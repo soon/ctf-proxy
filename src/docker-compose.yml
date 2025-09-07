@@ -1,0 +1,10 @@
+services:
+  envoy:
+    image: envoyproxy/envoy:v1.30.0
+    network_mode: host
+    user: "1337:1337"
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ./logs:/var/log/envoy   
+    command: ["-c", "/etc/envoy/envoy.yaml"]
+    restart: unless-stopped
