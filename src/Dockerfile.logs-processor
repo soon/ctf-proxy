@@ -1,0 +1,19 @@
+FROM python:3.13-slim-bookworm
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-install-project
+
+COPY ctf_proxy/ ./ctf_proxy/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked
+
+RUN mkdir -p /app/data /app/logs/tap /app/logs-archive
+
+ENV PATH="/app/.venv/bin:$PATH"
+
+CMD ["python", "-m", "ctf_proxy.logs_processor"]

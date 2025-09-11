@@ -1,0 +1,28 @@
+# CTF Proxy Configuration Example
+# This file defines the services that the proxy will monitor and forward traffic for
+
+services:
+  # Web application service
+  - name: webapp
+    port: 8080
+    type: http
+  
+  # API service  
+  - name: api
+    port: 8081
+    type: http
+  
+  # Database service
+  - name: database
+    port: 5432
+    type: tcp
+  
+  # WebSocket service for real-time features
+  - name: websocket
+    port: 3000
+    type: ws
+  
+  # UDP-based service (e.g., DNS or game server)
+  - name: gameserver
+    port: 9999
+    type: udp

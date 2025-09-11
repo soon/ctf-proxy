@@ -4,7 +4,26 @@ services:
     network_mode: host
     user: "1337:1337"
     volumes:
-      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ./ctf_proxy/proxy/envoy.yaml:/etc/envoy/envoy.yaml:ro
       - ./logs:/var/log/envoy   
     command: ["-c", "/etc/envoy/envoy.yaml"]
     restart: unless-stopped
+
+  logs-processor:
+    build:
+      context: .
+      dockerfile: Dockerfile.logs-processor
+    user: "1337:1337"
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./logs-archive:/app/logs-archive
+    environment:
+      - TAP_FOLDER=/app/logs/tap
+      - HTTP_ACCESS_LOG=/app/logs/http_access.log
+      - DB_FILE=/app/data/proxy_stats.db
+      - ARCHIVE_FOLDER=/app/logs-archive
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    depends_on:
+      - envoy

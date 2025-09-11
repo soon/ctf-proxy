@@ -1,0 +1,36 @@
+.PHONY: help test lint fmt check install-dev clean test-cov
+
+help:
+	@echo "Development commands:"
+	@echo "  test        Run all tests"
+	@echo "  test-cov    Run tests with coverage"
+	@echo "  lint        Run ruff linter"
+	@echo "  fmt         Format code with ruff"
+	@echo "  check       Run both linting and tests"
+	@echo "  install-dev Install development dependencies"
+	@echo "  clean       Clean up cache files"
+
+install-dev:
+	uv sync --dev
+
+test:
+	uv run pytest
+
+test-cov:
+	uv run pytest --cov=ctf_proxy --cov-report=term-missing
+
+lint:
+	uv run ruff check .
+
+fmt:
+	uv run ruff format .
+	uv run ruff check --fix .
+
+check: lint test
+
+clean:
+	find . -type d -name "__pycache__" -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
+	rm -rf .coverage
+	rm -rf .pytest_cache
+	rm -rf htmlcov

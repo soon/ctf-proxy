@@ -12,7 +12,7 @@ static_resources:
         typed_config:
           "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
           stat_prefix: hcm
-          generate_request_id: false
+          generate_request_id: true
           add_user_agent: false
           use_remote_address: false
           skip_xff_append: true
@@ -30,8 +30,11 @@ static_resources:
                 status: "%RESPONSE_CODE%"
                 duration_ms: "%DURATION%"
                 upstream_host: "%UPSTREAM_HOST%"
+                upstream_connection_id: "%UPSTREAM_CONNECTION_ID%"
+                stream_id: "%STREAM_ID%"
                 bytes_in: "%BYTES_RECEIVED%"
                 bytes_out: "%BYTES_SENT%"
+
 
           http_filters:
           - name: envoy.filters.http.tap
@@ -44,6 +47,8 @@ static_resources:
                     sinks:
                     - file_per_tap:
                         path_prefix: /var/log/envoy/tap/http_
+                    max_buffered_rx_bytes: 0xFFFFFFFF
+                    max_buffered_tx_bytes: 0xFFFFFFFF
           - name: envoy.filters.http.router
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router

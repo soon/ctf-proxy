@@ -1,0 +1,7 @@
+# CTF Proxy Configuration
+# Generated from running Docker containers
+
+services:
+  - name: faustctf-2024-secretchannel-secretchannel-1
+    port: 3000
+    type: http
