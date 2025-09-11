@@ -23,6 +23,7 @@ services:
       - HTTP_ACCESS_LOG=/app/logs/http_access.log
       - DB_FILE=/app/data/proxy_stats.db
       - ARCHIVE_FOLDER=/app/logs-archive
+      - CONFIG_FILE=/app/data/config.yml
       - PYTHONUNBUFFERED=1
     restart: unless-stopped
     depends_on:

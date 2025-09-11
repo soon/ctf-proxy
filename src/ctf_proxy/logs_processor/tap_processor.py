@@ -1,14 +1,13 @@
-import hashlib
+import base64
 import json
 import logging
-import sqlite3
+import re
 from datetime import datetime
-from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
-from ctf_proxy.db.models import HttpHeaderRow, ProxyStatsDB
-import base64
-
+from ctf_proxy.config.config import Config
+from ctf_proxy.db.models import FlagRow, HttpHeaderRow, ProxyStatsDB
+from ctf_proxy.logs_processor.flags import find_body_flags
 
 DEFAULT_DURATION_MS = 100
 
@@ -16,8 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 class TapProcessor:
-    def __init__(self, db: ProxyStatsDB):
+    def __init__(self, db: ProxyStatsDB, config: Config):
         self.db = db
+        self.config = config
 
     def normalize_path(self, path):
         if not path:
@@ -26,7 +26,6 @@ class TapProcessor:
         parsed = urlparse(path)
         normalized_path = parsed.path if parsed.path else "/"
 
-        import re
         normalized_path = re.sub(r"/\d+(?=/|$)", "/{id}", normalized_path)
         normalized_path = re.sub(
             r"/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?=/|$)",
@@ -53,7 +52,9 @@ class TapProcessor:
                 return header.get("value")
         return None
 
-    def process_tap_file(self, tap_file_path: str, tap_id: str, batch_id: str, log_entry: Optional[dict]=None):
+    def process_tap_file(
+        self, tap_file_path: str, tap_id: str, batch_id: str, log_entry: dict | None = None
+    ):
         if not log_entry:
             log_entry = {}
 
@@ -64,61 +65,98 @@ class TapProcessor:
         request = http_trace.get("request", {})
         response = http_trace.get("response", {})
 
-        request_headers = {h.get("key").lower(): h.get("value") for h in request.get("headers", []) if h.get("key")}
-        response_headers = {h.get("key").lower(): h.get("value") for h in response.get("headers", []) if h.get("key")}
+        request_headers = {
+            h.get("key").lower(): h.get("value") for h in request.get("headers", []) if h.get("key")
+        }
+        response_headers = {
+            h.get("key").lower(): h.get("value")
+            for h in response.get("headers", [])
+            if h.get("key")
+        }
 
-        method = log_entry.get('method') or request_headers.get(":method")
-        path = log_entry.get('path') or request_headers.get(":path")
-        status_str = log_entry.get('status') or response_headers.get(":status")
+        method = log_entry.get("method") or request_headers.get(":method")
+        path = log_entry.get("path") or request_headers.get(":path")
+        status_str = log_entry.get("status") or response_headers.get(":status")
         status = int(status_str) if status_str and str(status_str).isdigit() else -1
 
         user_agent = request_headers.get("user-agent")
-        start_time_str = log_entry.get('start_time')
+        start_time_str = log_entry.get("start_time")
 
-        start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00')) if start_time_str else datetime.now()
-        upstream_host = log_entry.get('upstream_host', '')
+        start_time = (
+            datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+            if start_time_str
+            else datetime.now()
+        )
+        upstream_host = log_entry.get("upstream_host", "")
         port = self.try_get_port_from_upstream_host(upstream_host)
 
         req_body = self.extract_body(request.get("body"))
         resp_body = self.extract_body(response.get("body"))
 
         with self.db.connect() as conn:
-          tx = conn.cursor()
-          request_id = self.db.http_requests.insert(
-              tx=tx,
-              port=port or None,
-              start_time=int(start_time.timestamp() * 1000),
-              path=path or None,
-              method=method or None,
-              user_agent=user_agent,
-              body=req_body,
-              tap_id=tap_id,
-              batch_id=batch_id
-          )
+            tx = conn.cursor()
+            request_id = self.db.http_requests.insert(
+                tx=tx,
+                port=port or 0,
+                start_time=int(start_time.timestamp() * 1000),
+                path=path or None,
+                method=method or None,
+                user_agent=user_agent,
+                body=req_body,
+                tap_id=tap_id,
+                batch_id=batch_id,
+            )
 
-          response_id = self.db.http_responses.insert(
-              tx=tx,
-              request_id=request_id,
-              status=status,
-              body=resp_body
-          )
-        
-          headers = [
-              *(HttpHeaderRow.Insert(request_id=request_id, name=key, value=value) for key, value in request_headers.items()),
-              *(HttpHeaderRow.Insert(response_id=response_id, name=key, value=value) for key, value in response_headers.items()),
-          ]
-          self.db.http_headers.insert_many(tx=tx, headers=headers)
+            response_id = self.db.http_responses.insert(
+                tx=tx, request_id=request_id, status=status, body=resp_body
+            )
+
+            headers = [
+                *(
+                    HttpHeaderRow.Insert(request_id=request_id, name=key, value=value)
+                    for key, value in request_headers.items()
+                ),
+                *(
+                    HttpHeaderRow.Insert(response_id=response_id, name=key, value=value)
+                    for key, value in response_headers.items()
+                ),
+            ]
+            if headers:
+                self.db.http_headers.insert_many(tx=tx, headers=headers)
+
+            flags = [
+                *(
+                    FlagRow.Insert(
+                        value=flag,
+                        http_request_id=request_id,
+                        location="body",
+                        offset=offset,
+                    )
+                    for offset, flag in find_body_flags(req_body or "", self.config.flag_format)
+                ),
+                *(
+                    FlagRow.Insert(
+                        value=flag,
+                        http_response_id=response_id,
+                        location="body",
+                        offset=offset,
+                    )
+                    for offset, flag in find_body_flags(resp_body or "", self.config.flag_format)
+                ),
+            ]
+            if flags:
+                self.db.flags.insert_many(tx=tx, flags=flags)
 
         logger.debug(f"Processed tap file {tap_file_path} with log data (request_id: {request_id})")
 
-    def try_get_port_from_upstream_host(self, upstream_host: str) -> Optional[int]:
+    def try_get_port_from_upstream_host(self, upstream_host: str) -> int | None:
         if not upstream_host:
             return None
 
-        loc = upstream_host.rfind(':')
+        loc = upstream_host.rfind(":")
         if loc == -1:
             return None
-        port_str = upstream_host[loc + 1:]
+        port_str = upstream_host[loc + 1 :]
 
         try:
             # todo - can there be ipv6 without port?
@@ -129,5 +167,5 @@ class TapProcessor:
     def extract_body(self, body_data):
         if not body_data:
             return None
-        
-        return base64.b64decode(body_data.get('as_bytes')).decode('utf-8', errors='ignore')
+
+        return base64.b64decode(body_data.get("as_bytes")).decode("utf-8", errors="ignore")

@@ -1,20 +1,18 @@
 from .models import (
     AlertRow,
-    BaseTable,
-    BatchRow,
-    HttpHeaderRow,
-    HttpRequestRow,
-    HttpResponseRow,
-    HttpRequestTable,
-    HttpResponseTable,
-    HttpHeaderTable,
     AlertTable,
+    BaseTable,
+    HttpHeaderRow,
+    HttpHeaderTable,
+    HttpRequestRow,
+    HttpRequestTable,
+    HttpResponseRow,
+    HttpResponseTable,
     ProxyStatsDB,
 )
 
 __all__ = [
     "ProxyStatsDB",
-    "BatchRow",
     "AlertRow",
     "HttpRequestRow",
     "HttpResponseRow",
