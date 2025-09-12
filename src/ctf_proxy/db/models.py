@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import enum
 import logging
 import os
 import sqlite3
@@ -48,12 +49,20 @@ class HttpHeaderRow:
 
 @dataclass
 class AlertRow:
-    id: str
+    id: int
     created: datetime
     port: int
     description: str
     http_request_id: int | None = None
     http_response_id: int | None = None
+
+    @dataclass
+    class Insert:
+        port: int
+        created: int
+        description: str
+        http_request_id: int | None = None
+        http_response_id: int | None = None
 
 
 @dataclass
@@ -72,6 +81,79 @@ class FlagRow:
         http_response_id: int | None = None
         location: str | None = None
         offset: int | None = None
+
+
+@dataclass
+class ServiceStatsRow:
+    id: int
+    port: int
+    total_requests: int
+    total_blocked_requests: int
+    total_responses: int
+    total_blocked_responses: int
+    total_flags_written: int
+    total_flags_retrieved: int
+    total_flags_blocked: int
+
+    @dataclass
+    class Insert:
+        port: int
+
+    @dataclass
+    class Increment:
+        port: int
+        total_requests: int = 0
+        total_blocked_requests: int = 0
+        total_responses: int = 0
+        total_blocked_responses: int = 0
+        total_flags_written: int = 0
+        total_flags_retrieved: int = 0
+        total_flags_blocked: int = 0
+
+
+@dataclass
+class HttpResponseCodeStatsRow:
+    id: int
+    port: int
+    status_code: int
+    count: int
+
+    @dataclass
+    class Insert:
+        port: int
+        status_code: int
+        count: int = 0
+
+    @dataclass
+    class Increment:
+        port: int
+        status_code: int
+        count: int = 0
+
+
+@dataclass
+class HttpPathStatsRow:
+    id: int
+    port: int
+    path: str
+    count: int
+
+    @dataclass
+    class Insert:
+        port: int
+        path: str
+        count: int = 0
+
+    @dataclass
+    class Increment:
+        port: int
+        path: str
+        count: int = 0
+
+
+class RowStatus(enum.Enum):
+    NEW = "new"
+    UPDATED = "updated"
 
 
 class BaseTable:
@@ -175,41 +257,16 @@ class HttpHeaderTable(BaseTable):
 class AlertTable(BaseTable):
     def insert(
         self,
-        alert_id: str,
-        port: int,
-        description: str,
-        http_request_id: int | None = None,
-        http_response_id: int | None = None,
-        created: datetime | None = None,
+        tx: sqlite3.Cursor,
+        row: AlertRow.Insert,
     ) -> None:
-        if created is None:
-            created = datetime.now()
-
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO alert (id, created, port, http_request_id, http_response_id, description)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (alert_id, created, port, http_request_id, http_response_id, description),
-            )
-
-    def get_by_port(self, port: int) -> list[AlertRow]:
-        with self.get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM alert WHERE port = ? ORDER BY created DESC", (port,))
-            rows = cursor.fetchall()
-            return [AlertRow(**dict(row)) for row in rows]
-
-    def get_all(self, limit: int = 100) -> list[AlertRow]:
-        with self.get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM alert ORDER BY created DESC LIMIT ?", (limit,))
-            rows = cursor.fetchall()
-            return [AlertRow(**dict(row)) for row in rows]
+        tx.execute(
+            """
+            INSERT INTO alert (created, port, http_request_id, http_response_id, description)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (row.created, row.port, row.http_request_id, row.http_response_id, row.description),
+        )
 
 
 class FlagTable(BaseTable):
@@ -252,6 +309,149 @@ class FlagTable(BaseTable):
             return [FlagRow(**dict(row)) for row in rows]
 
 
+class ServiceStatsTable(BaseTable):
+    def insert(self, tx: sqlite3.Cursor, row: ServiceStatsRow.Insert) -> int:
+        tx.execute(
+            """
+            INSERT INTO service_stats (port)
+            VALUES (?)
+            """,
+            (row.port,),
+        )
+        return tx.lastrowid
+
+    def increment(self, tx: sqlite3.Cursor, increments: ServiceStatsRow.Increment) -> None:
+        sql = """
+UPDATE service_stats SET
+    total_requests = total_requests + ?,
+    total_blocked_requests = total_blocked_requests + ?,
+    total_responses = total_responses + ?,
+    total_blocked_responses = total_blocked_responses + ?,
+    total_flags_written = total_flags_written + ?,
+    total_flags_retrieved = total_flags_retrieved + ?,
+    total_flags_blocked = total_flags_blocked + ?
+WHERE port = ?;
+"""
+        params = (
+            increments.total_requests,
+            increments.total_blocked_requests,
+            increments.total_responses,
+            increments.total_blocked_responses,
+            increments.total_flags_written,
+            increments.total_flags_retrieved,
+            increments.total_flags_blocked,
+            increments.port,
+        )
+        tx.execute(sql, params)
+        if not tx.rowcount:
+            self.insert(tx, ServiceStatsRow.Insert(port=increments.port))
+            tx.execute(sql, params)
+            assert tx.rowcount, "Failed to increment service stats after insert"
+
+    def get_by_ports(self, tx: sqlite3.Cursor, ports: list[int]) -> list[ServiceStatsRow]:
+        if not ports:
+            return []
+
+        placeholders = ",".join("?" for _ in ports)
+        fields = [
+            "port",
+            "total_requests",
+            "total_blocked_requests",
+            "total_responses",
+            "total_blocked_responses",
+            "total_flags_written",
+            "total_flags_retrieved",
+            "total_flags_blocked",
+        ]
+        sql = f"SELECT {', '.join(fields)} FROM service_stats WHERE port IN ({placeholders})"
+        tx.execute(sql, ports)
+        rows = tx.fetchall()
+        return [ServiceStatsRow(**dict(zip(fields, row, strict=False))) for row in rows]
+
+
+class HttpResponseCodeStatsTable(BaseTable):
+    def insert(self, tx: sqlite3.Cursor, row: HttpResponseCodeStatsRow.Insert) -> int:
+        tx.execute(
+            """
+            INSERT INTO http_response_code_stats (port, status_code, count)
+            VALUES (?, ?, ?)
+            """,
+            (row.port, row.status_code, row.count),
+        )
+        return tx.lastrowid
+
+    def increment(self, tx: sqlite3.Cursor, increments: HttpResponseCodeStatsRow.Increment) -> None:
+        sql = """
+UPDATE http_response_code_stats SET
+    count = count + ?
+WHERE port = ? AND status_code = ?;
+"""
+        params = (
+            increments.count,
+            increments.port,
+            increments.status_code,
+        )
+        tx.execute(sql, params)
+        if not tx.rowcount:
+            self.insert(
+                tx,
+                HttpResponseCodeStatsRow.Insert(
+                    port=increments.port, status_code=increments.status_code, count=increments.count
+                ),
+            )
+
+    def get_by_ports(self, tx: sqlite3.Cursor, ports: list[int]) -> list[HttpResponseCodeStatsRow]:
+        if not ports:
+            return []
+
+        placeholders = ",".join("?" for _ in ports)
+        fields = [
+            "port",
+            "status_code",
+            "count",
+        ]
+        sql = f"SELECT {', '.join(fields)} FROM http_response_code_stats WHERE port IN ({placeholders})"
+        tx.execute(sql, ports)
+        rows = tx.fetchall()
+        return [HttpResponseCodeStatsRow(**dict(zip(fields, row, strict=False))) for row in rows]
+
+
+class HttpPathStatsTable(BaseTable):
+    def insert(self, tx: sqlite3.Cursor, row: HttpPathStatsRow.Insert) -> int:
+        tx.execute(
+            """
+            INSERT INTO http_path_stats (port, path, count)
+            VALUES (?, ?, ?)
+            """,
+            (row.port, row.path, row.count),
+        )
+        return tx.lastrowid
+
+    def increment(self, tx: sqlite3.Cursor, increments: HttpPathStatsRow.Increment) -> RowStatus:
+        sql = """
+UPDATE http_path_stats SET
+    count = count + ?
+WHERE port = ? AND path = ?;
+"""
+        params = (
+            increments.count,
+            increments.port,
+            increments.path,
+        )
+        tx.execute(sql, params)
+
+        if not tx.rowcount:
+            self.insert(
+                tx,
+                HttpPathStatsRow.Insert(
+                    port=increments.port, path=increments.path, count=increments.count
+                ),
+            )
+            return RowStatus.NEW
+
+        return RowStatus.UPDATED
+
+
 def make_db(path: str = "proxy_stats.db"):
     db = ProxyStatsDB(path)
     db.init_db()
@@ -266,6 +466,9 @@ class ProxyStatsDB:
         self.http_headers = HttpHeaderTable(db_file)
         self.alerts = AlertTable(db_file)
         self.flags = FlagTable(db_file)
+        self.service_stats = ServiceStatsTable(db_file)
+        self.http_response_code_stats = HttpResponseCodeStatsTable(db_file)
+        self.http_path_stats = HttpPathStatsTable(db_file)
         # self.conn = sqlite3.connect(self.db_file)
 
     # def transaction(self):

@@ -49,13 +49,11 @@ CREATE INDEX IF NOT EXISTS http_header_name_value ON http_header(name, value);
 
 CREATE TABLE IF NOT EXISTS alert (
     id INTEGER PRIMARY KEY,
-    created INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created INTEGER NOT NULL,
     description TEXT NOT NULL,
     port INTEGER,
     http_request_id INTEGER,
     http_response_id INTEGER,
-    batch_id TEXT,
-    tap_id TEXT,
     FOREIGN KEY (http_request_id) REFERENCES http_request (id),
     FOREIGN KEY (http_response_id) REFERENCES http_response (id)
 ) STRICT;
@@ -78,3 +76,36 @@ CREATE TABLE IF NOT EXISTS flag (
 
 CREATE INDEX IF NOT EXISTS flag_http_request_id ON flag(http_request_id);
 CREATE INDEX IF NOT EXISTS flag_http_response_id ON flag(http_response_id);
+
+CREATE TABLE IF NOT EXISTS service_stats (
+    id INTEGER PRIMARY KEY,
+    port INTEGER NOT NULL,
+    total_requests INTEGER NOT NULL DEFAULT 0,
+    total_blocked_requests INTEGER NOT NULL DEFAULT 0,
+    total_responses INTEGER NOT NULL DEFAULT 0,
+    total_blocked_responses INTEGER NOT NULL DEFAULT 0,
+    total_flags_written INTEGER NOT NULL DEFAULT 0,
+    total_flags_retrieved INTEGER NOT NULL DEFAULT 0,
+    total_flags_blocked INTEGER NOT NULL DEFAULT 0
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS service_stats_unique_port ON service_stats(port);
+
+
+CREATE TABLE IF NOT EXISTS http_response_code_stats (
+    id INTEGER PRIMARY KEY,
+    port INTEGER NOT NULL,
+    status_code INTEGER NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS http_response_code_stats_unique ON http_response_code_stats(port, status_code);
+
+CREATE TABLE IF NOT EXISTS http_path_stats (
+    id INTEGER PRIMARY KEY,
+    port INTEGER NOT NULL,
+    path TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS http_path_stats_unique ON http_path_stats(port, path);

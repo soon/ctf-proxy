@@ -6,7 +6,17 @@ from datetime import datetime
 from urllib.parse import parse_qs, urlparse
 
 from ctf_proxy.config.config import Config
-from ctf_proxy.db.models import FlagRow, HttpHeaderRow, ProxyStatsDB
+from ctf_proxy.db.models import (
+    AlertRow,
+    FlagRow,
+    HttpHeaderRow,
+    HttpPathStatsRow,
+    HttpResponseCodeStatsRow,
+    ProxyStatsDB,
+    RowStatus,
+    ServiceStatsRow,
+)
+from ctf_proxy.db.utils import now_timestamp
 from ctf_proxy.logs_processor.flags import find_body_flags
 
 DEFAULT_DURATION_MS = 100
@@ -124,28 +134,68 @@ class TapProcessor:
             if headers:
                 self.db.http_headers.insert_many(tx=tx, headers=headers)
 
+            flags_written = [
+                FlagRow.Insert(
+                    value=flag,
+                    http_request_id=request_id,
+                    location="body",
+                    offset=offset,
+                )
+                for offset, flag in find_body_flags(req_body or "", self.config.flag_format)
+            ]
+            flags_retrieved = [
+                FlagRow.Insert(
+                    value=flag,
+                    http_response_id=response_id,
+                    location="body",
+                    offset=offset,
+                )
+                for offset, flag in find_body_flags(resp_body or "", self.config.flag_format)
+            ]
             flags = [
-                *(
-                    FlagRow.Insert(
-                        value=flag,
-                        http_request_id=request_id,
-                        location="body",
-                        offset=offset,
-                    )
-                    for offset, flag in find_body_flags(req_body or "", self.config.flag_format)
-                ),
-                *(
-                    FlagRow.Insert(
-                        value=flag,
-                        http_response_id=response_id,
-                        location="body",
-                        offset=offset,
-                    )
-                    for offset, flag in find_body_flags(resp_body or "", self.config.flag_format)
-                ),
+                *flags_written,
+                *flags_retrieved,
             ]
             if flags:
                 self.db.flags.insert_many(tx=tx, flags=flags)
+            if port:
+                self.db.service_stats.increment(
+                    tx,
+                    ServiceStatsRow.Increment(
+                        port=port,
+                        total_requests=1,
+                        total_responses=1,
+                        total_flags_written=len(flags_written),
+                        total_flags_retrieved=len(flags_retrieved),
+                    ),
+                )
+                self.db.http_response_code_stats.increment(
+                    tx,
+                    HttpResponseCodeStatsRow.Increment(
+                        port=port,
+                        status_code=status,
+                        count=1,
+                    ),
+                )
+                path_stats_result = self.db.http_path_stats.increment(
+                    tx,
+                    HttpPathStatsRow.Increment(
+                        port=port,
+                        path=path,
+                        count=1,
+                    ),
+                )
+                if path_stats_result == RowStatus.NEW:
+                    self.db.alerts.insert(
+                        tx,
+                        AlertRow.Insert(
+                            port=port,
+                            created=now_timestamp(),
+                            description=f"New path: '{path}'",
+                            http_request_id=request_id,
+                            http_response_id=response_id,
+                        ),
+                    )
 
         logger.debug(f"Processed tap file {tap_file_path} with log data (request_id: {request_id})")
 

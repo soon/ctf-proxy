@@ -71,25 +71,20 @@ def parse_port_mappings(ports_str: str) -> list[dict[str, Any]]:
 
 def determine_service_type(port: int, protocol: str, container_name: str) -> str:
     """Determine service type based on port, protocol and container name."""
-    if protocol == "udp":
-        return "udp"
-
-    common_http_ports = {80, 443, 8000, 8080, 8443, 3000, 5000, 9000}
-    websocket_indicators = ["ws", "websocket", "socket", "realtime"]
-
-    if port in common_http_ports:
-        return "http"
-
-    container_lower = container_name.lower()
-    if any(indicator in container_lower for indicator in websocket_indicators):
-        return "ws"
-
-    if any(
-        indicator in container_lower for indicator in ["web", "http", "api", "frontend", "backend"]
-    ):
-        return "http"
-
-    return "tcp"
+    available_types = {"http", "ws", "tcp", "udp"}
+    while True:
+        res = (
+            input(
+                f"Enter service type for container '{container_name}' on port {port}/{protocol} (http [default], ws, tcp, udp): "
+            )
+            .strip()
+            .lower()
+        )
+        if not res:
+            res = "http"
+        if res in available_types:
+            return res
+        print(f"Invalid service type: {res}. Please enter one of: {', '.join(available_types)}")
 
 
 def sanitize_service_name(name: str) -> str:

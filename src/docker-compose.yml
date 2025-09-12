@@ -28,3 +28,17 @@ services:
     restart: unless-stopped
     depends_on:
       - envoy
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.logs-processor
+    user: "1337:1337"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DB_FILE=/app/data/proxy_stats.db
+      - CONFIG_FILE=/app/data/config.yml
+      - PYTHONUNBUFFERED=1
+    command: ["ctf-proxy-dashboard", "--config", "/app/data/config.yml", "--db", "/app/data/proxy_stats.db"]
+    restart: no

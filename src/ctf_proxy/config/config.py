@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from ..utils.watcher import Watcher
+from ctf_proxy.utils.watcher import Watcher
 
 logger = logging.getLogger(__name__)
 
