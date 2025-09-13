@@ -35,6 +35,9 @@ You're a senior software engineer. When working follow engineering principles:
 # Code guidelines:
 
 1. **No comments**: Don't write comments explaining the code.
+2. **Type hints**: Use type hints for all functions and methods.
+3. **Absolute imports**: Use absolute imports instead of relative imports.
+4. **Simple naming**: Don't prefix private variables and methods with underscore.
 
 
 # How to work with the project:

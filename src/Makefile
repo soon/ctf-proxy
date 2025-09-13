@@ -1,5 +1,6 @@
 install: 
 	./ctf_proxy/bin/setup.sh
+	make ui
 
 install-with-ui: 
 	sudo useradd --system --no-create-home --uid 1337 envoy || true
