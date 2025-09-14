@@ -20,3 +20,19 @@ func getIntProperty(path []string) (int64, error) {
 	}
 	return int64(binary.LittleEndian.Uint64(v)), nil
 }
+
+// Human-readable representation of the stage.
+func (s Stage) String() string {
+	switch s {
+	case StageRequestHeaders:
+		return "req:headers"
+	case StageRequestBody:
+		return "req:body"
+	case StageResponseHeaders:
+		return "resp:headers"
+	case StageResponseBody:
+		return "resp:body"
+	default:
+		return "unknown"
+	}
+}

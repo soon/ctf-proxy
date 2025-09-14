@@ -27,7 +27,7 @@ func DoModifyHttpResponseBody(modifyFunc func([]byte) []byte) func(ctx *DoContex
 			return true
 		}
 
-		return false;
+		return false
 	}
 }
 
