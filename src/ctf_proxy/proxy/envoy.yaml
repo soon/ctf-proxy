@@ -42,6 +42,19 @@ static_resources:
 
 
           http_filters:
+          - name: envoy.filters.http.wasm
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm
+              config:
+                name: interceptor
+                vm_config:
+                  vm_id: interceptor_vm
+                  runtime: envoy.wasm.runtime.v8
+                  code:
+                    local:
+                      filename: /etc/envoy/wasm/interceptor.wasm
+                  allow_precompiled: true
+
           - name: envoy.filters.http.tap
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.tap.v3.Tap
@@ -54,6 +67,7 @@ static_resources:
                         path_prefix: /var/log/envoy/tap/http_
                     max_buffered_rx_bytes: 0xFFFFFFFF
                     max_buffered_tx_bytes: 0xFFFFFFFF
+
           - name: envoy.filters.http.router
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router

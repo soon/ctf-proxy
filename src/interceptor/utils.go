@@ -1,0 +1,22 @@
+package main
+
+import (
+	"encoding/binary"
+	"fmt"
+
+	"github.com/proxy-wasm/proxy-wasm-go-sdk/proxywasm"
+)
+
+func getIntProperty(path []string) (int64, error) {
+	v, err := proxywasm.GetProperty(path)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get property %v: %w", path, err)
+	}
+	if v == nil {
+		return 0, fmt.Errorf("property %v not found", path)
+	}
+	if len(v) != 8 {
+		return 0, fmt.Errorf("unexpected property %v length: %d", path, len(v))
+	}
+	return int64(binary.LittleEndian.Uint64(v)), nil
+}
