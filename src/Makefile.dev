@@ -25,6 +25,7 @@ lint:
 fmt:
 	uv run ruff format .
 	uv run ruff check --fix .
+	cd interceptor && go fmt
 
 check: lint test
 

@@ -134,9 +134,12 @@ class BatchProcessor:
 
             http_trace = data.get("http_buffered_trace", {})
             request = http_trace.get("request", {})
-            headers = request.get("headers", [])
+            for header in request.get("headers", []):
+                if header.get("key") == "x-request-id":
+                    return header.get("value")
 
-            for header in headers:
+            response = http_trace.get("response", {})
+            for header in response.get("headers", []):
                 if header.get("key") == "x-request-id":
                     return header.get("value")
         except Exception as e:

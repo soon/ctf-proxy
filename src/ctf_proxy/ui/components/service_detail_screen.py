@@ -27,9 +27,11 @@ def parse_filter(filter_str: str) -> tuple[str, list]:
     - Number (100-599) -> status
     - GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS -> method
     - Otherwise -> path (contains)
+
+    Supported columns: path, method, status, user_agent, blocked
     """
     HTTP_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
-    VALID_COLUMNS = {"path", "method", "status", "user_agent"}
+    VALID_COLUMNS = {"path", "method", "status", "user_agent", "blocked"}
 
     filter_str = filter_str.strip()
     if not filter_str:
@@ -60,6 +62,14 @@ def parse_filter(filter_str: str) -> tuple[str, list]:
                     if column == "status":
                         # For status, handle response table
                         return "resp.status = ?", [value]
+                    elif column == "blocked":
+                        # Handle blocked as boolean
+                        if value.lower() in ("yes", "true", "1"):
+                            return "req.is_blocked = 1", []
+                        elif value.lower() in ("no", "false", "0"):
+                            return "req.is_blocked = 0", []
+                        else:
+                            return "", []
                     return f"req.{column} = ?", [value]
                 return "", []
 
@@ -214,6 +224,8 @@ class ServiceDetailScreen(Screen):
                 "  q path=$json (ends with json)",
                 "  q method=POST (exact method)",
                 "  q status=404 (exact status)",
+                "  q blocked=yes (show blocked requests)",
+                "  q blocked=no (show non-blocked requests)",
                 "  q /api/users (auto: exact path)",
                 "  q 404 (auto: status)",
                 "  q POST (auto: method)",
@@ -280,7 +292,15 @@ class ServiceDetailScreen(Screen):
     def _create_requests_table(self) -> DataTable:
         table = DataTable(classes="requests-table", cursor_type="row")
         table.add_columns(
-            "ID", "Time", "Method", "Path", "Status", "User-Agent", "Req Flags", "Resp Flags"
+            "ID",
+            "Time",
+            "Method",
+            "Path",
+            "Status",
+            "Blocked",
+            "User-Agent",
+            "Req Flags",
+            "Resp Flags",
         )
         self._populate_requests_table(table)
         return table
@@ -297,6 +317,7 @@ class ServiceDetailScreen(Screen):
                     req.method,
                     req.path,
                     resp.status,
+                    req.is_blocked,
                     req.user_agent,
                     (SELECT COUNT(*) FROM flag WHERE flag.http_request_id = req.id) as req_flags_count,
                     (SELECT COUNT(*) FROM flag WHERE flag.http_response_id = resp.id) as resp_flags_count
@@ -326,6 +347,7 @@ class ServiceDetailScreen(Screen):
                     method,
                     path,
                     status,
+                    is_blocked,
                     user_agent,
                     req_flags_count,
                     resp_flags_count,
@@ -338,6 +360,7 @@ class ServiceDetailScreen(Screen):
                     time_str = "??:??:??"
 
                 status_str = str(status) if status else "N/A"
+                blocked_str = "REQ-BLOCKED" if is_blocked else ""
                 user_agent_str = (
                     (user_agent[:30] + "...")
                     if user_agent and len(user_agent) > 30
@@ -369,6 +392,7 @@ class ServiceDetailScreen(Screen):
                     method,
                     path_str,
                     status_str,
+                    blocked_str,
                     user_agent_str,
                     req_flags_str,
                     resp_flags_str,

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS http_request (
     method TEXT NOT NULL,
     user_agent TEXT,
     body TEXT,
+    is_blocked INTEGER NOT NULL,
     -- trace request data in archive
     tap_id TEXT,
     batch_id TEXT

@@ -5,7 +5,7 @@ echo 'Creating envoy user (uid 1337)...'
 sudo useradd --system --no-create-home --uid 1337 envoy || true
 
 echo 'Creating container dirs...'
-sudo mkdir -p logs/tap logs-archive data
+sudo mkdir -p logs/tap logs/pre-tap logs/post-tap logs-archive data
 sudo chown -R 1337:1337 logs logs-archive data
 
 echo 'Generating services config...'

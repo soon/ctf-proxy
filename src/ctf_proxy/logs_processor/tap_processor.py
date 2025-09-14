@@ -78,11 +78,18 @@ class TapProcessor:
         request_headers = {
             h.get("key").lower(): h.get("value") for h in request.get("headers", []) if h.get("key")
         }
+        request_trailers = {
+            h.get("key").lower(): h.get("value")
+            for h in request.get("trailers", [])
+            if h.get("key")
+        }
         response_headers = {
             h.get("key").lower(): h.get("value")
             for h in response.get("headers", [])
             if h.get("key")
         }
+
+        is_blocked = request_trailers.get("x-blocked") == "1"
 
         method = log_entry.get("method") or request_headers.get(":method")
         path = log_entry.get("path") or request_headers.get(":path")
@@ -109,10 +116,11 @@ class TapProcessor:
                 tx=tx,
                 port=port or 0,
                 start_time=int(start_time.timestamp() * 1000),
-                path=path or None,
-                method=method or None,
+                path=path or "",
+                method=method or "",
                 user_agent=user_agent,
                 body=req_body,
+                is_blocked=is_blocked,
                 tap_id=tap_id,
                 batch_id=batch_id,
             )
@@ -164,7 +172,8 @@ class TapProcessor:
                     ServiceStatsRow.Increment(
                         port=port,
                         total_requests=1,
-                        total_responses=1,
+                        total_responses=1 if not is_blocked else 0,
+                        total_blocked_requests=1 if is_blocked else 0,
                         total_flags_written=len(flags_written),
                         total_flags_retrieved=len(flags_retrieved),
                     ),

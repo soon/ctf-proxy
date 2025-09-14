@@ -21,9 +21,16 @@ type Interceptor struct {
 
 // WhenContext provides read-only access for condition evaluation.
 type WhenContext struct {
-	Stage       Stage
-	End         bool // endOfStream (only meaningful on body stages)
-	BodySize    int  // buffered size visible to the filter
+	// Current stage
+	Stage Stage
+	// endOfStream (only meaningful on body stages)
+	End bool
+	// buffered size visible to the filter
+	BodySize int
+	// Any data needed to persist between calls by the When function
+	Data interface{}
+
+	// Interceptor being executed
 	interceptor *Interceptor
 
 	// Retrieves request header by name. Returns "" if not present or not in request stage.
@@ -41,16 +48,21 @@ type WhenContext struct {
 	// Logs info message to proxy logs with interceptor name prefix
 	LogInfo func(message string)
 
-	// Sets the interceptor for logging context
-	setInterceptor func(interceptor *Interceptor)
+	// By default ActionContinue; set to ActionPause by Pause().
+	resultAction types.Action
 }
 
 // DoContext provides full access to modify requests and responses.
 type DoContext struct {
-	Stage       Stage
-	Port        int64
-	End         bool // endOfStream (only meaningful on body stages)
-	BodySize    int  // buffered size visible to the filter
+	Stage Stage
+	Port  int64
+	// endOfStream (only meaningful on body stages)
+	End bool
+	// buffered size visible to the filter
+	BodySize int
+	// Any data needed to persist between calls by the When function
+	Data interface{}
+
 	interceptor *Interceptor
 
 	// Retrieves request header by name. Returns "" if not present or not in request stage.
@@ -95,6 +107,8 @@ type httpCtx struct {
 	types.DefaultHttpContext
 	// Skip any further stream processing using this action (undefinedAction by default)
 	skip types.Action
-	// Current interceptor being executed
-	interceptor *Interceptor
+	// When contexts for all interceptors defined for this port (if any)
+	whenContexts []*WhenContext
+	// Do context, once When matched
+	doContext *DoContext
 }

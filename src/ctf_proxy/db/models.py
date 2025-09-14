@@ -174,15 +174,16 @@ class HttpRequestTable(BaseTable):
         method: str,
         user_agent: str | None = None,
         body: str | None = None,
+        is_blocked: bool | None = False,
         tap_id: str | None = None,
         batch_id: str | None = None,
     ) -> int:
         tx.execute(
             """
-            INSERT INTO http_request (port, start_time, path, method, user_agent, body, tap_id, batch_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO http_request (port, start_time, path, method, user_agent, body, is_blocked, tap_id, batch_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (port, start_time, path, method, user_agent, body, tap_id, batch_id),
+            (port, start_time, path, method, user_agent, body, is_blocked, tap_id, batch_id),
         )
         return tx.lastrowid
 

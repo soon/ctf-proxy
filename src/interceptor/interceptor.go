@@ -19,15 +19,24 @@ const undefinedAction types.Action = 0xFFFFFFFF
 
 // Pause makes the current hook return ActionPause (caller should then expect a
 // re-entry with more data or with End=true).
+func (c *WhenContext) Pause() { c.resultAction = types.ActionPause }
+
+// Pause makes the current hook return ActionPause (caller should then expect a
+// re-entry with more data or with End=true).
 func (c *DoContext) Pause() { c.resultAction = types.ActionPause }
 
 // Interceptor registry port -> []Interceptor
 var reg = map[int64][]Interceptor{}
 
 // Registers an interceptor for a service port
-func RegisterInterceptor(port int64, i Interceptor) {
+func RegisterInterceptor(port int64, name string, when func(*WhenContext) bool, do func(*DoContext) bool) {
+	i := Interceptor{
+		Name: name,
+		When: when,
+		Do:   do,
+	}
 	reg[port] = append(reg[port], i)
-	proxywasm.LogInfo(fmt.Sprintf("registered interceptor name=%s port=%d", i.Name, port))
+	proxywasm.LogInfo(fmt.Sprintf("registered interceptor name=%s port=%d", name, port))
 }
 
 func (h *httpCtx) OnHttpRequestHeaders(n int, end bool) types.Action {
@@ -53,11 +62,12 @@ func (h *httpCtx) run(stage Stage, n int, end bool, isReq bool) types.Action {
 	}
 
 runDo:
-	if h.interceptor != nil {
-		doCtx := h.makeDoCtx(stage, 0, n, end, isReq, h.interceptor)
-		ignoreFurtherCalls := h.interceptor.Do(doCtx)
+	if h.doContext != nil {
+		doCtx := h.doContext
+		updateDoCtx(doCtx, stage, n, end)
+		ignoreFurtherCalls := doCtx.interceptor.Do(doCtx)
 		if ignoreFurtherCalls {
-			h.interceptor = nil
+			h.doContext = nil
 			h.skip = doCtx.resultAction
 		}
 		return doCtx.resultAction
@@ -75,27 +85,49 @@ runDo:
 		return types.ActionContinue
 	}
 
-	for _, it := range ints {
-		if it.When != nil {
-			whenCtx := h.makeWhenCtx(stage, port, n, end, isReq)
-			whenCtx.setInterceptor(&it)
-			if it.When(whenCtx) {
-				whenCtx.LogInfo(fmt.Sprintf("when matched stage=%s", stage.String()))
-				h.trace(isReq, it.Name)
-				h.interceptor = &it
-				goto runDo
-			}
+	// Create WhenContext once for all interceptors
+	whenContexts := h.whenContexts
+	if whenContexts == nil {
+		whenContexts = make([]*WhenContext, len(ints))
+		for i, it := range ints {
+			whenContexts[i] = h.makeWhenCtx(stage, port, n, end, isReq, &it)
+		}
+		h.whenContexts = whenContexts
+	}
+
+	anyPaused := false
+
+	for _, wc := range whenContexts {
+		updateWhenCtx(wc, stage, n, end)
+
+		it := wc.interceptor
+		if it == nil || it.When == nil {
+			continue
+		}
+		if it.When(wc) {
+			wc.LogInfo(fmt.Sprintf("when matched stage=%s", stage.String()))
+			h.trace(isReq, it.Name)
+			h.doContext = makeDoCtx(stage, port, n, end, isReq, it)
+			goto runDo
+		}
+		if wc.resultAction == types.ActionPause {
+			anyPaused = true
 		}
 	}
 
+	if anyPaused {
+		return types.ActionPause
+	}
 	return types.ActionContinue
 }
 
-func (h *httpCtx) makeWhenCtx(stage Stage, port int64, n int, end bool, isReq bool) *WhenContext {
+func (h *httpCtx) makeWhenCtx(stage Stage, port int64, n int, end bool, isReq bool, interceptor *Interceptor) *WhenContext {
 	c := &WhenContext{
-		Stage:    stage,
-		BodySize: n,
-		End:      end,
+		Stage:        stage,
+		BodySize:     n,
+		End:          end,
+		interceptor:  interceptor,
+		resultAction: types.ActionContinue,
 	}
 
 	c.GetRequestHeader = func(k string) string {
@@ -133,20 +165,25 @@ func (h *httpCtx) makeWhenCtx(stage Stage, port int64, n int, end bool, isReq bo
 			proxywasm.LogInfo(message)
 		}
 	}
-	c.setInterceptor = func(interceptor *Interceptor) {
-		c.interceptor = interceptor
-	}
 
 	return c
 }
 
-func (h *httpCtx) makeDoCtx(stage Stage, port int64, n int, end bool, isReq bool, interceptor *Interceptor) *DoContext {
+func updateWhenCtx(c *WhenContext, stage Stage, n int, end bool) {
+	c.Stage = stage
+	c.BodySize = n
+	c.End = end
+	c.resultAction = types.ActionContinue
+}
+
+func makeDoCtx(stage Stage, port int64, n int, end bool, isReq bool, interceptor *Interceptor) *DoContext {
 	c := &DoContext{
-		Stage:       stage,
-		Port:        port,
-		BodySize:    n,
-		End:         end,
-		interceptor: interceptor,
+		Stage:        stage,
+		Port:         port,
+		BodySize:     n,
+		End:          end,
+		interceptor:  interceptor,
+		resultAction: types.ActionContinue,
 	}
 
 	c.GetRequestHeader = func(k string) string {
@@ -219,6 +256,13 @@ func (h *httpCtx) makeDoCtx(stage Stage, port int64, n int, end bool, isReq bool
 	}
 
 	return c
+}
+
+func updateDoCtx(c *DoContext, stage Stage, n int, end bool) {
+	c.Stage = stage
+	c.BodySize = n
+	c.End = end
+	c.resultAction = types.ActionContinue
 }
 
 func (h *httpCtx) trace(isReq bool, name string) {
