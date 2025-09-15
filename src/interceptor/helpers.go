@@ -2,29 +2,82 @@ package main
 
 import (
 	"github.com/proxy-wasm/proxy-wasm-go-sdk/proxywasm"
+	"strings"
 )
 
-func CheckHttpRequestBody(passes func([]byte) bool) func(ctx *WhenContext) bool {
-	return func(ctx *WhenContext) bool {
-		if ctx.Stage != StageRequestBody {
-			return false
-		}
-		if !ctx.End {
-			ctx.Pause()
-			return false
-		}
-		body, err := ctx.GetRequestBody(0, ctx.BodySize)
-		if err != nil {
-			return false
-		}
-		if body == nil {
-			return false
-		}
-		return passes(body)
+type Matcher struct {
+	Path    func(string) bool
+	Method  func(string) bool
+	Headers map[string]string
+	Body    func([]byte) bool
+}
+
+type MatcherResult struct {
+	Path    bool
+	Method  bool
+	Headers bool
+	Body    bool
+}
+
+func (r MatcherResult) All() bool {
+	return r.Path && r.Method && r.Headers && r.Body
+}
+
+func MatchPrefix(prefix string) func(string) bool {
+	return func(path string) bool {
+		return strings.HasPrefix(path, prefix)
 	}
 }
 
-func DoModifyHttpResponseBody(modifyFunc func([]byte) []byte) func(ctx *DoContext) bool {
+func MatchMethod(expected string) func(string) bool {
+	return func(actual string) bool {
+		return strings.ToUpper(actual) == strings.ToUpper(expected)
+	}
+}
+
+func MatchHttpRequest(matcher Matcher) func(ctx *WhenContext) bool {
+	return func(ctx *WhenContext) bool {
+		if ctx.Data == nil {
+			ctx.Data = &MatcherResult{
+				Path:    matcher.Path == nil,
+				Method:  matcher.Method == nil,
+				Headers: matcher.Headers == nil,
+				Body:    matcher.Body == nil,
+			}
+		}
+		var res = ctx.Data.(*MatcherResult)
+		if ctx.Stage == StageRequestHeaders {
+			if !res.Path && matcher.Path != nil {
+				res.Path = matcher.Path(ctx.GetRequestHeader(":path"))
+			}
+			if !res.Method && matcher.Method != nil {
+				res.Method = matcher.Method(ctx.GetRequestHeader(":method"))
+			}
+			if !res.Headers && matcher.Headers != nil {
+				res.Headers = true
+				for k, v := range matcher.Headers {
+					res.Headers = res.Headers && (ctx.GetRequestHeader(k) == v)
+				}
+			}
+		}
+		if ctx.Stage == StageRequestBody {
+			if !res.Body && matcher.Body != nil {
+				if !ctx.End {
+					ctx.Pause()
+					return false
+				}
+				body, err := ctx.GetRequestBody(0, ctx.BodySize)
+				if err != nil {
+					return false
+				}
+				res.Body = matcher.Body(body)
+			}
+		}
+		return res.All()
+	}
+}
+
+func ModifyHttpResponseBody(modifyFunc func([]byte) []byte) func(ctx *DoContext) bool {
 	return func(ctx *DoContext) bool {
 		if ctx.Stage == StageResponseHeaders {
 			ctx.DelResponseHeader("content-length")
@@ -55,7 +108,7 @@ func DoModifyHttpResponseBody(modifyFunc func([]byte) []byte) func(ctx *DoContex
 }
 
 func DoReplaceHttpResponseBody(newBody []byte) func(ctx *DoContext) bool {
-	return DoModifyHttpResponseBody(func(_ []byte) []byte {
+	return ModifyHttpResponseBody(func(_ []byte) []byte {
 		return newBody
 	})
 }

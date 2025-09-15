@@ -1,0 +1,26 @@
+# Ignore the original main.go (will be replaced with test version)
+main.go
+
+# Ignore test artifacts that aren't needed for build
+test/docker-compose.yml
+test/Dockerfile.build
+test/Makefile
+test/README.md
+
+# Ignore build artifacts
+wasm/
+*.wasm
+
+# Ignore Git and other VCS
+.git
+.gitignore
+
+# Ignore IDE files
+.vscode
+.idea
+*.swp
+*.swo
+
+# Ignore OS files
+.DS_Store
+Thumbs.db

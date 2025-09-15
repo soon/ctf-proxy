@@ -15,6 +15,7 @@ install-dev:
 
 test:
 	uv run pytest
+	cd interceptor/test && make test
 
 test-cov:
 	uv run pytest --cov=ctf_proxy --cov-report=term-missing
@@ -26,6 +27,7 @@ fmt:
 	uv run ruff format .
 	uv run ruff check --fix .
 	cd interceptor && go fmt
+	cd interceptor/test && go fmt
 
 check: lint test
 

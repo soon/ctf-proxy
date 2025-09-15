@@ -1,0 +1,9 @@
+FROM python:3.13.7-alpine
+
+RUN pip install pytest==8.4.2 requests==2.32.5
+
+WORKDIR /app
+
+ENV CI=true
+
+CMD ["pytest", "-v", "-s", "./checker/test.py"]

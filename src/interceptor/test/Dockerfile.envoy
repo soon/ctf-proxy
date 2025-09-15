@@ -1,0 +1,17 @@
+FROM golang:1.24.5-alpine AS wasm-builder
+
+WORKDIR /build
+
+COPY interceptor.go helpers.go types.go utils.go go.mod go.sum ./
+COPY test/test_interceptors.go ./main.go
+
+RUN env GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o interceptor.wasm .
+
+FROM envoyproxy/envoy:v1.35.3
+
+COPY test/envoy.yaml /etc/envoy/envoy.yaml
+COPY --from=wasm-builder /build/interceptor.wasm /etc/envoy/wasm/interceptor.wasm
+
+EXPOSE 15001 15000
+
+CMD ["envoy", "-c", "/etc/envoy/envoy.yaml", "-l", "info"]

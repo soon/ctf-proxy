@@ -1,0 +1,13 @@
+FROM golang:1.24.5-alpine AS builder
+
+WORKDIR /build
+
+COPY interceptor.go helpers.go types.go utils.go go.mod go.sum ./
+COPY test/test_interceptors.go ./main.go
+
+# Build the WASM module
+RUN env GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o interceptor_test.wasm .
+
+# Output stage - minimal image to extract the WASM file
+FROM alpine:latest AS output
+COPY --from=builder /build/interceptor_test.wasm /interceptor_test.wasm
