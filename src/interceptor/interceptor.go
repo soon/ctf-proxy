@@ -107,7 +107,7 @@ runDo:
 		if it.When(wc) {
 			wc.LogInfo(fmt.Sprintf("when matched stage=%s", stage.String()))
 			h.trace(isReq, it.Name)
-			h.doContext = makeDoCtx(stage, port, n, end, isReq, it)
+			h.doContext = makeDoCtx(stage, port, n, end, it)
 			goto runDo
 		}
 		if wc.resultAction == types.ActionPause {
@@ -176,7 +176,7 @@ func updateWhenCtx(c *WhenContext, stage Stage, n int, end bool) {
 	c.resultAction = types.ActionContinue
 }
 
-func makeDoCtx(stage Stage, port int64, n int, end bool, isReq bool, interceptor *Interceptor) *DoContext {
+func makeDoCtx(stage Stage, port int64, n int, end bool, interceptor *Interceptor) *DoContext {
 	c := &DoContext{
 		Stage:        stage,
 		Port:         port,
@@ -187,71 +187,93 @@ func makeDoCtx(stage Stage, port int64, n int, end bool, isReq bool, interceptor
 	}
 
 	c.GetRequestHeader = func(k string) string {
-		if !isReq {
+		if c.Stage != StageRequestHeaders {
+			c.LogWarn("GetRequestHeader called at wrong stage: " + c.Stage.String())
 			return ""
 		}
 		v, _ := proxywasm.GetHttpRequestHeader(k)
 		return v
 	}
 	c.SetRequestHeader = func(k, v string) {
-		if isReq {
-			proxywasm.ReplaceHttpRequestHeader(k, v)
+		if c.Stage != StageRequestHeaders {
+			c.LogWarn("SetRequestHeader called at wrong stage: " + c.Stage.String())
+			return
 		}
+		proxywasm.ReplaceHttpRequestHeader(k, v)
 	}
 	c.DelRequestHeader = func(k string) {
-		if isReq {
-			proxywasm.RemoveHttpRequestHeader(k)
+		if c.Stage != StageRequestHeaders {
+			c.LogWarn("DelRequestHeader called at wrong stage: " + c.Stage.String())
+			return
 		}
+		proxywasm.RemoveHttpRequestHeader(k)
 	}
 	c.GetRequestBody = func(start, size int) ([]byte, error) {
-		if !isReq {
+		if c.Stage != StageRequestBody {
+			c.LogWarn("GetRequestBody called at wrong stage: " + c.Stage.String())
 			return nil, nil
 		}
 		body, err := proxywasm.GetHttpRequestBody(start, size)
 		return body, err
 	}
 	c.ReplaceRequestBody = func(b []byte) error {
-		if !isReq {
+		if c.Stage != StageRequestBody {
+			c.LogWarn("ReplaceRequestBody called at wrong stage: " + c.Stage.String())
 			return nil
 		}
 		return proxywasm.ReplaceHttpRequestBody(b)
 	}
 
 	c.GetResponseHeader = func(k string) string {
-		if isReq {
+		if c.Stage != StageResponseHeaders {
+			c.LogWarn("GetResponseHeader called at wrong stage: " + c.Stage.String())
 			return ""
 		}
 		v, _ := proxywasm.GetHttpResponseHeader(k)
 		return v
 	}
 	c.SetResponseHeader = func(k, v string) {
-		if !isReq {
-			proxywasm.ReplaceHttpResponseHeader(k, v)
+		if c.Stage != StageResponseHeaders {
+			c.LogWarn("SetResponseHeader called at wrong stage: " + c.Stage.String())
+			return
 		}
+		proxywasm.ReplaceHttpResponseHeader(k, v)
 	}
 	c.DelResponseHeader = func(k string) {
-		if !isReq {
-			proxywasm.RemoveHttpResponseHeader(k)
+		if c.Stage != StageResponseHeaders {
+			c.LogWarn("DelResponseHeader called at wrong stage: " + c.Stage.String())
+			return
 		}
+		proxywasm.RemoveHttpResponseHeader(k)
 	}
 	c.GetResponseBody = func(start, size int) ([]byte, error) {
-		if isReq {
+		if c.Stage != StageResponseBody {
+			c.LogWarn("GetResponseBody called at wrong stage: " + c.Stage.String())
 			return nil, nil
 		}
 		body, err := proxywasm.GetHttpResponseBody(start, size)
 		return body, err
 	}
 	c.ReplaceResponseBody = func(b []byte) error {
-		if isReq {
+		if c.Stage != StageResponseBody {
+			c.LogWarn("ReplaceResponseBody called at wrong stage: " + c.Stage.String())
 			return nil
 		}
 		return proxywasm.ReplaceHttpResponseBody(b)
 	}
+
 	c.LogInfo = func(message string) {
 		if c.interceptor != nil && c.interceptor.Name != "" {
 			proxywasm.LogInfo(fmt.Sprintf("[%s (do)] %s", c.interceptor.Name, message))
 		} else {
 			proxywasm.LogInfo(message)
+		}
+	}
+	c.LogWarn = func(message string) {
+		if c.interceptor != nil && c.interceptor.Name != "" {
+			proxywasm.LogWarn(fmt.Sprintf("[%s (do)] %s", c.interceptor.Name, message))
+		} else {
+			proxywasm.LogWarn(message)
 		}
 	}
 

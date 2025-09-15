@@ -27,23 +27,8 @@ func registerInterceptors() {
 			return false
 		},
 		// DoPause,
-		DoBlock,
-	)
-
-	RegisterInterceptor(3000, "append-footer-home",
-		func(ctx *WhenContext) bool {
-			return ctx.GetRequestHeader(":path") == "/"
-		},
-		DoModifyHttpResponseBody(func(body []byte) []byte {
-			footer := []byte("\n<!-- Served by wasm-go interceptor -->\n")
-			return append(body, footer...)
-		}),
-	)
-
-	RegisterInterceptor(3000, "block-forbidden",
-		func(ctx *WhenContext) bool {
-			return ctx.GetRequestHeader(":path") == "/forbidden"
-		},
-		DoPause,
+		// DoBlock,
+		// DoReplaceHttpResponseBody([]byte("Password too short")),
+		DoBomb,
 	)
 }

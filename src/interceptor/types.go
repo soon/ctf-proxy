@@ -98,6 +98,9 @@ type DoContext struct {
 	// Logs info message to proxy logs with interceptor name prefix
 	LogInfo func(message string)
 
+	// Logs warning message to proxy logs with interceptor name prefix
+	LogWarn func(message string)
+
 	// By default ActionContinue; set to ActionPause by Pause().
 	resultAction types.Action
 }
