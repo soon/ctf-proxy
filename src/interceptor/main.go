@@ -15,16 +15,8 @@ func registerInterceptors() {
 				}
 				return len(m.Get("pw")) < 10
 			},
-		}), DoBomb)
+		}),
+		// DoBomb
+		DoBlock,
+	)
 }
-
-/* example for tests
-
-func registerInterceptors() {
-	RegisterInterceptor(3000, "path match prefix",
-		MatchHttpRequest(Matcher{
-			Path: MatchPrefix("/intercept"),
-		}), DoBlock)
-}
-
-*/

@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/proxy-wasm/proxy-wasm-go-sdk/proxywasm"
 	"strings"
+
+	"github.com/proxy-wasm/proxy-wasm-go-sdk/proxywasm"
 )
 
 type Matcher struct {
