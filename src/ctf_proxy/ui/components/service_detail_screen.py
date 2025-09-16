@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 
 from textual.app import ComposeResult
@@ -133,9 +134,12 @@ class ServiceDetailScreen(Screen):
     """
 
     BINDINGS = [
-        ("escape", "dismiss", "Back to Dashboard"),
-        ("q", "dismiss", "Quit"),
+        ("escape", "dismiss", "Close Screen"),
+        ("question_mark", "show_help", "Show Help"),
+        ("q", "view_query_param_stats", "View Query Param Stats"),
+        ("h", "view_header_stats", "View Header Stats"),
         ("r", "refresh", "Refresh Table"),
+        ("p", "view_path_stats", "View Path Stats"),
         ("enter", "view_request", "View Request Details"),
         ("/", "focus_command", "Focus Command Input"),
     ]
@@ -152,13 +156,13 @@ class ServiceDetailScreen(Screen):
     def compose(self) -> ComposeResult:
         with Vertical(classes="service-detail-container"):
             yield Static(
-                f"Service: {self.service.name}:{self.service.port} [{self.service.type.value}] - Press 'r' to refresh table, Enter to view request, ESC to go back",
+                f"Service: {self.service.name}:{self.service.port} [{self.service.type.value}] - Press '?' for help, 'r' to refresh, 'p' for paths, 'q' for query params, 'h' for headers, Enter to view request, ESC to close",
                 classes="service-header",
             )
             yield Static("", id="service-stats", classes="service-stats")
             yield self._create_requests_table()
             yield Input(
-                placeholder="Enter command (e.g., q path=/api, q 404, q POST, h for help)",
+                placeholder="Enter command (e.g., q path=/api, q 404, q POST, ? for help)",
                 classes="command-input",
                 id="command-input",
             )
@@ -167,6 +171,18 @@ class ServiceDetailScreen(Screen):
         table = self.query_one(DataTable)
         table.clear()
         self._populate_requests_table(table)
+
+    def action_show_help(self) -> None:
+        """Show help in a toast notification"""
+        help_text = """Commands:
+q <filter> - Filter requests (e.g., q path=/api, q 404, q POST)
+clear/c - Clear filter
+? - Show help
+r - Refresh
+p - Show paths
+q - Show query params
+h - Show headers"""
+        self.app.notify(help_text, severity="information")
 
     def action_focus_command(self) -> None:
         """Focus the command input"""
@@ -181,6 +197,24 @@ class ServiceDetailScreen(Screen):
             from .request_detail_screen import RequestDetailScreen
 
             self.app.push_screen(RequestDetailScreen(request_id, self.db))
+
+    def action_view_path_stats(self) -> None:
+        """View path stats for this service port"""
+        from .path_stats_screen import PathStatsScreen
+
+        self.app.push_screen(PathStatsScreen(self.db, self.service))
+
+    def action_view_query_param_stats(self) -> None:
+        """View query parameter stats for this service port"""
+        from .query_param_stats_screen import QueryParamStatsScreen
+
+        self.app.push_screen(QueryParamStatsScreen(self.db, self.service))
+
+    def action_view_header_stats(self) -> None:
+        """View header stats for this service port"""
+        from .header_stats_screen import HeaderStatsScreen
+
+        self.app.push_screen(HeaderStatsScreen(self.db, self.service))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         row = event.data_table.get_row_at(event.cursor_row)
@@ -202,9 +236,8 @@ class ServiceDetailScreen(Screen):
                 self.filter_where_clause = where_clause
                 self.filter_params = params
                 self.filter_display = filter_str
-                input_widget.value = f"Applied filter: {filter_str}"
+                self.app.notify(f"Applied filter: {filter_str}", severity="information")
                 self.action_refresh()
-                self.set_timer(2.0, lambda: setattr(input_widget, "value", ""))
             else:
                 input_widget.value = "Error: Invalid filter format"
                 self.set_timer(3.0, lambda: setattr(input_widget, "value", ""))
@@ -215,7 +248,7 @@ class ServiceDetailScreen(Screen):
             input_widget.value = "Filter cleared"
             self.action_refresh()
             self.set_timer(2.0, lambda: setattr(input_widget, "value", ""))
-        elif command.startswith("/h") or command == "/" or command == "h":
+        elif command.startswith("?") or command == "/" or command == "h":
             available_commands = [
                 "q <filter> - Filter requests (see examples below)",
                 "Examples:",
@@ -230,14 +263,16 @@ class ServiceDetailScreen(Screen):
                 "  q 404 (auto: status)",
                 "  q POST (auto: method)",
                 "clear or c - Clear current filter",
-                "h - Show this help",
+                "? - Show this help",
                 "r - Refresh table",
+                "p - View path stats",
+                "q - View query param stats",
+                "h - View header stats",
             ]
             input_widget.value = f"Commands: {' | '.join(available_commands)}"
             self.set_timer(8.0, lambda: setattr(input_widget, "value", ""))
         else:
-            input_widget.value = "Unknown command. Type h for help"
-            self.set_timer(3.0, lambda: setattr(input_widget, "value", ""))
+            self.app.notify("Unknown command. Type ? for help", severity="error")
 
     def refresh_stats(self) -> None:
         current_time = datetime.now().strftime("%H:%M:%S")
@@ -306,6 +341,8 @@ class ServiceDetailScreen(Screen):
         return table
 
     def _populate_requests_table(self, table: DataTable) -> None:
+        start_time = time.time()
+
         with self.db.connect() as conn:
             cursor = conn.cursor()
 

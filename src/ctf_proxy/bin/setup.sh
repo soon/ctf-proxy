@@ -8,8 +8,15 @@ echo 'Creating container dirs...'
 sudo mkdir -p logs/tap logs/pre-tap logs/post-tap logs-archive data
 sudo chown -R 1337:1337 logs logs-archive data
 
-echo 'Generating services config...'
-sudo python3 ./ctf_proxy/bin/docker-config-gen.py data/config.yml
+# Check if ~/config.yml exists, if not - create using config gen
+if [ ! -f ~/config.yml ]; then
+    echo 'Generating initial config.yml...'
+    python3 ./ctf_proxy/bin/docker-config-gen.py ~/config.yml
+else
+    echo 'Using existing config.yml...'
+fi
+
+sudo cp ~/config.yml data/config.yml
 
 echo 'Setting up iptables rules for proxying...'
 sudo PORTS_FILE=data/config.yml python3 ./ctf_proxy/bin/iptables-config.py setup

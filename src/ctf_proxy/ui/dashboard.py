@@ -10,6 +10,8 @@ from textual.widgets import Footer, Header, Input
 from ctf_proxy.config import Config
 from ctf_proxy.db import ProxyStatsDB
 from ctf_proxy.ui.components import (
+    PathStatsScreen,
+    QueryParamStatsScreen,
     RequestDetailScreen,
     ServiceBlock,
     ServiceDetailScreen,
@@ -53,7 +55,7 @@ class Dashboard(Widget):
                     yield block
 
             yield Input(
-                placeholder="Enter command (e.g., s 3000 for service, r 123 for request, h for help)",
+                placeholder="Enter command (e.g., s 3000 for service, r 123 for request, p 3000 for paths, h for help)",
                 classes="command-input",
                 id="command-input",
             )
@@ -83,9 +85,9 @@ class Dashboard(Widget):
                     input_widget.value = ""
                     self.app.push_screen(ServiceDetailScreen(service, self.db))
                 else:
-                    input_widget.value = f"Error: No service found on port {port}"
+                    self.app.notify(f"No service found on port {port}", severity="error")
             except ValueError:
-                input_widget.value = "Error: Invalid port number"
+                self.app.notify("Invalid port number", severity="error")
         elif command.startswith("/r ") or command.startswith("r "):
             try:
                 req_id_str = (
@@ -95,25 +97,52 @@ class Dashboard(Widget):
                 input_widget.value = ""
                 self.app.push_screen(RequestDetailScreen(req_id, self.db))
             except ValueError:
-                input_widget.value = "Error: Invalid request ID"
+                self.app.notify("Invalid request ID", severity="error")
+        elif command.startswith("/p ") or command.startswith("p "):
+            try:
+                port_str = command[3:].strip() if command.startswith("/p ") else command[2:].strip()
+                port = int(port_str)
+                service = self.config.get_service_by_port(port)
+                if service:
+                    input_widget.value = ""
+                    self.app.push_screen(PathStatsScreen(self.db, service))
+                else:
+                    self.app.notify(f"No service found on port {port}", severity="error")
+            except ValueError:
+                self.app.notify("Invalid port number", severity="error")
+        elif command.startswith("/m ") or command.startswith("m "):
+            try:
+                port_str = command[3:].strip() if command.startswith("/m ") else command[2:].strip()
+                port = int(port_str)
+                service = self.config.get_service_by_port(port)
+                if service:
+                    input_widget.value = ""
+                    self.app.push_screen(QueryParamStatsScreen(self.db, service))
+                else:
+                    self.app.notify(f"No service found on port {port}", severity="error")
+            except ValueError:
+                self.app.notify("Invalid port number", severity="error")
         elif command.startswith("/h") or command == "/" or command == "h":
-            available_commands = [
-                "s <port> - Open service detail page",
-                "/s <port> - Open service detail page",
-                "r <req_id> - Open request detail page",
-                "/r <req_id> - Open request detail page",
-                "h - Show this help",
-                "ESC - Clear command input",
-            ]
-            input_widget.value = f"Commands: {' | '.join(available_commands)}"
+            help_text = """Commands:
+s <port> - Open service detail page
+r <req_id> - Open request detail page
+p <port> - Open path stats page
+m <port> - Open query param stats page
+h - Show this help
+ESC - Clear command input"""
+            self.app.notify(help_text, severity="information")
         else:
-            input_widget.value = "Unknown command. Type h for help"
+            self.app.notify("Unknown command. Type h for help", severity="warning")
 
         if command and not (
             command.startswith("/s ")
             or command.startswith("s ")
             or command.startswith("/r ")
             or command.startswith("r ")
+            or command.startswith("/p ")
+            or command.startswith("p ")
+            or command.startswith("/m ")
+            or command.startswith("m ")
         ):
             self.set_timer(3.0, lambda: setattr(input_widget, "value", ""))
 

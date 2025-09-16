@@ -110,3 +110,36 @@ CREATE TABLE IF NOT EXISTS http_path_stats (
 ) STRICT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS http_path_stats_unique ON http_path_stats(port, path);
+
+CREATE TABLE IF NOT EXISTS http_path_time_stats (
+    id INTEGER PRIMARY KEY,
+    port INTEGER NOT NULL,
+    method TEXT NOT NULL,
+    path TEXT NOT NULL,
+    time INTEGER NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS http_path_time_stats_unique ON http_path_time_stats(port, method, path, time);
+
+CREATE TABLE IF NOT EXISTS http_query_param_time_stats (
+    id INTEGER PRIMARY KEY,
+    port INTEGER NOT NULL,
+    param TEXT NOT NULL,
+    value TEXT NOT NULL,
+    time INTEGER NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS http_query_param_time_stats_unique ON http_query_param_time_stats(port, param, value, time);
+
+CREATE TABLE IF NOT EXISTS http_header_time_stats (
+    id INTEGER PRIMARY KEY,
+    port INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    value TEXT NOT NULL,
+    time INTEGER NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS http_header_time_stats_unique ON http_header_time_stats(port, name, value, time);

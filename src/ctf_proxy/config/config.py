@@ -17,18 +17,29 @@ class ServiceType(Enum):
     WS = "ws"
 
 
+class IgnoredPathStat(BaseModel):
+    method: str = Field(..., min_length=1, description="HTTP method to ignore (e.g., GET, POST)")
+    path: str = Field(
+        ..., min_length=1, description="Path to ignore (e.g., /api/v1/resource, can be regex)"
+    )
+
+
 class Service(BaseModel):
     name: str = Field(..., min_length=1, description="Service name")
     port: int = Field(..., ge=1, le=65535, description="Service port number")
     type: ServiceType = Field(..., description="Service type")
-
-    def __repr__(self) -> str:
-        return f"Service(name='{self.name}', port={self.port}, type={self.type.value})"
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Service):
-            return False
-        return self.name == other.name and self.port == other.port and self.type == other.type
+    ignore_path_stats: list[IgnoredPathStat] = Field(
+        default_factory=list,
+        description="List of ignored path stats",
+    )
+    ignore_query_param_stats: dict[str, str] = Field(
+        default_factory=dict,
+        description="Query parameters to ignore in stats (key-value pairs)",
+    )
+    ignore_header_stats: dict[str, str] = Field(
+        default_factory=dict,
+        description="Headers to ignore in stats (key-value pairs)",
+    )
 
 
 class ConfigError(Exception):

@@ -7,6 +7,12 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 
+from ctf_proxy.db.stats import (
+    HttpHeaderTimeStatsTable,
+    HttpPathTimeStatsTable,
+    HttpQueryParamTimeStatsTable,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -470,6 +476,9 @@ class ProxyStatsDB:
         self.service_stats = ServiceStatsTable(db_file)
         self.http_response_code_stats = HttpResponseCodeStatsTable(db_file)
         self.http_path_stats = HttpPathStatsTable(db_file)
+        self.http_path_time_stats = HttpPathTimeStatsTable()
+        self.http_query_param_time_stats = HttpQueryParamTimeStatsTable()
+        self.http_header_time_stats = HttpHeaderTimeStatsTable()
         # self.conn = sqlite3.connect(self.db_file)
 
     # def transaction(self):

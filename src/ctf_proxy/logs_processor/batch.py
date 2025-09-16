@@ -168,10 +168,14 @@ class BatchProcessor:
                     continue
 
                 batch_id = self.create_batch_id()
+                start = datetime.now()
                 processed_count = self.process_batch(batch_id, tap_files)
+                duration = (datetime.now() - start).total_seconds() * 1000
 
                 if processed_count > 0:
-                    logger.info(f"Processed {processed_count} tap files in batch {batch_id}")
+                    logger.info(
+                        f"Processed {processed_count} tap files in batch {batch_id} in {duration:.2f} ms"
+                    )
 
                 if self.running:
                     if self.wait_or_shutdown(SLEEP_BETWEEN_BATCHES):
