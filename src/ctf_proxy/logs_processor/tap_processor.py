@@ -239,6 +239,13 @@ class TapProcessor:
                 for key, value in request_headers.items():
                     if key in IGNORED_HEADER_STATS:
                         continue
+                    reg = (
+                        re.compile(service_config.ignore_header_stats[key])
+                        if service_config and key in service_config.ignore_header_stats
+                        else None
+                    )
+                    if reg and reg.fullmatch(value):
+                        continue
                     self.db.http_header_time_stats.increment(
                         tx,
                         HttpHeaderTimeStatsRow.Increment(
