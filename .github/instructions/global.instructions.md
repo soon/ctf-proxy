@@ -20,21 +20,22 @@ You're a senior software engineer. When working follow engineering principles:
 1. **About**: The project is a CTF utility. The purpose is to help CTF players to monitor and quickly patch their services.
 2. **How**: The core idea is to run a single proxy in front of all services. The traffic is forwarded using iptables. The proxy supports plugins and logs all traffic which is later post-processed and visualized in a dashboard.
 3. **Components**: The project consists of several components:
-  - Proxy: The core component that forwards traffic, supports plugins, and logs all traffic.
-  - Post-processor: A component that processes the logs and extracts useful information.
-  - Plugins: Scripts that can intercept and modify requests and responses.
-  - CLI dashboard: A terminal-based dashboard to monitor services and traffic.
+  - Proxy: The core component that forwards traffic, supports plugins, and logs all traffic. Located in `src/ctf_proxy/proxy`.
+  - Post-processor: A component that processes the logs and extracts useful information. Located in `src/ctf_proxy/logs_processor`.
+  - Interceptor: Interrupt or modify requests on the fly. Located in `src/interceptor`
+  - CLI dashboard: A terminal-based dashboard to monitor services and traffic. Located in `src/ctf_proxy/ui`.
+  - DB: A SQLite database to store logs and statistics. Located in `src/ctf_proxy/db`.
 4. **Tech stack**:
   - Proxy: Envoy
   - Post-processor: Python, SQLite
   - Plugins: Go
-  - CLI dashboard: Python
+  - CLI dashboard: Python, SQLite, Textual
 5. **Ignored files**: Ignore files in "outdated" folder - it contains old version of the similar project.
 
 
 # Code guidelines:
 
-1. **No comments**: Don't write comments explaining the code.
+1. **No comments**: NEVER WRITE COMMENTS EXPLAINING YOUR CODE. If the code is not clear - rewrite it. ONLY add comments if explicitly asked.
 2. **Type hints**: Use type hints for all functions and methods.
 3. **Absolute imports**: Use absolute imports instead of relative imports.
 4. **Simple naming**: Don't prefix private variables and methods with underscore.
