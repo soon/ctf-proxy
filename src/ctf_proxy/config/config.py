@@ -40,6 +40,18 @@ class Service(BaseModel):
         default_factory=dict,
         description="Headers to ignore in stats (key-value pairs)",
     )
+    session_cookie_names: list[str] = Field(
+        default_factory=lambda: [
+            "session",
+            "sessid",
+            "sid",
+            "token",
+            "auth",
+            "sessionid",
+            ".AspNetCore.Identity.Application",
+        ],
+        description="Cookie names to track for session management",
+    )
 
 
 class ConfigError(Exception):

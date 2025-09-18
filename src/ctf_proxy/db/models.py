@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-import enum
 import logging
 import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 
+from ctf_proxy.db.base import RowStatus
 from ctf_proxy.db.stats import (
     HttpHeaderTimeStatsTable,
     HttpPathTimeStatsTable,
@@ -157,9 +157,11 @@ class HttpPathStatsRow:
         count: int = 0
 
 
-class RowStatus(enum.Enum):
-    NEW = "new"
-    UPDATED = "updated"
+class HttpRequestLinkRow:
+    @dataclass
+    class Insert:
+        from_request_id: int
+        to_request_id: int
 
 
 class BaseTable:
@@ -459,6 +461,38 @@ WHERE port = ? AND path = ?;
         return RowStatus.UPDATED
 
 
+class HttpRequestLinkTable(BaseTable):
+    def insert(self, tx: sqlite3.Cursor, row: HttpRequestLinkRow.Insert) -> None:
+        tx.execute(
+            """
+            INSERT OR IGNORE
+            INTO http_request_link (from_request_id, to_request_id)
+            VALUES (?, ?)
+            """,
+            (row.from_request_id, row.to_request_id),
+        )
+
+    def get_outgoing_links(self, request_id: int) -> list[int]:
+        """Get request IDs that this request links to (next requests in chain)"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT to_request_id FROM http_request_link WHERE from_request_id = ?",
+                (request_id,),
+            )
+            return [row[0] for row in cursor.fetchall()]
+
+    def get_incoming_links(self, request_id: int) -> list[int]:
+        """Get request IDs that link to this request (previous requests in chain)"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT from_request_id FROM http_request_link WHERE to_request_id = ?",
+                (request_id,),
+            )
+            return [row[0] for row in cursor.fetchall()]
+
+
 def make_db(path: str = "proxy_stats.db"):
     db = ProxyStatsDB(path)
     db.init_db()
@@ -479,6 +513,7 @@ class ProxyStatsDB:
         self.http_path_time_stats = HttpPathTimeStatsTable()
         self.http_query_param_time_stats = HttpQueryParamTimeStatsTable()
         self.http_header_time_stats = HttpHeaderTimeStatsTable()
+        self.http_request_links = HttpRequestLinkTable(db_file)
         # self.conn = sqlite3.connect(self.db_file)
 
     # def transaction(self):

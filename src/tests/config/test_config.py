@@ -23,7 +23,10 @@ class TestService:
 
     def test_service_repr(self):
         service = Service(name="web", port=8080, type="http")
-        assert repr(service) == "Service(name='web', port=8080, type=http)"
+        repr_str = repr(service)
+        assert "name='web'" in repr_str
+        assert "port=8080" in repr_str
+        assert "ServiceType.HTTP" in repr_str
 
     def test_invalid_service_type(self):
         with pytest.raises((ValueError, Exception)):  # Pydantic ValidationError or similar

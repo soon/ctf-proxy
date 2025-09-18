@@ -11,21 +11,21 @@ help:
 	@echo "  clean       Clean up cache files"
 
 install-dev:
-	uv sync --dev
+	./uv.sh sync --dev
 
 test:
-	uv run pytest
+	./uv.sh run pytest
 	cd interceptor/test && make test
 
 test-cov:
-	uv run pytest --cov=ctf_proxy --cov-report=term-missing
+	./uv.sh run pytest --cov=ctf_proxy --cov-report=term-missing
 
 lint:
-	uv run ruff check .
+	./uv.sh run ruff check .
 
 fmt:
-	uv run ruff format .
-	uv run ruff check --fix .
+	./uv.sh run ruff format .
+	./uv.sh run ruff check --fix .
 	cd interceptor && go fmt
 	cd interceptor/test && go fmt
 

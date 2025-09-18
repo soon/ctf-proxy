@@ -11,6 +11,7 @@ from ctf_proxy.db.models import (
     FlagRow,
     HttpHeaderRow,
     HttpPathStatsRow,
+    HttpRequestLinkRow,
     HttpResponseCodeStatsRow,
     ProxyStatsDB,
     RowStatus,
@@ -23,6 +24,7 @@ from ctf_proxy.db.stats import (
 )
 from ctf_proxy.db.utils import convert_datetime_to_timestamp, now_timestamp
 from ctf_proxy.logs_processor.flags import find_body_flags
+from ctf_proxy.logs_processor.sessions import SessionsStorage
 
 DEFAULT_DURATION_MS = 100
 
@@ -41,6 +43,7 @@ class TapProcessor:
     def __init__(self, db: ProxyStatsDB, config: Config):
         self.db = db
         self.config = config
+        self.sessions = SessionsStorage(self.config)
 
     def process_tap_file(
         self, tap_file_path: str, tap_id: str, batch_id: str, log_entry: dict | None = None
@@ -55,24 +58,28 @@ class TapProcessor:
         request = http_trace.get("request", {})
         response = http_trace.get("response", {})
 
-        request_headers = {
-            h.get("key").lower(): h.get("value") for h in request.get("headers", []) if h.get("key")
-        }
+        request_headers = [
+            (h.get("key").lower(), h.get("value"))
+            for h in request.get("headers", [])
+            if h.get("key")
+        ]
+        request_headers_dict = dict(request_headers)
         request_trailers = {
             h.get("key").lower(): h.get("value")
             for h in request.get("trailers", [])
             if h.get("key")
         }
-        response_headers = {
-            h.get("key").lower(): h.get("value")
+        response_headers = [
+            (h.get("key").lower(), h.get("value"))
             for h in response.get("headers", [])
             if h.get("key")
-        }
+        ]
+        response_headers_dict = dict(response_headers)
 
         is_blocked = request_trailers.get("x-blocked") == "1"
 
-        method = log_entry.get("method") or request_headers.get(":method")
-        full_path = log_entry.get("path") or request_headers.get(":path") or ""
+        method = log_entry.get("method") or request_headers_dict.get(":method")
+        full_path = log_entry.get("path") or request_headers_dict.get(":path") or ""
         try:
             parsed_url = urlparse(full_path)
             path = parsed_url.path
@@ -86,10 +93,10 @@ class TapProcessor:
         except Exception:
             query_params = {}
 
-        status_str = log_entry.get("status") or response_headers.get(":status")
+        status_str = log_entry.get("status") or response_headers_dict.get(":status")
         status = int(status_str) if status_str and str(status_str).isdigit() else -1
 
-        user_agent = request_headers.get("user-agent")
+        user_agent = request_headers_dict.get("user-agent")
         start_time_str = log_entry.get("start_time")
 
         start_time = (
@@ -97,6 +104,7 @@ class TapProcessor:
             if start_time_str
             else datetime.now()
         )
+        start_time_ts = convert_datetime_to_timestamp(start_time)
         start_minute = start_time.replace(second=0, microsecond=0)
         start_minute_ts = convert_datetime_to_timestamp(start_minute)
 
@@ -130,11 +138,11 @@ class TapProcessor:
             headers = [
                 *(
                     HttpHeaderRow.Insert(request_id=request_id, name=key, value=value)
-                    for key, value in request_headers.items()
+                    for key, value in request_headers
                 ),
                 *(
                     HttpHeaderRow.Insert(response_id=response_id, name=key, value=value)
-                    for key, value in response_headers.items()
+                    for key, value in response_headers
                 ),
             ]
             if headers:
@@ -236,7 +244,7 @@ class TapProcessor:
                                 count=1,
                             ),
                         )
-                for key, value in request_headers.items():
+                for key, value in request_headers:
                     if key in IGNORED_HEADER_STATS:
                         continue
                     reg = (
@@ -254,6 +262,21 @@ class TapProcessor:
                             value=value,
                             time=start_minute_ts,
                             count=1,
+                        ),
+                    )
+                self.sessions.add_request(
+                    port=port,
+                    request_id=request_id,
+                    start_time=start_time_ts,
+                    request_headers=request_headers,
+                    response_headers=response_headers,
+                )
+                for link in self.sessions.get_links(port, request_id):
+                    self.db.http_request_links.insert(
+                        tx,
+                        HttpRequestLinkRow.Insert(
+                            from_request_id=link.from_request_id,
+                            to_request_id=link.to_request_id,
                         ),
                     )
 

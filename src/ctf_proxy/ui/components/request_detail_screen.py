@@ -1,3 +1,7 @@
+# Import for circular dependency handling
+import os
+from typing import TYPE_CHECKING
+
 from textual.app import ComposeResult
 from textual.containers import Horizontal, ScrollableContainer, Vertical
 from textual.screen import Screen
@@ -5,6 +9,9 @@ from textual.widgets import DataTable, Label, Static
 
 from ctf_proxy.db import ProxyStatsDB
 from ctf_proxy.db.utils import convert_timestamp_to_datetime
+
+if TYPE_CHECKING:
+    pass
 
 
 class RequestDetailScreen(Screen):
@@ -98,11 +105,20 @@ class RequestDetailScreen(Screen):
         min-height: 3;
         max-height: 8;
       }
+
+      .linked-requests-table {
+        margin-top: 1;
+        height: auto;
+        min-height: 3;
+        max-height: 10;
+      }
     """
 
     BINDINGS = [
         ("escape", "dismiss", "Back"),
         ("q", "dismiss", "Quit"),
+        ("r", "view_raw", "View Raw Data"),
+        ("enter", "view_selected", "View Selected Request"),
     ]
 
     def __init__(self, request_id: int, db: ProxyStatsDB):
@@ -110,12 +126,15 @@ class RequestDetailScreen(Screen):
         self.db = db
         self.request_data = None
         self.response_data = None
+        self.incoming_links = []
+        self.outgoing_links = []
+        self.linked_requests_info = {}
         super().__init__()
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="request-detail-container"):
             yield Static(
-                f"Request ID: {self.request_id} - Press ESC to go back",
+                f"Request ID: {self.request_id} - Press ESC to go back | R for raw data | Enter to view linked request",
                 classes="request-header",
                 id="header-info",
             )
@@ -138,6 +157,10 @@ class RequestDetailScreen(Screen):
                             "Flags Found:", classes="section-title", id="request-flags-label"
                         )
                         yield self._create_request_flags_table()
+                        yield Label(
+                            "Linked Requests:", classes="section-title", id="linked-requests-label"
+                        )
+                        yield self._create_linked_requests_table()
 
                 with Vertical(classes="response-panel"):
                     yield Label("📥 RESPONSE", classes="panel-title")
@@ -216,12 +239,58 @@ class RequestDetailScreen(Screen):
                 self._update_response_body()
                 self._check_and_hide_query_params()
                 self._check_and_hide_flags()
+                self._load_linked_requests()
+
+    def _load_linked_requests(self) -> None:
+        """Load linked requests data"""
+        self.incoming_links = self.db.http_request_links.get_incoming_links(self.request_id)
+        self.outgoing_links = self.db.http_request_links.get_outgoing_links(self.request_id)
+
+        # Get basic info for linked requests
+        self.linked_requests_info = {}
+        all_linked_ids = self.incoming_links + self.outgoing_links
+
+        if all_linked_ids:
+            with self.db.connect() as conn:
+                cursor = conn.cursor()
+                placeholders = ",".join("?" for _ in all_linked_ids)
+                cursor.execute(
+                    f"""
+                    SELECT id, method, path, start_time
+                    FROM http_request
+                    WHERE id IN ({placeholders})
+                    """,
+                    all_linked_ids,
+                )
+
+                for row in cursor.fetchall():
+                    req_id, method, path, start_time = row
+                    try:
+                        start_dt = convert_timestamp_to_datetime(start_time)
+                        time_str = start_dt.strftime("%H:%M:%S")
+                    except Exception:
+                        time_str = "Unknown"
+
+                    # Parse path to get just the path part
+                    if "?" in path:
+                        path_part, _ = path.split("?", 1)
+                    else:
+                        path_part = path
+
+                    self.linked_requests_info[req_id] = {
+                        "method": method,
+                        "path": path_part,
+                        "time": time_str,
+                    }
+
+        self._check_and_hide_linked_requests()
+        self._update_linked_requests_table()
 
     def _update_header_info(self) -> None:
         if self.request_data:
-            header_text = f"Request ID: {self.request_id} | Port: {self.request_data['port']} - Press ESC to go back"
+            header_text = f"Request ID: {self.request_id} | Port: {self.request_data['port']} - Press ESC to go back | R for raw data | Enter to view linked request"
         else:
-            header_text = f"Request ID: {self.request_id} - Press ESC to go back"
+            header_text = f"Request ID: {self.request_id} - Press ESC to go back | R for raw data | Enter to view linked request"
 
         header_widget = self.query_one("#header-info")
         header_widget.update(header_text)
@@ -347,6 +416,57 @@ Response Available: Yes"""
                     table.display = False
                 except Exception:
                     pass
+
+    def _check_and_hide_linked_requests(self) -> None:
+        """Hide linked requests section if no linked requests exist, show if they do"""
+        has_links = bool(self.incoming_links or self.outgoing_links)
+
+        try:
+            label = self.query_one("#linked-requests-label")
+            table = self.query_one(".linked-requests-table")
+
+            if has_links:
+                label.display = True
+                table.display = True
+            else:
+                label.display = False
+                table.display = False
+        except Exception:
+            pass  # Widgets might not exist yet
+
+    def _update_linked_requests_table(self) -> None:
+        """Update the linked requests table with loaded data"""
+        try:
+            table = self.query_one(".linked-requests-table")
+            table.clear()
+
+            # Add incoming links (requests that link to this one)
+            for req_id in self.incoming_links:
+                info = self.linked_requests_info.get(req_id, {})
+                table.add_row(
+                    str(req_id),
+                    "PREV",
+                    info.get("method", "Unknown"),
+                    info.get("path", "Unknown"),
+                    info.get("time", "Unknown"),
+                )
+
+            # Add outgoing links (requests that this one links to)
+            for req_id in self.outgoing_links:
+                info = self.linked_requests_info.get(req_id, {})
+                table.add_row(
+                    str(req_id),
+                    "NEXT",
+                    info.get("method", "Unknown"),
+                    info.get("path", "Unknown"),
+                    info.get("time", "Unknown"),
+                )
+
+            if not self.incoming_links and not self.outgoing_links:
+                table.add_row("No linked requests", "", "", "", "")
+
+        except Exception:
+            pass  # Widgets might not exist yet
 
     def _create_request_headers_table(self) -> DataTable:
         table = DataTable(classes="data-table")
@@ -516,5 +636,77 @@ Response Available: Yes"""
 
         return table
 
+    def _create_linked_requests_table(self) -> DataTable:
+        table = DataTable(classes="linked-requests-table", cursor_type="row")
+        table.can_focus = True
+        table.add_columns("ID", "Direction", "Method", "Path", "Time")
+
+        # Add incoming links (requests that link to this one)
+        for req_id in self.incoming_links:
+            info = self.linked_requests_info.get(req_id, {})
+            table.add_row(
+                str(req_id),
+                "PREV",
+                info.get("method", "Unknown"),
+                info.get("path", "Unknown"),
+                info.get("time", "Unknown"),
+            )
+
+        # Add outgoing links (requests that this one links to)
+        for req_id in self.outgoing_links:
+            info = self.linked_requests_info.get(req_id, {})
+            table.add_row(
+                str(req_id),
+                "NEXT",
+                info.get("method", "Unknown"),
+                info.get("path", "Unknown"),
+                info.get("time", "Unknown"),
+            )
+
+        if not self.incoming_links and not self.outgoing_links:
+            table.add_row("No linked requests", "", "", "", "")
+        table._require_update_dimensions = True
+        return table
+
+    def action_view_raw(self) -> None:
+        """Open the raw request data screen"""
+        from .raw_request_screen import RawRequestScreen
+
+        # Get archive folder from environment or use default
+        archive_folder = os.environ.get("ARCHIVE_FOLDER", "/var/log/envoy/archive")
+        self.app.push_screen(RawRequestScreen(self.request_id, self.db, archive_folder))
+
+    def action_view_selected(self) -> None:
+        """View the selected request in linked requests table"""
+        try:
+            # Check if linked requests table is focused
+            table = self.query_one(".linked-requests-table")
+            if table.has_focus and table.cursor_row is not None:
+                row = table.get_row_at(table.cursor_row)
+                if row and row[0] and row[0] != "No linked requests":
+                    linked_request_id = int(row[0])
+                    self.app.push_screen(RequestDetailScreen(linked_request_id, self.db))
+                    return
+        except Exception:
+            pass
+
+        # If no linked request is selected, do nothing (could fall back to view_raw if desired)
+
     def action_dismiss(self) -> None:
         self.dismiss()
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Handle row selection in linked requests table"""
+        # Check if the selected table is the linked requests table
+        if (
+            hasattr(event.data_table, "classes")
+            and "linked-requests-table" in event.data_table.classes
+        ):
+            row = event.data_table.get_row_at(event.cursor_row)
+            if row and row[0] and row[0] != "No linked requests":
+                try:
+                    linked_request_id = int(row[0])
+                    # Open the linked request in a new detail screen
+                    self.app.push_screen(RequestDetailScreen(linked_request_id, self.db))
+                except (ValueError, TypeError):
+                    pass  # Invalid request ID

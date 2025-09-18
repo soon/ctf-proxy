@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 from pathlib import Path
 
 from textual.app import App, ComposeResult
@@ -12,6 +13,7 @@ from ctf_proxy.db import ProxyStatsDB
 from ctf_proxy.ui.components import (
     PathStatsScreen,
     QueryParamStatsScreen,
+    RawRequestScreen,
     RequestDetailScreen,
     ServiceBlock,
     ServiceDetailScreen,
@@ -55,7 +57,7 @@ class Dashboard(Widget):
                     yield block
 
             yield Input(
-                placeholder="Enter command (e.g., s 3000 for service, r 123 for request, p 3000 for paths, h for help)",
+                placeholder="Enter command (e.g., s 3000 for service, r 123 for request, raw 123 for raw data, p 3000 for paths, h for help)",
                 classes="command-input",
                 id="command-input",
             )
@@ -98,6 +100,18 @@ class Dashboard(Widget):
                 self.app.push_screen(RequestDetailScreen(req_id, self.db))
             except ValueError:
                 self.app.notify("Invalid request ID", severity="error")
+        elif command.startswith("/raw ") or command.startswith("raw "):
+            try:
+                req_id_str = (
+                    command[5:].strip() if command.startswith("/raw ") else command[4:].strip()
+                )
+                req_id = int(req_id_str)
+                input_widget.value = ""
+                # Get archive folder from environment or use default
+                archive_folder = os.environ.get("ARCHIVE_FOLDER", "/var/log/envoy/archive")
+                self.app.push_screen(RawRequestScreen(req_id, self.db, archive_folder))
+            except ValueError:
+                self.app.notify("Invalid request ID", severity="error")
         elif command.startswith("/p ") or command.startswith("p "):
             try:
                 port_str = command[3:].strip() if command.startswith("/p ") else command[2:].strip()
@@ -126,6 +140,7 @@ class Dashboard(Widget):
             help_text = """Commands:
 s <port> - Open service detail page
 r <req_id> - Open request detail page
+raw <req_id> - Open raw request data page
 p <port> - Open path stats page
 m <port> - Open query param stats page
 h - Show this help
@@ -139,6 +154,8 @@ ESC - Clear command input"""
             or command.startswith("s ")
             or command.startswith("/r ")
             or command.startswith("r ")
+            or command.startswith("/raw ")
+            or command.startswith("raw ")
             or command.startswith("/p ")
             or command.startswith("p ")
             or command.startswith("/m ")

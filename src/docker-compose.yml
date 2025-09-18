@@ -37,9 +37,11 @@ services:
     user: "1337:1337"
     volumes:
       - ./data:/app/data
+      - ./logs-archive:/app/logs-archive
     environment:
       - DB_FILE=/app/data/proxy_stats.db
       - CONFIG_FILE=/app/data/config.yml
+      - ARCHIVE_FOLDER=/app/logs-archive
       - PYTHONUNBUFFERED=1
     command: ["ctf-proxy-dashboard", "--config", "/app/data/config.yml", "--db", "/app/data/proxy_stats.db"]
     restart: no

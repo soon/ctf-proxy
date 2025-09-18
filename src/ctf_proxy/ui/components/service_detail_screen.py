@@ -336,6 +336,8 @@ h - Show headers"""
             "User-Agent",
             "Req Flags",
             "Resp Flags",
+            "In Links",
+            "Out Links",
         )
         self._populate_requests_table(table)
         return table
@@ -357,7 +359,9 @@ h - Show headers"""
                     req.is_blocked,
                     req.user_agent,
                     (SELECT COUNT(*) FROM flag WHERE flag.http_request_id = req.id) as req_flags_count,
-                    (SELECT COUNT(*) FROM flag WHERE flag.http_response_id = resp.id) as resp_flags_count
+                    (SELECT COUNT(*) FROM flag WHERE flag.http_response_id = resp.id) as resp_flags_count,
+                    (SELECT COUNT(*) FROM http_request_link WHERE to_request_id = req.id) as incoming_links_count,
+                    (SELECT COUNT(*) FROM http_request_link WHERE from_request_id = req.id) as outgoing_links_count
                 FROM http_request req
                 LEFT JOIN http_response resp ON req.id = resp.request_id
                 WHERE req.port = ?
@@ -388,6 +392,8 @@ h - Show headers"""
                     user_agent,
                     req_flags_count,
                     resp_flags_count,
+                    incoming_links_count,
+                    outgoing_links_count,
                 ) = row
 
                 try:
@@ -421,6 +427,12 @@ h - Show headers"""
                     else:
                         resp_flags_str = f"HAS {resp_flags} FLAGS"
 
+                incoming_links = incoming_links_count or 0
+                outgoing_links = outgoing_links_count or 0
+
+                incoming_links_str = str(incoming_links) if incoming_links > 0 else ""
+                outgoing_links_str = str(outgoing_links) if outgoing_links > 0 else ""
+
                 path_str = path[:50] + "..." if len(path) > 50 else path
 
                 table.add_row(
@@ -433,6 +445,8 @@ h - Show headers"""
                     user_agent_str,
                     req_flags_str,
                     resp_flags_str,
+                    incoming_links_str,
+                    outgoing_links_str,
                 )
 
     def action_dismiss(self) -> None:

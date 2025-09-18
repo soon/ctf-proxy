@@ -1,0 +1,12 @@
+[project]
+name = "examples"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13.3"
+dependencies = [
+    "beautifulsoup4>=4.13.5",
+    "dicttoxml>=1.7.16",
+    "requests>=2.32.5",
+    "xmltodict==1.0.0",
+]

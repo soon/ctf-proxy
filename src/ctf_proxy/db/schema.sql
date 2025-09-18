@@ -143,3 +143,15 @@ CREATE TABLE IF NOT EXISTS http_header_time_stats (
 ) STRICT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS http_header_time_stats_unique ON http_header_time_stats(port, name, value, time);
+
+CREATE TABLE IF NOT EXISTS http_request_link (
+    id INTEGER PRIMARY KEY,
+    from_request_id INTEGER NOT NULL,
+    to_request_id INTEGER NOT NULL,
+    FOREIGN KEY (from_request_id) REFERENCES http_request (id),
+    FOREIGN KEY (to_request_id) REFERENCES http_request (id)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS http_request_link_from_request_id ON http_request_link(from_request_id);
+CREATE INDEX IF NOT EXISTS http_request_link_to_request_id ON http_request_link(to_request_id);
+CREATE UNIQUE INDEX IF NOT EXISTS http_request_link_unique ON http_request_link(from_request_id, to_request_id);

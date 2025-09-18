@@ -11,3 +11,6 @@ http_*.json
 *.spec.md
 
 *.wasm
+
+.venv/
+.venv_vm/
