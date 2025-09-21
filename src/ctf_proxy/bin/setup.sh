@@ -8,17 +8,11 @@ echo 'Creating dashboard user (uid 1338)...'
 sudo useradd --system --uid 1338 -m dashboard || true
 
 echo 'Creating container dirs...'
-sudo mkdir -p logs/tap logs/pre-tap logs/post-tap logs-archive data
+sudo mkdir -p logs/tap logs/tcp-tap logs-archive data
 sudo chown -R 1337:1337 logs logs-archive data
 
-# Check if ~/config.yml exists, if not - create using config gen
-if [ ! -f ~/config.yml ]; then
-    echo 'Generating initial config.yml...'
-    python3 ./ctf_proxy/bin/docker-config-gen.py ~/config.yml
-else
-    echo 'Using existing config.yml...'
-fi
-
+echo 'Updating config.yml...'
+python3 ./ctf_proxy/bin/docker-config-gen.py ~/config.yml
 sudo cp ~/config.yml data/config.yml
 
 echo 'Setting up iptables rules for proxying...'

@@ -493,6 +493,243 @@ export type ServiceStats = {
 	 * Unique Header Values
 	 */
 	unique_header_values: number;
+	tcp_stats?: TcpStats | null;
+};
+
+/**
+ * TCPConnectionDetail
+ */
+export type TcpConnectionDetail = {
+	/**
+	 * Id
+	 */
+	id: number;
+	/**
+	 * Connection Id
+	 */
+	connection_id: number;
+	/**
+	 * Port
+	 */
+	port: number;
+	/**
+	 * Timestamp
+	 */
+	timestamp: string;
+	/**
+	 * Duration Ms
+	 */
+	duration_ms: number | null;
+	/**
+	 * Bytes In
+	 */
+	bytes_in: number;
+	/**
+	 * Bytes Out
+	 */
+	bytes_out: number;
+	/**
+	 * Events
+	 */
+	events: Array<TcpEventItem>;
+	/**
+	 * Total Flags
+	 */
+	total_flags: number;
+};
+
+/**
+ * TCPConnectionItem
+ */
+export type TcpConnectionItem = {
+	/**
+	 * Id
+	 */
+	id: number;
+	/**
+	 * Connection Id
+	 */
+	connection_id: number;
+	/**
+	 * Timestamp
+	 */
+	timestamp: string;
+	/**
+	 * Duration Ms
+	 */
+	duration_ms: number | null;
+	/**
+	 * Bytes In
+	 */
+	bytes_in: number;
+	/**
+	 * Bytes Out
+	 */
+	bytes_out: number;
+	/**
+	 * Flags In
+	 */
+	flags_in: number;
+	/**
+	 * Flags Out
+	 */
+	flags_out: number;
+};
+
+/**
+ * TCPConnectionListResponse
+ */
+export type TcpConnectionListResponse = {
+	/**
+	 * Connections
+	 */
+	connections: Array<TcpConnectionItem>;
+	/**
+	 * Total
+	 */
+	total: number;
+	/**
+	 * Service Name
+	 */
+	service_name: string;
+	/**
+	 * Service Port
+	 */
+	service_port: number;
+	/**
+	 * Page
+	 */
+	page?: number;
+	/**
+	 * Page Size
+	 */
+	page_size?: number;
+	/**
+	 * Total Pages
+	 */
+	total_pages?: number;
+};
+
+/**
+ * TCPConnectionStatsItem
+ */
+export type TcpConnectionStatsItem = {
+	/**
+	 * Read Min
+	 */
+	read_min: number;
+	/**
+	 * Read Max
+	 */
+	read_max: number;
+	/**
+	 * Write Min
+	 */
+	write_min: number;
+	/**
+	 * Write Max
+	 */
+	write_max: number;
+	/**
+	 * Count
+	 */
+	count: number;
+	/**
+	 * Time Series
+	 */
+	time_series?: Array<{
+		[key: string]: number;
+	}>;
+};
+
+/**
+ * TCPConnectionStatsResponse
+ */
+export type TcpConnectionStatsResponse = {
+	/**
+	 * Stats
+	 */
+	stats: Array<TcpConnectionStatsItem>;
+	/**
+	 * Service Name
+	 */
+	service_name: string;
+	/**
+	 * Service Port
+	 */
+	service_port: number;
+	/**
+	 * Precision
+	 */
+	precision: number;
+	/**
+	 * Window Minutes
+	 */
+	window_minutes?: number;
+};
+
+/**
+ * TCPEventItem
+ */
+export type TcpEventItem = {
+	/**
+	 * Id
+	 */
+	id: number;
+	/**
+	 * Timestamp
+	 */
+	timestamp: string;
+	/**
+	 * Event Type
+	 */
+	event_type: string;
+	/**
+	 * Data Size
+	 */
+	data_size: number;
+	/**
+	 * Data Bytes
+	 */
+	data_bytes: string | null;
+	/**
+	 * Truncated
+	 */
+	truncated: boolean;
+	/**
+	 * End Stream
+	 */
+	end_stream: boolean;
+	/**
+	 * Flags
+	 */
+	flags: Array<string>;
+};
+
+/**
+ * TCPStats
+ */
+export type TcpStats = {
+	/**
+	 * Total Connections
+	 */
+	total_connections: number;
+	/**
+	 * Total Bytes In
+	 */
+	total_bytes_in: number;
+	/**
+	 * Total Bytes Out
+	 */
+	total_bytes_out: number;
+	/**
+	 * Avg Duration Ms
+	 */
+	avg_duration_ms: number;
+	/**
+	 * Total Flags Found
+	 */
+	total_flags_found: number;
 };
 
 /**
@@ -525,6 +762,20 @@ export type ValidationError = {
 	 * Error Type
 	 */
 	type: string;
+};
+
+export type HealthCheckApiHealthGetData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/health";
+};
+
+export type HealthCheckApiHealthGetResponses = {
+	/**
+	 * Successful Response
+	 */
+	200: unknown;
 };
 
 export type GetServicesApiServicesGetData = {
@@ -665,6 +916,35 @@ export type GetRequestDetailApiRequestsRequestIdGetResponses = {
 export type GetRequestDetailApiRequestsRequestIdGetResponse =
 	GetRequestDetailApiRequestsRequestIdGetResponses[keyof GetRequestDetailApiRequestsRequestIdGetResponses];
 
+export type GetRequestRawApiRequestsRequestIdRawGetData = {
+	body?: never;
+	path: {
+		/**
+		 * Request Id
+		 */
+		request_id: number;
+	};
+	query?: never;
+	url: "/api/requests/{request_id}/raw";
+};
+
+export type GetRequestRawApiRequestsRequestIdRawGetErrors = {
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
+};
+
+export type GetRequestRawApiRequestsRequestIdRawGetError =
+	GetRequestRawApiRequestsRequestIdRawGetErrors[keyof GetRequestRawApiRequestsRequestIdRawGetErrors];
+
+export type GetRequestRawApiRequestsRequestIdRawGetResponses = {
+	/**
+	 * Successful Response
+	 */
+	200: unknown;
+};
+
 export type GetServicePathStatsApiServicesPortPathsGetData = {
 	body?: never;
 	path: {
@@ -799,6 +1079,117 @@ export type GetServiceHeaderStatsApiServicesPortHeadersGetResponses = {
 
 export type GetServiceHeaderStatsApiServicesPortHeadersGetResponse =
 	GetServiceHeaderStatsApiServicesPortHeadersGetResponses[keyof GetServiceHeaderStatsApiServicesPortHeadersGetResponses];
+
+export type GetTcpConnectionsApiServicesPortTcpConnectionsGetData = {
+	body?: never;
+	path: {
+		/**
+		 * Port
+		 */
+		port: number;
+	};
+	query?: {
+		/**
+		 * Page
+		 */
+		page?: number;
+		/**
+		 * Page Size
+		 */
+		page_size?: number;
+	};
+	url: "/api/services/{port}/tcp-connections";
+};
+
+export type GetTcpConnectionsApiServicesPortTcpConnectionsGetErrors = {
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
+};
+
+export type GetTcpConnectionsApiServicesPortTcpConnectionsGetError =
+	GetTcpConnectionsApiServicesPortTcpConnectionsGetErrors[keyof GetTcpConnectionsApiServicesPortTcpConnectionsGetErrors];
+
+export type GetTcpConnectionsApiServicesPortTcpConnectionsGetResponses = {
+	/**
+	 * Successful Response
+	 */
+	200: TcpConnectionListResponse;
+};
+
+export type GetTcpConnectionsApiServicesPortTcpConnectionsGetResponse =
+	GetTcpConnectionsApiServicesPortTcpConnectionsGetResponses[keyof GetTcpConnectionsApiServicesPortTcpConnectionsGetResponses];
+
+export type GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetData = {
+	body?: never;
+	path: {
+		/**
+		 * Connection Id
+		 */
+		connection_id: number;
+	};
+	query?: never;
+	url: "/api/tcp-connections/{connection_id}";
+};
+
+export type GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetErrors = {
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
+};
+
+export type GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetError =
+	GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetErrors[keyof GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetErrors];
+
+export type GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetResponses = {
+	/**
+	 * Successful Response
+	 */
+	200: TcpConnectionDetail;
+};
+
+export type GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetResponse =
+	GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetResponses[keyof GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetResponses];
+
+export type GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetData = {
+	body?: never;
+	path: {
+		/**
+		 * Port
+		 */
+		port: number;
+	};
+	query?: {
+		/**
+		 * Window Minutes
+		 */
+		window_minutes?: number;
+	};
+	url: "/api/services/{port}/tcp-connection-stats";
+};
+
+export type GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetErrors = {
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
+};
+
+export type GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetError =
+	GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetErrors[keyof GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetErrors];
+
+export type GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetResponses =
+	{
+		/**
+		 * Successful Response
+		 */
+		200: TcpConnectionStatsResponse;
+	};
+
+export type GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetResponse =
+	GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetResponses[keyof GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetResponses];
 
 export type ClientOptions = {
 	baseUrl: "http://localhost:8080" | (string & {});

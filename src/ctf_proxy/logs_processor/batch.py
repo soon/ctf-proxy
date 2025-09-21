@@ -1,3 +1,4 @@
+import io
 import json
 import logging
 import os
@@ -5,26 +6,24 @@ import signal
 import sys
 import tarfile
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from ctf_proxy.config.config import Config
 from ctf_proxy.db.models import make_db
-import heapq
 
-from .http import HttpAccessLogReader
-from .tap_processor import TapProcessor
+from .http import HttpProcessor
+from .tcp import TcpProcessor
 
-DEFAULT_TAP_FOLDER = "/var/log/envoy/taps"
-DEFAULT_HTTP_ACCESS_LOG = "/var/log/envoy/http_access.log"
-DEFAULT_DB_FILE = "proxy_stats.db"
-DEFAULT_ARCHIVE_FOLDER = "/var/log/envoy/archive"
-DEFAULT_CONFIG_FILE = "config.yaml"
-DEFAULT_MAX_FILES_PER_BATCH = 100
-DEFAULT_DURATION_MS = 100
+DEFAULT_HTTP_TAP_FOLDER = "/app/logs/tap"
+DEFAULT_HTTP_ACCESS_LOG = "/app/logs/http_access.log"
+DEFAULT_TCP_ACCESS_LOG = "/app/logs/tcp_access.log"
+DEFAULT_TCP_TAP_FOLDER = "/app/logs/tcp-tap"
+DEFAULT_DB_FILE = "/app/data/proxy_stats.db"
+DEFAULT_ARCHIVE_FOLDER = "/app/logs-archive"
+DEFAULT_CONFIG_FILE = "/app/data/config.yml"
 SLEEP_WHEN_NO_FILES = 5
 SLEEP_BETWEEN_BATCHES = 1
 SLEEP_ON_ERROR = 5
-IGNORED_TAP_TIMEOUT_SECONDS = 60
 
 logger = logging.getLogger(__name__)
 
@@ -33,29 +32,44 @@ class BatchProcessor:
     def __init__(
         self,
         config: Config,
-        tap_folder=DEFAULT_TAP_FOLDER,
+        http_tap_folder=DEFAULT_HTTP_TAP_FOLDER,
         http_access_log=DEFAULT_HTTP_ACCESS_LOG,
+        tcp_access_log=DEFAULT_TCP_ACCESS_LOG,
+        tcp_tap_folder=DEFAULT_TCP_TAP_FOLDER,
         db_file=DEFAULT_DB_FILE,
         archive_folder=DEFAULT_ARCHIVE_FOLDER,
     ):
-        self.tap_folder = tap_folder
-        self.http_access_log = http_access_log
+        self.http_tap_folder = http_tap_folder
+        self.http_access_log_path = http_access_log
+        self.tcp_access_log_path = tcp_access_log
+        self.tcp_tap_folder = tcp_tap_folder
         self.db_file = db_file
         self.archive_folder = archive_folder
         self.running = True
-        self.max_files_per_batch = DEFAULT_MAX_FILES_PER_BATCH
         self.shutdown_event = threading.Event()
-
-        self.ignored_taps: dict[str, datetime] = {}
         self.next_batch_count = 1
 
         os.makedirs(self.archive_folder, exist_ok=True)
         self.db = make_db(self.db_file)
         self.config = config
-        self.tap_processor = TapProcessor(self.db, config)
-        self.http_access_log = HttpAccessLogReader(
-            self.http_access_log, processed_position_file=f"{self.http_access_log}_position.txt"
+
+        # Initialize the new processors
+        self.http_processor = HttpProcessor(
+            db=self.db,
+            config=config,
+            access_log_path=self.http_access_log_path,
+            taps_dir=self.http_tap_folder,
         )
+
+        self.tcp_processor = TcpProcessor(
+            db=self.db,
+            config=config,
+            access_log_path=self.tcp_access_log_path,
+            taps_dir=self.tcp_tap_folder,
+        )
+
+        self.processors = [self.http_processor, self.tcp_processor]
+
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
 
@@ -63,137 +77,57 @@ class BatchProcessor:
         logger.info(f"Received signal {signum}, shutting down gracefully...")
         self.running = False
         self.shutdown_event.set()
-        self.http_access_log.save_position()
 
     def wait_or_shutdown(self, duration):
         return self.shutdown_event.wait(timeout=duration)
-
-    def get_tap_files(self, max_files=100):
-        if not os.path.exists(self.tap_folder):
-            return []
-
-        paths = []
-        with os.scandir(self.tap_folder) as it:
-            for entry in it:
-                if len(paths) >= max_files:
-                    break
-                if entry.is_file() and entry.name.endswith(".json"):
-                    tap_id = self.get_tap_id(entry.path)
-                    if not self.is_tap_ignored(tap_id):
-                        paths.append(entry.path)
-
-        return paths
-
-    def get_next_batch_unique_id(self):
-        return self.db.get_next_batch_unique_id()
 
     def create_batch_id(self):
         datetime_str = datetime.now().isoformat()
         batch_id = f"batch_{datetime_str}_{self.next_batch_count}"
         self.next_batch_count += 1
         return batch_id
-    
-    def get_tap_id(self, tap_file_path: str) -> str:
-        return os.path.basename(tap_file_path).replace(".json", "")
-    
-    def is_tap_ignored(self, tap_id: str) -> bool:
-        if tap_id not in self.ignored_taps:
-            return False
-        ignored_since = self.ignored_taps[tap_id]
-        return datetime.now() - ignored_since <= timedelta(seconds=IGNORED_TAP_TIMEOUT_SECONDS)
 
-    def process_batch(self, batch_id: str, tap_files: list[str]):
-        self.http_access_log.read_new_entries()
+    def process_batch(self):
+        total_processed = 0
+        for processor in self.processors:
+            try:
+                batch_id = self.create_batch_id()
+                processed = processor.process_new_access_log_entries(batch_id)
+                total_processed += len(processed)
+                self.save_archive(batch_id, processed)
+            except Exception as e:
+                logger.error(f"Error processing entries by {processor.__class__.__name__}: {e}")
 
-        processed_tap_files = []
+        return total_processed
 
-        for tap_file in tap_files:
-            tap_id = os.path.basename(tap_file).replace(".json", "")
+    def save_archive(self, batch_id: str, to_archive: dict[str, dict]):
+        if not to_archive:
+            return
 
-            request_id = self.extract_request_id_from_tap(tap_file)
-            log_entry = self.http_access_log.get_log_entry(request_id) if request_id else None
-            if not log_entry:
-                ignored_since = self.ignored_taps.get(tap_id, datetime.now())
-                if datetime.now() - ignored_since > timedelta(seconds=IGNORED_TAP_TIMEOUT_SECONDS):
-                    log_entry = {}
-                    logger.debug(f"Timeout reached for tap {tap_id}, processing without log entry")
-                else:
-                    self.ignored_taps[tap_id] = ignored_since
-                    logger.debug(f"Ignoring tap {tap_id}, no matching log entry yet")
-                    continue
+        archive_path = os.path.join(self.archive_folder, f"{batch_id}.tar.gz")
 
-            self.tap_processor.process_tap_file(tap_file, tap_id, batch_id, log_entry)
-            self.http_access_log.remove_log_entry(request_id)
-            self.ignored_taps.pop(tap_id, None)
-            processed_tap_files.append(tap_file)
-            logger.debug(f"Processed {tap_id}")
+        with tarfile.open(archive_path, "w:gz") as tar:
+            for name, data in to_archive.items():
+                try:
+                    json_bytes = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+                    info = tarfile.TarInfo(name)
+                    info.size = len(json_bytes)
+                    tar.addfile(info, io.BytesIO(json_bytes))
+                except Exception as e:
+                    logger.error(f"Failed to archive {name}: {e}")
 
-        if processed_tap_files:
-            archive_file = self.archive_batch(batch_id, processed_tap_files)
-
-            for tap_file in processed_tap_files:
-                os.remove(tap_file)
-
-            logger.info(
-                f"Processed batch {batch_id} -> {archive_file} ({len(self.ignored_taps)} ignored)"
-            )
-
-        return len(processed_tap_files)
-
-    def extract_request_id_from_tap(self, tap_file_path: str) -> str | None:
-        try:
-            with open(tap_file_path) as f:
-                data = json.load(f)
-
-            http_trace = data.get("http_buffered_trace", {})
-            request = http_trace.get("request", {})
-            for header in request.get("headers", []):
-                if header.get("key") == "x-request-id":
-                    return header.get("value")
-
-            response = http_trace.get("response", {})
-            for header in response.get("headers", []):
-                if header.get("key") == "x-request-id":
-                    return header.get("value")
-        except Exception as e:
-            logger.error(f"Error extracting request ID from {tap_file_path}: {e}")
-
-        return None
-
-    def archive_batch(self, batch_id, tap_files):
-        archive_file = os.path.join(self.archive_folder, f"{batch_id}.tar.gz")
-
-        with tarfile.open(archive_file, "w:gz") as tar:
-            for tap_file in tap_files:
-                tar.add(tap_file, arcname=os.path.basename(tap_file))
-
-        return archive_file
+        logger.info(f"Saved archive {archive_path} with {len(to_archive)} items")
 
     def process_taps(self):
         while self.running:
+            logger.info("Checking for new log entries...")
             try:
-                tap_files_start = datetime.now()
-                tap_files = self.get_tap_files()
-                tap_files_duration = (datetime.now() - tap_files_start).total_seconds() * 1000
-                logger.info(
-                    f"Found {len(tap_files)} tap files in {tap_files_duration:.2f} ms"
-                )
-
-                if not tap_files:
-                    logger.debug(f"No tap files found in {self.tap_folder}, waiting...")
-                    if self.wait_or_shutdown(SLEEP_WHEN_NO_FILES):
-                        break
-                    continue
-
-                batch_id = self.create_batch_id()
                 start = datetime.now()
-                processed_count = self.process_batch(batch_id, tap_files)
+                processed_count = self.process_batch()
                 duration = (datetime.now() - start).total_seconds() * 1000
 
                 if processed_count > 0:
-                    logger.info(
-                        f"Processed {processed_count} tap files in batch {batch_id} in {duration:.2f} ms"
-                    )
+                    logger.info(f"Processed batch in {duration:.2f} ms")
 
                 if self.running:
                     if self.wait_or_shutdown(SLEEP_BETWEEN_BATCHES):
@@ -218,8 +152,10 @@ class BatchProcessor:
 
     def run(self):
         logger.info("Starting post-processor...")
-        logger.info(f"Tap folder: {self.tap_folder}")
-        logger.info(f"HTTP access log: {self.http_access_log}")
+        logger.info(f"HTTP tap folder: {self.http_tap_folder}")
+        logger.info(f"TCP tap folder: {self.tcp_tap_folder}")
+        logger.info(f"HTTP access log: {self.http_access_log_path}")
+        logger.info(f"TCP access log: {self.tcp_access_log_path}")
         logger.info(f"Archive folder: {self.archive_folder}")
         logger.info(f"Database: {self.db_file}")
 
@@ -228,7 +164,6 @@ class BatchProcessor:
         except KeyboardInterrupt:
             pass
         finally:
-            self.http_access_log.save_position()
             logger.info("Post-processor stopped")
 
 
@@ -239,14 +174,17 @@ def main():
         handlers=[logging.StreamHandler(sys.stdout)],
     )
 
-    tap_folder = os.environ.get("TAP_FOLDER", DEFAULT_TAP_FOLDER)
+    http_tap_folder = os.environ.get("HTTP_TAP_FOLDER", DEFAULT_HTTP_TAP_FOLDER)
     http_access_log = os.environ.get("HTTP_ACCESS_LOG", DEFAULT_HTTP_ACCESS_LOG)
+    tcp_access_log = os.environ.get("TCP_ACCESS_LOG", DEFAULT_TCP_ACCESS_LOG)
+    tcp_tap_folder = os.environ.get("TCP_TAP_FOLDER", DEFAULT_TCP_TAP_FOLDER)
     db_file = os.environ.get("DB_FILE", DEFAULT_DB_FILE)
     archive_folder = os.environ.get("ARCHIVE_FOLDER", DEFAULT_ARCHIVE_FOLDER)
     config_file = os.environ.get("CONFIG_FILE", DEFAULT_CONFIG_FILE)
 
+    # Support legacy command line arguments
     if len(sys.argv) > 1:
-        tap_folder = sys.argv[1]
+        http_tap_folder = sys.argv[1]
     if len(sys.argv) > 2:
         http_access_log = sys.argv[2]
     if len(sys.argv) > 3:
@@ -258,5 +196,13 @@ def main():
 
     with Config(config_file) as config:
         config.start_watching()
-        processor = BatchProcessor(config, tap_folder, http_access_log, db_file, archive_folder)
+        processor = BatchProcessor(
+            config,
+            http_tap_folder,
+            http_access_log,
+            tcp_access_log,
+            tcp_tap_folder,
+            db_file,
+            archive_folder,
+        )
         processor.run()

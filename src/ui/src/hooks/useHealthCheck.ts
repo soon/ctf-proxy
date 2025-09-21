@@ -14,7 +14,7 @@ export function useHealthCheck(): HealthCheckResult {
 	const [error, setError] = useState<string | null>(null);
 
 	const storedUrl = localStorage.getItem("ctf-proxy-api-url");
-	const apiUrl = storedUrl || "http://localhost:8080";
+	const apiUrl = storedUrl || "http://localhost:48955";
 
 	useEffect(() => {
 		const checkHealth = async () => {

@@ -10,6 +10,7 @@ __pycache__/
 *.env
 
 http_*.json
+tcp_*.json
 *.spec.md
 
 *.wasm

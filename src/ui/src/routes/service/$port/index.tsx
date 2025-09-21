@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
 	getServiceByPortApiServicesPortGetOptions,
 	getServiceRequestsApiServicesPortRequestsGetOptions,
+	getTcpConnectionsApiServicesPortTcpConnectionsGetOptions,
 } from "@/client/@tanstack/react-query.gen";
 import {
 	Card,
@@ -43,7 +44,18 @@ const { Text } = Typography;
 
 export const Route = createFileRoute("/service/$port/")({
 	component: ServiceDetail,
+	staticData: {
+		breadcrumb: "Service",
+	},
 });
+
+function formatBytes(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+	if (bytes < 1024 * 1024 * 1024)
+		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+	return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
 
 function ServiceDetail() {
 	const { port } = Route.useParams();
@@ -77,6 +89,8 @@ function ServiceDetail() {
 		refetchInterval: 5000,
 	});
 
+	const isTcpService = service?.type === "tcp";
+
 	const {
 		data: requestsData,
 		isLoading: requestsLoading,
@@ -90,6 +104,24 @@ function ServiceDetail() {
 				...filters,
 			},
 		}),
+		enabled: !isTcpService && !!service,
+		refetchInterval: 5000,
+	});
+
+	// Fetch TCP connections for TCP services
+	const {
+		data: tcpConnectionsData,
+		isLoading: tcpConnectionsLoading,
+		refetch: refetchTcpConnections,
+	} = useQuery({
+		...getTcpConnectionsApiServicesPortTcpConnectionsGetOptions({
+			path: { port: portNumber },
+			query: {
+				page: currentPage,
+				page_size: pageSize,
+			},
+		}),
+		enabled: isTcpService && !!service,
 		refetchInterval: 5000,
 	});
 
@@ -133,7 +165,7 @@ function ServiceDetail() {
 		}
 	};
 
-	const columns: ColumnsType<any> = [
+	const httpColumns: ColumnsType<any> = [
 		{
 			title: "ID",
 			dataIndex: "id",
@@ -370,8 +402,11 @@ function ServiceDetail() {
 						setRawRequestModalVisible(true);
 
 						try {
+							const apiUrl =
+								localStorage.getItem("ctf-proxy-api-url") ||
+								"http://localhost:48955";
 							const response = await fetch(
-								`http://localhost:8080/api/requests/${record.id}/raw`,
+								`${apiUrl}/api/requests/${record.id}/raw`,
 							);
 							if (response.ok) {
 								const data = await response.json();
@@ -387,6 +422,99 @@ function ServiceDetail() {
 					}}
 				/>
 			),
+		},
+	];
+
+	// TCP Connections columns
+	const tcpColumns: ColumnsType<any> = [
+		{
+			title: "ID",
+			dataIndex: "id",
+			key: "id",
+			width: 60,
+		},
+		{
+			title: "Conn ID",
+			dataIndex: "connection_id",
+			key: "connection_id",
+			width: 80,
+			render: (id: number) => <span className="font-mono text-xs">{id}</span>,
+		},
+		{
+			title: "Time",
+			dataIndex: "timestamp",
+			key: "timestamp",
+			width: 80,
+			render: (timestamp: string) =>
+				new Date(timestamp).toLocaleTimeString("en-GB", {
+					hour: "2-digit",
+					minute: "2-digit",
+					second: "2-digit",
+				}),
+		},
+		{
+			title: "Bytes In",
+			dataIndex: "bytes_in",
+			key: "bytes_in",
+			width: 90,
+			render: (bytes: number) => {
+				if (bytes < 1024) return `${bytes} B`;
+				if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+				return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+			},
+		},
+		{
+			title: "Bytes Out",
+			dataIndex: "bytes_out",
+			key: "bytes_out",
+			width: 90,
+			render: (bytes: number) => {
+				if (bytes < 1024) return `${bytes} B`;
+				if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+				return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+			},
+		},
+		{
+			title: "Duration",
+			dataIndex: "duration_ms",
+			key: "duration_ms",
+			width: 80,
+			render: (ms: number | null) =>
+				ms !== null ? (
+					<span className="text-xs">
+						{ms >= 1000
+							? `${(ms / 1000).toFixed(2)}s`
+							: ms >= 1
+								? `${ms.toFixed(1)}ms`
+								: `${(ms * 1000000).toFixed(0)}ns`}
+					</span>
+				) : (
+					<span className="text-gray-400 text-xs">Active</span>
+				),
+		},
+		{
+			title: "Flags In",
+			dataIndex: "flags_in",
+			key: "flags_in",
+			width: 80,
+			render: (count: number) =>
+				count > 0 ? (
+					<Tag icon={<FlagOutlined />} color="blue" className="text-xs">
+						IN: {count}
+					</Tag>
+				) : null,
+		},
+		{
+			title: "Flags Out",
+			dataIndex: "flags_out",
+			key: "flags_out",
+			width: 85,
+			render: (count: number) =>
+				count > 0 ? (
+					<Tag icon={<FlagOutlined />} color="red" className="text-xs">
+						OUT: {count}
+					</Tag>
+				) : null,
 		},
 	];
 
@@ -416,29 +544,44 @@ function ServiceDetail() {
 					Clear
 				</Button>
 			)}
-			<Button
-				icon={<LineChartOutlined />}
-				onClick={() => navigate({ to: `/service/${port}/paths` })}
-			>
-				Paths
-			</Button>
-			<Button
-				icon={<SearchOutlined />}
-				onClick={() => navigate({ to: `/service/${port}/queries` })}
-			>
-				Queries
-			</Button>
-			<Button
-				icon={<FileTextOutlined />}
-				onClick={() => navigate({ to: `/service/${port}/headers` })}
-			>
-				Headers
-			</Button>
+			{isTcpService ? (
+				<Button
+					icon={<LineChartOutlined />}
+					onClick={() => navigate({ to: `/service/${port}/tcp-stats` })}
+				>
+					TCP Stats
+				</Button>
+			) : (
+				<>
+					<Button
+						icon={<LineChartOutlined />}
+						onClick={() => navigate({ to: `/service/${port}/paths` })}
+					>
+						Paths
+					</Button>
+					<Button
+						icon={<SearchOutlined />}
+						onClick={() => navigate({ to: `/service/${port}/queries` })}
+					>
+						Queries
+					</Button>
+					<Button
+						icon={<FileTextOutlined />}
+						onClick={() => navigate({ to: `/service/${port}/headers` })}
+					>
+						Headers
+					</Button>
+				</>
+			)}
 			<Button
 				icon={<ReloadOutlined />}
 				onClick={() => {
 					refetchService();
-					refetchRequests();
+					if (isTcpService) {
+						refetchTcpConnections();
+					} else {
+						refetchRequests();
+					}
 				}}
 			>
 				Refresh
@@ -460,8 +603,16 @@ function ServiceDetail() {
 						className="hover:shadow-md transition-shadow"
 					>
 						<Statistic
-							title={<span className="text-xs">Requests</span>}
-							value={service.stats.total_requests}
+							title={
+								<span className="text-xs">
+									{isTcpService ? "Connections" : "Requests"}
+								</span>
+							}
+							value={
+								isTcpService
+									? service.stats.tcp_stats?.total_connections || 0
+									: service.stats.total_requests
+							}
 							prefix={<ApiOutlined className="text-xs" />}
 							valueStyle={{ fontSize: 14 }}
 						/>
@@ -469,16 +620,26 @@ function ServiceDetail() {
 				</Col>
 				<Col xs={12} sm={6}>
 					<Card size="small" bodyStyle={{ padding: "8px" }}>
-						<Statistic
-							title={<span className="text-xs">Flags</span>}
-							value={`${service.stats.flags_written}/${service.stats.flags_retrieved}`}
-							prefix={<FlagOutlined className="text-xs" />}
-							valueStyle={{ fontSize: 14 }}
-						/>
-						{service.stats.flags_blocked > 0 && (
-							<div className="text-xs text-red-500">
-								{service.stats.flags_blocked} blocked
-							</div>
+						{isTcpService ? (
+							<Statistic
+								title={<span className="text-xs">Bytes In/Out</span>}
+								value={`${formatBytes(service.stats.tcp_stats?.total_bytes_in || 0)}/${formatBytes(service.stats.tcp_stats?.total_bytes_out || 0)}`}
+								valueStyle={{ fontSize: 14 }}
+							/>
+						) : (
+							<>
+								<Statistic
+									title={<span className="text-xs">Flags</span>}
+									value={`${service.stats.flags_written}/${service.stats.flags_retrieved}`}
+									prefix={<FlagOutlined className="text-xs" />}
+									valueStyle={{ fontSize: 14 }}
+								/>
+								{service.stats.flags_blocked > 0 && (
+									<div className="text-xs text-red-500">
+										{service.stats.flags_blocked} blocked
+									</div>
+								)}
+							</>
 						)}
 					</Card>
 				</Col>
@@ -517,8 +678,46 @@ function ServiceDetail() {
 				</Col>
 			</Row>
 
-			{/* Requests Table */}
-			{requestsLoading ? (
+			{/* Requests Table for HTTP services or TCP Connections Table for TCP services */}
+			{isTcpService ? (
+				// TCP Connections Table
+				tcpConnectionsLoading ? (
+					<div className="flex justify-center py-4">
+						<Spin />
+					</div>
+				) : tcpConnectionsData?.connections?.length === 0 ? (
+					<Empty description="No TCP connections found" />
+				) : (
+					<Table
+						columns={tcpColumns}
+						dataSource={tcpConnectionsData?.connections}
+						rowKey="id"
+						size="small"
+						pagination={{
+							current: currentPage,
+							pageSize: pageSize,
+							total: tcpConnectionsData?.total || 0,
+							showSizeChanger: true,
+							pageSizeOptions: ["10", "20", "30", "50", "100"],
+							onChange: handlePageChange,
+							showTotal: (total, range) => (
+								<span className="text-xs">
+									{range[0]}-{range[1]} of {total} connections
+								</span>
+							),
+						}}
+						scroll={{ x: 700 }}
+						rowClassName="hover:bg-gray-50 cursor-pointer"
+						onRow={(record) => ({
+							onClick: () =>
+								navigate({
+									to: `/service/${port}/tcp-connection/${record.id}`,
+								}),
+						})}
+					/>
+				)
+			) : // HTTP Requests Table
+			requestsLoading ? (
 				<div className="flex justify-center py-4">
 					<Spin />
 				</div>
@@ -526,7 +725,7 @@ function ServiceDetail() {
 				<Empty description="No requests found" />
 			) : (
 				<Table
-					columns={columns}
+					columns={httpColumns}
 					dataSource={requestsData?.requests}
 					rowKey="id"
 					size="small"

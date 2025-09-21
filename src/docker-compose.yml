@@ -20,31 +20,10 @@ services:
       - ./data:/app/data
       - ./logs-archive:/app/logs-archive
     environment:
-      - TAP_FOLDER=/app/logs/tap
-      - HTTP_ACCESS_LOG=/app/logs/http_access.log
-      - DB_FILE=/app/data/proxy_stats.db
-      - ARCHIVE_FOLDER=/app/logs-archive
-      - CONFIG_FILE=/app/data/config.yml
       - PYTHONUNBUFFERED=1
     restart: unless-stopped
     depends_on:
       - envoy
-
-  ui:
-    build:
-      context: .
-      dockerfile: Dockerfile.logs-processor
-    user: "1337:1337"
-    volumes:
-      - ./data:/app/data
-      - ./logs-archive:/app/logs-archive
-    environment:
-      - DB_FILE=/app/data/proxy_stats.db
-      - CONFIG_FILE=/app/data/config.yml
-      - ARCHIVE_FOLDER=/app/logs-archive
-      - PYTHONUNBUFFERED=1
-    command: ["ctf-proxy-dashboard", "--config", "/app/data/config.yml", "--db", "/app/data/proxy_stats.db"]
-    restart: no
 
   dashboard-backend:
     build:
@@ -55,9 +34,6 @@ services:
       - ./data:/app/data
       - ./logs-archive:/app/logs-archive
     environment:
-      - DB_FILE=/app/data/proxy_stats.db
-      - CONFIG_FILE=/app/data/config.yml
-      - ARCHIVE_FOLDER=/app/logs-archive
       - PYTHONUNBUFFERED=1
     command: ["python", "-m", "ctf_proxy.dashboard.main", "--config", "/app/data/config.yml", "--db", "/app/data/proxy_stats.db", "--host", "0.0.0.0", "--port", "48955"]
     ports:

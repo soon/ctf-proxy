@@ -2,6 +2,8 @@
 
 import type { Options as ClientOptions, Client, TDataShape } from "./client";
 import type {
+	HealthCheckApiHealthGetData,
+	HealthCheckApiHealthGetResponses,
 	GetServicesApiServicesGetData,
 	GetServicesApiServicesGetResponses,
 	GetServiceByPortApiServicesPortGetData,
@@ -13,6 +15,9 @@ import type {
 	GetRequestDetailApiRequestsRequestIdGetData,
 	GetRequestDetailApiRequestsRequestIdGetResponses,
 	GetRequestDetailApiRequestsRequestIdGetErrors,
+	GetRequestRawApiRequestsRequestIdRawGetData,
+	GetRequestRawApiRequestsRequestIdRawGetResponses,
+	GetRequestRawApiRequestsRequestIdRawGetErrors,
 	GetServicePathStatsApiServicesPortPathsGetData,
 	GetServicePathStatsApiServicesPortPathsGetResponses,
 	GetServicePathStatsApiServicesPortPathsGetErrors,
@@ -22,6 +27,15 @@ import type {
 	GetServiceHeaderStatsApiServicesPortHeadersGetData,
 	GetServiceHeaderStatsApiServicesPortHeadersGetResponses,
 	GetServiceHeaderStatsApiServicesPortHeadersGetErrors,
+	GetTcpConnectionsApiServicesPortTcpConnectionsGetData,
+	GetTcpConnectionsApiServicesPortTcpConnectionsGetResponses,
+	GetTcpConnectionsApiServicesPortTcpConnectionsGetErrors,
+	GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetData,
+	GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetResponses,
+	GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetErrors,
+	GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetData,
+	GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetResponses,
+	GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetErrors,
 } from "./types.gen";
 import { client } from "./client.gen";
 
@@ -40,6 +54,22 @@ export type Options<
 	 * used to access values that aren't defined as part of the SDK function.
 	 */
 	meta?: Record<string, unknown>;
+};
+
+/**
+ * Health Check
+ */
+export const healthCheckApiHealthGet = <ThrowOnError extends boolean = false>(
+	options?: Options<HealthCheckApiHealthGetData, ThrowOnError>,
+) => {
+	return (options?.client ?? client).get<
+		HealthCheckApiHealthGetResponses,
+		unknown,
+		ThrowOnError
+	>({
+		url: "/api/health",
+		...options,
+	});
 };
 
 /**
@@ -116,6 +146,24 @@ export const getRequestDetailApiRequestsRequestIdGet = <
 };
 
 /**
+ * Get Request Raw
+ */
+export const getRequestRawApiRequestsRequestIdRawGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<GetRequestRawApiRequestsRequestIdRawGetData, ThrowOnError>,
+) => {
+	return (options.client ?? client).get<
+		GetRequestRawApiRequestsRequestIdRawGetResponses,
+		GetRequestRawApiRequestsRequestIdRawGetErrors,
+		ThrowOnError
+	>({
+		url: "/api/requests/{request_id}/raw",
+		...options,
+	});
+};
+
+/**
  * Get Service Path Stats
  */
 export const getServicePathStatsApiServicesPortPathsGet = <
@@ -174,6 +222,69 @@ export const getServiceHeaderStatsApiServicesPortHeadersGet = <
 		ThrowOnError
 	>({
 		url: "/api/services/{port}/headers",
+		...options,
+	});
+};
+
+/**
+ * Get Tcp Connections
+ */
+export const getTcpConnectionsApiServicesPortTcpConnectionsGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<
+		GetTcpConnectionsApiServicesPortTcpConnectionsGetData,
+		ThrowOnError
+	>,
+) => {
+	return (options.client ?? client).get<
+		GetTcpConnectionsApiServicesPortTcpConnectionsGetResponses,
+		GetTcpConnectionsApiServicesPortTcpConnectionsGetErrors,
+		ThrowOnError
+	>({
+		url: "/api/services/{port}/tcp-connections",
+		...options,
+	});
+};
+
+/**
+ * Get Tcp Connection Detail
+ */
+export const getTcpConnectionDetailApiTcpConnectionsConnectionIdGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<
+		GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetData,
+		ThrowOnError
+	>,
+) => {
+	return (options.client ?? client).get<
+		GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetResponses,
+		GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetErrors,
+		ThrowOnError
+	>({
+		url: "/api/tcp-connections/{connection_id}",
+		...options,
+	});
+};
+
+/**
+ * Get Tcp Connection Stats
+ */
+export const getTcpConnectionStatsApiServicesPortTcpConnectionStatsGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<
+		GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetData,
+		ThrowOnError
+	>,
+) => {
+	return (options.client ?? client).get<
+		GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetResponses,
+		GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetErrors,
+		ThrowOnError
+	>({
+		url: "/api/services/{port}/tcp-connection-stats",
 		...options,
 	});
 };

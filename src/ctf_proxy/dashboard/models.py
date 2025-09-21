@@ -10,6 +10,14 @@ class ServiceInfo(BaseModel):
     type: str
 
 
+class TCPStats(BaseModel):
+    total_connections: int
+    total_bytes_in: int
+    total_bytes_out: int
+    avg_duration_ms: int
+    total_flags_found: int
+
+
 class ServiceStats(BaseModel):
     total_requests: int
     blocked_requests: int
@@ -28,6 +36,7 @@ class ServiceStats(BaseModel):
     total_flags: int
     unique_headers: int
     unique_header_values: int
+    tcp_stats: TCPStats | None = None
 
 
 class ServiceListItem(BaseModel):
@@ -161,3 +170,64 @@ class HeaderStatsResponse(BaseModel):
     service_port: int
     ignored_headers: list[str] = []
     window_minutes: int = 60
+
+
+class TCPConnectionItem(BaseModel):
+    id: int
+    connection_id: int
+    timestamp: datetime
+    duration_ms: int | None
+    bytes_in: int
+    bytes_out: int
+    flags_in: int
+    flags_out: int
+
+
+class TCPConnectionListResponse(BaseModel):
+    connections: list[TCPConnectionItem]
+    total: int
+    service_name: str
+    service_port: int
+    page: int = 1
+    page_size: int = 30
+    total_pages: int = 1
+
+
+class TCPEventItem(BaseModel):
+    id: int
+    timestamp: datetime
+    event_type: str
+    data_size: int
+    data_bytes: str | None  # Base64 encoded bytes
+    truncated: bool
+    end_stream: bool
+    flags: list[str]
+
+
+class TCPConnectionStatsItem(BaseModel):
+    read_min: int
+    read_max: int
+    write_min: int
+    write_max: int
+    count: int
+    time_series: list[dict[str, int]] = []
+
+
+class TCPConnectionStatsResponse(BaseModel):
+    stats: list[TCPConnectionStatsItem]
+    service_name: str
+    service_port: int
+    precision: int
+    window_minutes: int = 60
+
+
+class TCPConnectionDetail(BaseModel):
+    id: int
+    connection_id: int
+    port: int
+    timestamp: datetime
+    duration_ms: int | None
+    bytes_in: int
+    bytes_out: int
+    events: list[TCPEventItem]
+    total_flags: int

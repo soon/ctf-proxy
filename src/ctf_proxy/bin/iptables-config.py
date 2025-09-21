@@ -6,7 +6,7 @@ Manages transparent traffic interception by setting up REDIRECT rules to forward
 TCP traffic from configured service ports to an Envoy proxy. Handles both IPv4/IPv6,
 excludes Docker bridge interfaces, and prevents direct access to the Envoy listener.
 
-Traffic Flow (for port 3000 example):
+Traffic Flow (for HTTP port 3000 example, similar for TCP):
 ┌──────────────┐    ┌──────────────┐    ┌─────────┐    ┌───────────────┐    ┌─────────┐
 │ Client       │───▶│ iptables     │───▶│ Envoy   │───▶│ iptables      │───▶│ Service │
 │ :any → :3000 │    │ REDIRECT     │    │ :15001  │    │ UID BYPASS    │    │ :3000   │
@@ -39,14 +39,16 @@ from pathlib import Path
 import yaml
 
 # ===== Config (override via env) =====
-ENVOY_PORT = int(os.getenv("ENVOY_PORT", "15001"))
+ENVOY_HTTP_PORT = int(os.getenv("ENVOY_HTTP_PORT", "15001"))
+ENVOY_TCP_PORT = int(os.getenv("ENVOY_TCP_PORT", "15002"))
 ENVOY_UID = int(os.getenv("ENVOY_UID", "1337"))
 BRIDGE_IFS = os.getenv("BRIDGE_IFS", "auto")  # space-separated list or "auto"
 PROTECT_ENVOY_PORT = os.getenv("PROTECT_ENVOY_PORT", "1") in {"1", "true", "yes", "on"}
 ENABLE_IPV6 = os.getenv("ENABLE_IPV6", "auto")  # auto|1|0
 IPT = os.getenv("IPT", "iptables")
 IP6T = os.getenv("IP6T", "ip6tables")
-USER_CHAIN = os.getenv("USER_CHAIN", "ENVOY_PRE")
+USER_CHAIN_HTTP = os.getenv("USER_CHAIN_HTTP", "ENVOY_HTTP")
+USER_CHAIN_TCP = os.getenv("USER_CHAIN_TCP", "ENVOY_TCP")
 PORTS_FILE = os.getenv("PORTS_FILE", "data/config.yml").strip()  # path to config with ports
 
 
@@ -137,86 +139,140 @@ def detect_bridges() -> list[str]:
     return names
 
 
-def load_ports() -> list[int]:
-    ports: list[int] = []
+def load_ports() -> tuple[list[int], list[int]]:
+    """Load ports from config file and return (http_ports, tcp_ports)."""
+    http_ports: list[int] = []
+    tcp_ports: list[int] = []
+
     if PORTS_FILE and Path(PORTS_FILE).is_file():
         text = Path(PORTS_FILE).read_text(encoding="utf-8", errors="ignore")
         data = yaml.safe_load(text)
 
-        def walk(o):
-            if isinstance(o, dict):
-                for k, v in o.items():
-                    if str(k).lower() == "port":
-                        yield v
-                    else:
-                        yield from walk(v)
-            elif isinstance(o, list):
-                for it in o:
-                    yield from walk(it)
+        # Parse services from YAML
+        services = data.get("services", []) if isinstance(data, dict) else []
+        for service in services:
+            if isinstance(service, dict):
+                port = service.get("port")
+                service_type = service.get("type", "http").lower()
 
-        for v in walk(data):
-            try:
-                ports.append(int(v))
-            except Exception:
-                pass
-        ports = sorted({p for p in ports if 1 <= p <= 65535})
-    if not ports:
+                if port:
+                    try:
+                        port = int(port)
+                        if 1 <= port <= 65535:
+                            if service_type in ["http", "https", "ws", "wss"]:
+                                http_ports.append(port)
+                            else:  # tcp, udp, etc.
+                                tcp_ports.append(port)
+                    except (ValueError, TypeError):
+                        pass
+
+        http_ports = sorted(set(http_ports))
+        tcp_ports = sorted(set(tcp_ports))
+
+    if not http_ports and not tcp_ports:
         raise ValueError(f"No valid ports found (tried {PORTS_FILE})")
-    return ports
+
+    return http_ports, tcp_ports
 
 
-def setup_family(ipt: str, label: str, ports: list[int], excl_ifs: list[str]):
-    print(
-        f"[+] ({label}) Setting up NAT redirects via Envoy :{ENVOY_PORT} (UID {ENVOY_UID}) for ports: {', '.join(map(str, ports))}"
-    )
+def setup_family(
+    ipt: str, label: str, http_ports: list[int], tcp_ports: list[int], excl_ifs: list[str]
+):
+    print(f"[+] ({label}) Setting up NAT redirects via Envoy (UID {ENVOY_UID})")
+    if http_ports:
+        print(f"    HTTP ports (→ :{ENVOY_HTTP_PORT}): {', '.join(map(str, http_ports))}")
+    if tcp_ports:
+        print(f"    TCP ports  (→ :{ENVOY_TCP_PORT}): {', '.join(map(str, tcp_ports))}")
 
-    # Create and prepare user chain (one chain handles all target ports)
-    ensure_chain(ipt, "nat", USER_CHAIN)
+    # Create and prepare user chains for HTTP and TCP
+    if http_ports:
+        ensure_chain(ipt, "nat", USER_CHAIN_HTTP)
+        run([ipt, "-t", "nat", "-F", USER_CHAIN_HTTP])
 
-    # Always (re)build USER_CHAIN contents: exclusions then final redirect
-    run([ipt, "-t", "nat", "-F", USER_CHAIN])
+        # Skip docker/bridge interfaces for HTTP
+        for ifname in excl_ifs:
+            add_rule_end(
+                ipt,
+                "nat",
+                USER_CHAIN_HTTP,
+                [
+                    "-i",
+                    ifname,
+                    "-p",
+                    "tcp",
+                    "-m",
+                    "comment",
+                    "--comment",
+                    f"envoy: skip on {ifname}",
+                    "-j",
+                    "RETURN",
+                ],
+            )
 
-    # Skip docker/bridge interfaces
-    for ifname in excl_ifs:
+        # Final redirect to HTTP Envoy port
         add_rule_end(
             ipt,
             "nat",
-            USER_CHAIN,
+            USER_CHAIN_HTTP,
             [
-                "-i",
-                ifname,
                 "-p",
                 "tcp",
                 "-m",
                 "comment",
                 "--comment",
-                f"envoy: skip on {ifname}",
+                f"envoy: redirect to {ENVOY_HTTP_PORT}",
                 "-j",
-                "RETURN",
+                "REDIRECT",
+                "--to-ports",
+                str(ENVOY_HTTP_PORT),
             ],
         )
 
-    # Final redirect to Envoy port
-    add_rule_end(
-        ipt,
-        "nat",
-        USER_CHAIN,
-        [
-            "-p",
-            "tcp",
-            "-m",
-            "comment",
-            "--comment",
-            f"envoy: redirect to {ENVOY_PORT}",
-            "-j",
-            "REDIRECT",
-            "--to-ports",
-            str(ENVOY_PORT),
-        ],
-    )
+    if tcp_ports:
+        ensure_chain(ipt, "nat", USER_CHAIN_TCP)
+        run([ipt, "-t", "nat", "-F", USER_CHAIN_TCP])
 
-    # For each app port: PREROUTING jump and local OUTPUT redirect (excluding Envoy's UID)
-    for port in ports:
+        # Skip docker/bridge interfaces for TCP
+        for ifname in excl_ifs:
+            add_rule_end(
+                ipt,
+                "nat",
+                USER_CHAIN_TCP,
+                [
+                    "-i",
+                    ifname,
+                    "-p",
+                    "tcp",
+                    "-m",
+                    "comment",
+                    "--comment",
+                    f"envoy: skip on {ifname}",
+                    "-j",
+                    "RETURN",
+                ],
+            )
+
+        # Final redirect to TCP Envoy port
+        add_rule_end(
+            ipt,
+            "nat",
+            USER_CHAIN_TCP,
+            [
+                "-p",
+                "tcp",
+                "-m",
+                "comment",
+                "--comment",
+                f"envoy: redirect to {ENVOY_TCP_PORT}",
+                "-j",
+                "REDIRECT",
+                "--to-ports",
+                str(ENVOY_TCP_PORT),
+            ],
+        )
+
+    # For each HTTP port: PREROUTING jump and local OUTPUT redirect
+    for port in http_ports:
         add_rule_top(
             ipt,
             "nat",
@@ -229,9 +285,9 @@ def setup_family(ipt: str, label: str, ports: list[int], excl_ifs: list[str]):
                 "-m",
                 "comment",
                 "--comment",
-                f"envoy: jump to {USER_CHAIN}",
+                f"envoy: jump to {USER_CHAIN_HTTP}",
                 "-j",
-                USER_CHAIN,
+                USER_CHAIN_HTTP,
             ],
         )
         add_rule_top(
@@ -255,46 +311,95 @@ def setup_family(ipt: str, label: str, ports: list[int], excl_ifs: list[str]):
                 "-m",
                 "comment",
                 "--comment",
-                f"envoy: local redirect to {ENVOY_PORT}",
+                f"envoy: local redirect to {ENVOY_HTTP_PORT}",
                 "-j",
                 "REDIRECT",
                 "--to-ports",
-                str(ENVOY_PORT),
+                str(ENVOY_HTTP_PORT),
             ],
         )
 
-    # Optional: protect Envoy listener from direct remote hits
-    if PROTECT_ENVOY_PORT:
+    # For each TCP port: PREROUTING jump and local OUTPUT redirect
+    for port in tcp_ports:
         add_rule_top(
             ipt,
-            "raw",
+            "nat",
             "PREROUTING",
             [
-                "!",
-                "-i",
-                "lo",
                 "-p",
                 "tcp",
                 "--dport",
-                str(ENVOY_PORT),
+                str(port),
                 "-m",
                 "comment",
                 "--comment",
-                f"envoy: drop direct hits to {ENVOY_PORT}",
+                f"envoy: jump to {USER_CHAIN_TCP}",
                 "-j",
-                "DROP",
+                USER_CHAIN_TCP,
+            ],
+        )
+        add_rule_top(
+            ipt,
+            "nat",
+            "OUTPUT",
+            [
+                "-p",
+                "tcp",
+                "--dport",
+                str(port),
+                "-m",
+                "addrtype",
+                "--dst-type",
+                "LOCAL",
+                "-m",
+                "owner",
+                "!",
+                "--uid-owner",
+                str(ENVOY_UID),
+                "-m",
+                "comment",
+                "--comment",
+                f"envoy: local redirect to {ENVOY_TCP_PORT}",
+                "-j",
+                "REDIRECT",
+                "--to-ports",
+                str(ENVOY_TCP_PORT),
             ],
         )
 
+    # Optional: protect Envoy listeners from direct remote hits
+    if PROTECT_ENVOY_PORT:
+        for port in [ENVOY_HTTP_PORT, ENVOY_TCP_PORT]:
+            add_rule_top(
+                ipt,
+                "raw",
+                "PREROUTING",
+                [
+                    "!",
+                    "-i",
+                    "lo",
+                    "-p",
+                    "tcp",
+                    "--dport",
+                    str(port),
+                    "-m",
+                    "comment",
+                    "--comment",
+                    f"envoy: drop direct hits to {port}",
+                    "-j",
+                    "DROP",
+                ],
+            )
 
     print(f"[✓] ({label}) Setup complete.")
 
 
-def teardown_family(ipt: str, label: str, ports: list[int]):
-    print(f"[+] ({label}) Tearing down NAT redirects for ports: {', '.join(map(str, ports))}")
+def teardown_family(ipt: str, label: str, http_ports: list[int], tcp_ports: list[int]):
+    all_ports = http_ports + tcp_ports
+    print(f"[+] ({label}) Tearing down NAT redirects for ports: {', '.join(map(str, all_ports))}")
 
-    # Remove per-port PREROUTING/OUTPUT rules first to free the user chain
-    for port in ports:
+    # Remove HTTP port rules
+    for port in http_ports:
         del_rule(
             ipt,
             "nat",
@@ -307,9 +412,9 @@ def teardown_family(ipt: str, label: str, ports: list[int]):
                 "-m",
                 "comment",
                 "--comment",
-                f"envoy: jump to {USER_CHAIN}",
+                f"envoy: jump to {USER_CHAIN_HTTP}",
                 "-j",
-                USER_CHAIN,
+                USER_CHAIN_HTTP,
             ],
         )
         del_rule(
@@ -333,46 +438,102 @@ def teardown_family(ipt: str, label: str, ports: list[int]):
                 "-m",
                 "comment",
                 "--comment",
-                f"envoy: local redirect to {ENVOY_PORT}",
+                f"envoy: local redirect to {ENVOY_HTTP_PORT}",
                 "-j",
                 "REDIRECT",
                 "--to-ports",
-                str(ENVOY_PORT),
+                str(ENVOY_HTTP_PORT),
             ],
         )
 
-    # Delete the user chain (flush + delete)
-    delete_chain_if_empty(ipt, "nat", USER_CHAIN)
-
-    # Remove protection rule (if present)
-    if PROTECT_ENVOY_PORT:
+    # Remove TCP port rules
+    for port in tcp_ports:
         del_rule(
             ipt,
-            "raw",
+            "nat",
             "PREROUTING",
             [
-                "!",
-                "-i",
-                "lo",
                 "-p",
                 "tcp",
                 "--dport",
-                str(ENVOY_PORT),
+                str(port),
                 "-m",
                 "comment",
                 "--comment",
-                f"envoy: drop direct hits to {ENVOY_PORT}",
+                f"envoy: jump to {USER_CHAIN_TCP}",
                 "-j",
-                "DROP",
+                USER_CHAIN_TCP,
+            ],
+        )
+        del_rule(
+            ipt,
+            "nat",
+            "OUTPUT",
+            [
+                "-p",
+                "tcp",
+                "--dport",
+                str(port),
+                "-m",
+                "addrtype",
+                "--dst-type",
+                "LOCAL",
+                "-m",
+                "owner",
+                "!",
+                "--uid-owner",
+                str(ENVOY_UID),
+                "-m",
+                "comment",
+                "--comment",
+                f"envoy: local redirect to {ENVOY_TCP_PORT}",
+                "-j",
+                "REDIRECT",
+                "--to-ports",
+                str(ENVOY_TCP_PORT),
             ],
         )
 
+    # Delete the user chains (flush + delete)
+    delete_chain_if_empty(ipt, "nat", USER_CHAIN_HTTP)
+    delete_chain_if_empty(ipt, "nat", USER_CHAIN_TCP)
+
+    # Remove protection rules (if present)
+    if PROTECT_ENVOY_PORT:
+        for port in [ENVOY_HTTP_PORT, ENVOY_TCP_PORT]:
+            del_rule(
+                ipt,
+                "raw",
+                "PREROUTING",
+                [
+                    "!",
+                    "-i",
+                    "lo",
+                    "-p",
+                    "tcp",
+                    "--dport",
+                    str(port),
+                    "-m",
+                    "comment",
+                    "--comment",
+                    f"envoy: drop direct hits to {port}",
+                    "-j",
+                    "DROP",
+                ],
+            )
 
     print(f"[✓] ({label}) Teardown complete.")
 
 
-def add_port_family(ipt: str, label: str, port: int, excl_ifs: list[str]):
+def add_port_family(ipt: str, label: str, port: int, port_type: str, excl_ifs: list[str]):
     print(f"[+] ({label}) Adding NAT redirect for port {port}")
+
+    if port_type == "http":
+        USER_CHAIN = USER_CHAIN_HTTP
+        ENVOY_PORT = ENVOY_HTTP_PORT
+    else:
+        USER_CHAIN = USER_CHAIN_TCP
+        ENVOY_PORT = ENVOY_TCP_PORT
 
     # Ensure user chain exists (create it if needed)
     ensure_chain(ipt, "nat", USER_CHAIN)
@@ -484,8 +645,17 @@ def add_port_family(ipt: str, label: str, port: int, excl_ifs: list[str]):
     print(f"[✓] ({label}) Port {port} redirect added.")
 
 
-def remove_port_family(ipt: str, label: str, port: int):
+def remove_port_family(ipt: str, label: str, port: int, port_type: str):
     print(f"[+] ({label}) Removing NAT redirect for port {port}")
+
+    if port_type == "http":
+        USER_CHAIN = USER_CHAIN_HTTP
+        ENVOY_PORT = ENVOY_HTTP_PORT
+    elif port_type == "tcp":
+        USER_CHAIN = USER_CHAIN_TCP
+        ENVOY_PORT = ENVOY_TCP_PORT
+    else:
+        raise ValueError(f"Unknown port type: {port_type}")
 
     # Remove PREROUTING rule for this port
     del_rule(
@@ -540,26 +710,74 @@ def remove_port_family(ipt: str, label: str, port: int):
 
 
 def add_port(port: int):
+    http_ports, tcp_ports = load_ports()
+    if port in http_ports:
+        port_type = "http"
+    elif port in tcp_ports:
+        port_type = "tcp"
+    else:
+        raise ValueError(f"Port {port} not found in configuration")
+
     # Resolve bridges
     if BRIDGE_IFS.strip().lower() in {"auto", ""}:
         excl_ifs = detect_bridges()
     else:
         excl_ifs = [x for x in BRIDGE_IFS.split() if x]
 
-    add_port_family(IPT, "IPv4", port, excl_ifs)
+    add_port_family(IPT, "IPv4", port, port_type, excl_ifs)
     if ipv6_wanted():
-        add_port_family(IP6T, "IPv6", port, excl_ifs)
+        add_port_family(IP6T, "IPv6", port, port_type, excl_ifs)
     else:
         print("[i] IPv6 disabled or unavailable; skipping IPv6 rules.")
 
 
 def remove_port(port: int):
-    remove_port_family(IPT, "IPv4", port)
+    http_ports, tcp_ports = load_ports()
+    if port in http_ports:
+        port_type = "http"
+    elif port in tcp_ports:
+        port_type = "tcp"
+    else:
+        raise ValueError(f"Port {port} not found in configuration")
+
+    remove_port_family(IPT, "IPv4", port, port_type)
     if ipv6_wanted():
-        remove_port_family(IP6T, "IPv6", port)
+        remove_port_family(IP6T, "IPv6", port, port_type)
+
+
+def cleanup_old_chains(ipt: str):
+    """Remove old ENVOY_PRE chain if it exists from previous setup."""
+    old_chain = "ENVOY_PRE"
+    if chain_exists(ipt, "nat", old_chain):
+        print(f"[i] Cleaning up old chain '{old_chain}' from previous setup...")
+
+        # Remove any rules that jump to the old chain
+        res = run([ipt, "-t", "nat", "-nL", "PREROUTING"])
+        if res.returncode == 0:
+            for line in res.stdout.splitlines():
+                if old_chain in line:
+                    # Try to remove rules jumping to old chain
+                    run([ipt, "-t", "nat", "-D", "PREROUTING", "-j", old_chain])
+
+        res = run([ipt, "-t", "nat", "-nL", "OUTPUT"])
+        if res.returncode == 0:
+            for line in res.stdout.splitlines():
+                if old_chain in line:
+                    # Try to remove rules jumping to old chain
+                    run([ipt, "-t", "nat", "-D", "OUTPUT", "-j", old_chain])
+
+        # Flush and delete the old chain
+        run([ipt, "-t", "nat", "-F", old_chain])
+        run([ipt, "-t", "nat", "-X", old_chain])
+        print(f"[✓] Old chain '{old_chain}' removed.")
 
 
 def setup():
+    # Clean up old chains from previous setup
+    cleanup_old_chains(IPT)
+    if ipv6_wanted():
+        cleanup_old_chains(IP6T)
+
     # Resolve bridges once (shared by v4 and v6)
     if BRIDGE_IFS.strip().lower() in {"auto", ""}:
         excl_ifs = detect_bridges()
@@ -570,19 +788,24 @@ def setup():
         f"[i] Excluding bridge interfaces from REDIRECT: {(' '.join(excl_ifs)) if excl_ifs else '<none>'}"
     )
 
-    ports = load_ports()
-    setup_family(IPT, "IPv4", ports, excl_ifs)
+    http_ports, tcp_ports = load_ports()
+    setup_family(IPT, "IPv4", http_ports, tcp_ports, excl_ifs)
     if ipv6_wanted():
-        setup_family(IP6T, "IPv6", ports, excl_ifs)
+        setup_family(IP6T, "IPv6", http_ports, tcp_ports, excl_ifs)
     else:
         print("[i] IPv6 disabled or unavailable; skipping IPv6 rules.")
 
 
 def teardown():
-    ports = load_ports()
-    teardown_family(IPT, "IPv4", ports)
+    http_ports, tcp_ports = load_ports()
+    teardown_family(IPT, "IPv4", http_ports, tcp_ports)
     if ipv6_wanted():
-        teardown_family(IP6T, "IPv6", ports)
+        teardown_family(IP6T, "IPv6", http_ports, tcp_ports)
+
+    # Also clean up old chains if they exist
+    cleanup_old_chains(IPT)
+    if ipv6_wanted():
+        cleanup_old_chains(IP6T)
 
 
 def parse_iptables_rule(line: str) -> dict:
@@ -672,32 +895,48 @@ def format_rules_table(rules: list[dict], title: str):
 def show_rules_family(ipt: str, label: str):
     print(f"\n=== {label} Rules ===")
 
-    # Check if user chain exists
-    if chain_exists(ipt, "nat", USER_CHAIN):
-        print(f"\n[+] Custom chain '{USER_CHAIN}' contents:")
-        res = run([ipt, "-t", "nat", "-nL", USER_CHAIN, "--line-numbers"])
+    # Check HTTP chain
+    if chain_exists(ipt, "nat", USER_CHAIN_HTTP):
+        print(f"\n[+] HTTP chain '{USER_CHAIN_HTTP}' contents:")
+        res = run([ipt, "-t", "nat", "-nL", USER_CHAIN_HTTP, "--line-numbers"])
         if res.returncode == 0 and res.stdout.strip():
             lines = res.stdout.splitlines()
-            # Skip header lines (first 2 lines)
             rule_lines = [line for line in lines[2:] if line.strip()]
             if rule_lines:
                 rules = [parse_iptables_rule(line) for line in rule_lines]
-                format_rules_table(rules, "rules")
+                format_rules_table(rules, "HTTP rules")
             else:
                 print("  (empty)")
         else:
             print("  (empty or error)")
     else:
-        print(f"\n[-] Custom chain '{USER_CHAIN}' does not exist")
+        print(f"\n[-] HTTP chain '{USER_CHAIN_HTTP}' does not exist")
 
-    # Show PREROUTING rules that jump to our chain
-    print(f"\n[+] PREROUTING rules (jumping to {USER_CHAIN}):")
+    # Check TCP chain
+    if chain_exists(ipt, "nat", USER_CHAIN_TCP):
+        print(f"\n[+] TCP chain '{USER_CHAIN_TCP}' contents:")
+        res = run([ipt, "-t", "nat", "-nL", USER_CHAIN_TCP, "--line-numbers"])
+        if res.returncode == 0 and res.stdout.strip():
+            lines = res.stdout.splitlines()
+            rule_lines = [line for line in lines[2:] if line.strip()]
+            if rule_lines:
+                rules = [parse_iptables_rule(line) for line in rule_lines]
+                format_rules_table(rules, "TCP rules")
+            else:
+                print("  (empty)")
+        else:
+            print("  (empty or error)")
+    else:
+        print(f"\n[-] TCP chain '{USER_CHAIN_TCP}' does not exist")
+
+    # Show PREROUTING rules that jump to our chains
+    print("\n[+] PREROUTING rules (jumping to proxy chains):")
     res = run([ipt, "-t", "nat", "-nL", "PREROUTING", "--line-numbers"])
     if res.returncode == 0:
         lines = res.stdout.splitlines()
         envoy_rules = []
-        for line in lines[2:]:  # Skip header lines
-            if USER_CHAIN in line or "envoy:" in line:
+        for line in lines[2:]:
+            if USER_CHAIN_HTTP in line or USER_CHAIN_TCP in line or "envoy:" in line:
                 envoy_rules.append(parse_iptables_rule(line))
         format_rules_table(envoy_rules, "envoy-related rules")
     else:
@@ -709,7 +948,7 @@ def show_rules_family(ipt: str, label: str):
     if res.returncode == 0:
         lines = res.stdout.splitlines()
         envoy_rules = []
-        for line in lines[2:]:  # Skip header lines
+        for line in lines[2:]:
             if f"uid !{ENVOY_UID}" in line or "envoy:" in line:
                 envoy_rules.append(parse_iptables_rule(line))
         format_rules_table(envoy_rules, "envoy-related rules")
@@ -718,18 +957,21 @@ def show_rules_family(ipt: str, label: str):
 
     # Show protection rules in raw table if enabled
     if PROTECT_ENVOY_PORT:
-        print(f"\n[+] Protection rules (raw table, blocking direct access to :{ENVOY_PORT}):")
+        print("\n[+] Protection rules (raw table, blocking direct access):")
         res = run([ipt, "-t", "raw", "-nL", "PREROUTING", "--line-numbers"])
         if res.returncode == 0:
             lines = res.stdout.splitlines()
             protection_rules = []
-            for line in lines[2:]:  # Skip header lines
-                if f"dpt:{ENVOY_PORT}" in line or "envoy:" in line:
+            for line in lines[2:]:
+                if (
+                    f"dpt:{ENVOY_HTTP_PORT}" in line
+                    or f"dpt:{ENVOY_TCP_PORT}" in line
+                    or "envoy:" in line
+                ):
                     protection_rules.append(parse_iptables_rule(line))
             format_rules_table(protection_rules, "protection rules")
         else:
             print("  (error reading raw PREROUTING rules)")
-
 
 
 def info():
@@ -739,15 +981,18 @@ def info():
     else:
         excl_ifs = [x for x in BRIDGE_IFS.split() if x]
 
-    ports = load_ports()
+    http_ports, tcp_ports = load_ports()
 
     print("=== CTF Proxy iptables Configuration Info ===")
-    print(f"Envoy Port: {ENVOY_PORT}")
+    print(f"Envoy HTTP Port: {ENVOY_HTTP_PORT}")
+    print(f"Envoy TCP Port: {ENVOY_TCP_PORT}")
     print(f"Envoy UID: {ENVOY_UID}")
-    print(f"User Chain: {USER_CHAIN}")
-    print(f"Configured Ports: {', '.join(map(str, ports))}")
+    print(f"HTTP Chain: {USER_CHAIN_HTTP}")
+    print(f"TCP Chain: {USER_CHAIN_TCP}")
+    print(f"Configured HTTP Ports: {', '.join(map(str, http_ports)) if http_ports else '<none>'}")
+    print(f"Configured TCP Ports: {', '.join(map(str, tcp_ports)) if tcp_ports else '<none>'}")
     print(f"Excluded Bridge Interfaces: {', '.join(excl_ifs) if excl_ifs else '<none>'}")
-    print(f"Protect Envoy Port: {'Yes' if PROTECT_ENVOY_PORT else 'No'}")
+    print(f"Protect Envoy Ports: {'Yes' if PROTECT_ENVOY_PORT else 'No'}")
     print(f"IPv6 Enabled: {'Yes' if ipv6_wanted() else 'No'}")
 
     show_rules_family(IPT, "IPv4")
@@ -761,34 +1006,38 @@ def usage():
         f"""Usage: sudo {exe} setup|teardown|add-port <port>|remove-port <port>|info
 
 Environment overrides:
-  PORTS_FILE={PORTS_FILE or "<unset>"}   # path to config file listing ports (YAML or text)
-  ENVOY_PORT={ENVOY_PORT}
+  PORTS_FILE={PORTS_FILE or "<unset>"}   # path to config file listing ports (YAML)
+  ENVOY_HTTP_PORT={ENVOY_HTTP_PORT}      # HTTP proxy port
+  ENVOY_TCP_PORT={ENVOY_TCP_PORT}       # TCP proxy port
   ENVOY_UID={ENVOY_UID}
   BRIDGE_IFS={BRIDGE_IFS}        # space-separated list or "auto"
   PROTECT_ENVOY_PORT={"1" if PROTECT_ENVOY_PORT else "0"}
   ENABLE_IPV6={ENABLE_IPV6}      # auto|1|0
   IPT={IPT}
   IP6T={IP6T}
-  USER_CHAIN={USER_CHAIN}
+  USER_CHAIN_HTTP={USER_CHAIN_HTTP}
+  USER_CHAIN_TCP={USER_CHAIN_TCP}
 
 Notes:
-  • setup: Configure redirects for all ports from PORTS_FILE (or default PORT).
+  • setup: Configure redirects for all ports from PORTS_FILE.
   • teardown: Remove all existing redirects.
   • add-port <port>: Add redirect for a specific port.
   • remove-port <port>: Remove redirect for a specific port.
   • info: Display current iptables rules related to proxying.
-  • If PORTS_FILE is provided, all discovered TCP ports are redirected to :$ENVOY_PORT.
+  • Services are classified by type in PORTS_FILE:
+    - HTTP/WS services (type: http, https, ws, wss) → :{ENVOY_HTTP_PORT}
+    - TCP services (type: tcp, udp, etc.) → :{ENVOY_TCP_PORT}
     - YAML example:
         services:
-          - name: foo
-            port: 3000
-          - name: bar
-            port: 3001
-    - Plain text fallback: any lines like "port: 3000" will be read.
-  • IPv4 and IPv6 traffic to each TCP port is redirected to :$ENVOY_PORT before Docker's DNAT,
-    except on excluded bridges.
+          - name: web
+            port: 8080
+            type: http
+          - name: database
+            port: 3306
+            type: tcp
+  • IPv4 and IPv6 traffic is redirected based on service type.
   • Local traffic (127.0.0.1 and ::1) is redirected too; Envoy's UID is excluded to avoid loops.
-  • Direct remote hits to :$ENVOY_PORT are dropped when PROTECT_ENVOY_PORT=1.
+  • Direct remote hits to proxy ports are dropped when PROTECT_ENVOY_PORT=1.
 """,
         file=sys.stderr,
     )

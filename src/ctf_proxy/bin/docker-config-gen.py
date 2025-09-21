@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 
 import json
+import os
 import subprocess
 import sys
 from typing import Any
+
+import yaml
 
 
 def run_docker_command(args: list[str]) -> str:
@@ -98,16 +101,58 @@ def sanitize_service_name(name: str) -> str:
     return name if name else "service"
 
 
-def generate_config() -> dict[str, Any]:
-    """Generate configuration based on running Docker containers."""
+def load_existing_config(file_path: str) -> dict[str, Any]:
+    """Load existing configuration file if it exists."""
+    if not os.path.exists(file_path):
+        return {}
+
+    try:
+        with open(file_path) as f:
+            config = yaml.safe_load(f) or {}
+            return config
+    except Exception as e:
+        print(f"Warning: Failed to load existing config: {e}", file=sys.stderr)
+        return {}
+
+
+def get_existing_ports(config: dict[str, Any]) -> set[int]:
+    """Extract all ports from existing configuration."""
+    ports = set()
+    if "services" in config and isinstance(config["services"], list):
+        for service in config["services"]:
+            if isinstance(service, dict) and "port" in service:
+                ports.add(int(service["port"]))
+    return ports
+
+
+def should_skip_container(container_name: str, port: int) -> bool:
+    """Check if container should be skipped from proxy configuration."""
+    return port in [48955, 15000, 15001, 15002]
+
+
+def generate_config(existing_config: dict[str, Any] = None) -> dict[str, Any]:
+    """Generate configuration based on running Docker containers, merging with existing config."""
     containers = get_running_containers()
 
     if not containers:
         print("No running containers found.", file=sys.stderr)
+        if existing_config:
+            return existing_config
         return {"services": []}
 
-    services = []
-    used_ports = set()
+    # Get existing services and their ports
+    if existing_config is None:
+        existing_config = {}
+
+    existing_ports = get_existing_ports(existing_config)
+    existing_services = existing_config.get("services", [])
+
+    # Start with existing services
+    services = list(existing_services)
+    used_ports = existing_ports.copy()
+
+    new_services_count = 0
+    skipped_count = 0
 
     for container in containers:
         container_name = container.get("Names", "")
@@ -127,6 +172,13 @@ def generate_config() -> dict[str, Any]:
             external_port = mapping["external_port"]
             protocol = mapping["protocol"]
 
+            # Skip proxy infrastructure containers and ports
+            if should_skip_container(container_name, external_port):
+                skipped_count += 1
+                print(f"Skipping infrastructure service on port {external_port}", file=sys.stderr)
+                continue
+
+            # Skip if port already exists in configuration
             if external_port in used_ports:
                 continue
 
@@ -141,10 +193,34 @@ def generate_config() -> dict[str, Any]:
             services.append(
                 {"name": final_service_name, "port": external_port, "type": service_type}
             )
+            new_services_count += 1
+
+    if new_services_count > 0:
+        print(f"Added {new_services_count} new service(s) to configuration.", file=sys.stderr)
+    if skipped_count > 0:
+        print(f"Skipped {skipped_count} proxy infrastructure service(s).", file=sys.stderr)
+    if new_services_count == 0 and skipped_count == 0:
+        print("No new services to add (all ports already configured).", file=sys.stderr)
 
     services.sort(key=lambda s: s["port"])
 
-    return {"services": services}
+    # Preserve other config fields from existing config
+    result = existing_config.copy()
+    result["services"] = services
+
+    # Add default flag_format if not present
+    if "flag_format" not in result:
+        result["flag_format"] = "FLAG_[A-Za-z0-9/+]{32}"
+
+    return result
+
+
+def save_config(config: dict[str, Any], filename: str) -> str:
+    """Convert configuration dictionary to YAML string."""
+    with open(filename, "w") as f:
+        f.write("# CTF Proxy Configuration\n")
+        f.write("# Generated/Updated from running Docker containers\n\n")
+        yaml.dump(config, f, sort_keys=False)
 
 
 def main():
@@ -152,40 +228,30 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] in ["-h", "--help"]:
         print("Usage: python docker-config-gen.py [output_file]")
         print()
-        print("Generate CTF proxy configuration based on running Docker containers.")
+        print("Generate/Update CTF proxy configuration based on running Docker containers.")
         print("Only containers with exposed ports are included.")
         print()
+        print("If output_file is specified and exists, new services will be merged.")
         print("If output_file is not specified, configuration is printed to stdout.")
+        print()
+        print("Existing services (matched by port) are preserved.")
         sys.exit(0)
 
-    config = generate_config()
-
-    if not config["services"]:
-        print("No services with exposed ports found.", file=sys.stderr)
-        sys.exit(1)
-
-    yaml_output = "# CTF Proxy Configuration\n"
-    yaml_output += "# Generated from running Docker containers\n\n"
-    yaml_output += 'flag_format: "FLAG_[A-Za-z0-9/+]{32}"\n\n'
-    yaml_output += "services:\n"
-
-    for service in config["services"]:
-        yaml_output += f"  - name: {service['name']}\n"
-        yaml_output += f"    port: {service['port']}\n"
-        yaml_output += f"    type: {service['type']}\n"
-        yaml_output += "\n"
-
+    # Load existing config if output file is specified and exists
+    existing_config = {}
     if len(sys.argv) > 1:
         output_file = sys.argv[1]
-        try:
-            with open(output_file, "w") as f:
-                f.write(yaml_output)
-            print(f"Configuration written to {output_file}")
-        except Exception as e:
-            print(f"Error writing to file: {e}", file=sys.stderr)
-            sys.exit(1)
-    else:
-        print(yaml_output, end="")
+        existing_config = load_existing_config(output_file)
+        if existing_config:
+            print(f"Loaded existing configuration from {output_file}", file=sys.stderr)
+
+    config = generate_config(existing_config)
+
+    if not config.get("services"):
+        print("No services found in configuration.", file=sys.stderr)
+        sys.exit(1)
+
+    save_config(config, output_file if len(sys.argv) > 1 else "/dev/stdout")
 
 
 if __name__ == "__main__":

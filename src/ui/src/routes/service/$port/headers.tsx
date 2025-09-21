@@ -215,6 +215,9 @@ const headerSearchSchema = z.object({
 export const Route = createFileRoute("/service/$port/headers")({
 	component: HeaderStats,
 	validateSearch: headerSearchSchema,
+	staticData: {
+		breadcrumb: "Header Stats",
+	},
 });
 
 function HeaderStats() {

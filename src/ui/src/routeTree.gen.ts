@@ -11,9 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ServicePortIndexRouteImport } from './routes/service/$port/index'
+import { Route as ServicePortTcpStatsRouteImport } from './routes/service/$port/tcp-stats'
 import { Route as ServicePortQueriesRouteImport } from './routes/service/$port/queries'
 import { Route as ServicePortPathsRouteImport } from './routes/service/$port/paths'
 import { Route as ServicePortHeadersRouteImport } from './routes/service/$port/headers'
+import { Route as ServicePortTcpConnectionIdRouteImport } from './routes/service/$port/tcp-connection/$id'
 import { Route as ServicePortRequestIdRouteImport } from './routes/service/$port/request/$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -24,6 +26,11 @@ const IndexRoute = IndexRouteImport.update({
 const ServicePortIndexRoute = ServicePortIndexRouteImport.update({
   id: '/service/$port/',
   path: '/service/$port/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServicePortTcpStatsRoute = ServicePortTcpStatsRouteImport.update({
+  id: '/service/$port/tcp-stats',
+  path: '/service/$port/tcp-stats',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ServicePortQueriesRoute = ServicePortQueriesRouteImport.update({
@@ -41,6 +48,12 @@ const ServicePortHeadersRoute = ServicePortHeadersRouteImport.update({
   path: '/service/$port/headers',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ServicePortTcpConnectionIdRoute =
+  ServicePortTcpConnectionIdRouteImport.update({
+    id: '/service/$port/tcp-connection/$id',
+    path: '/service/$port/tcp-connection/$id',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ServicePortRequestIdRoute = ServicePortRequestIdRouteImport.update({
   id: '/service/$port/request/$id',
   path: '/service/$port/request/$id',
@@ -52,16 +65,20 @@ export interface FileRoutesByFullPath {
   '/service/$port/headers': typeof ServicePortHeadersRoute
   '/service/$port/paths': typeof ServicePortPathsRoute
   '/service/$port/queries': typeof ServicePortQueriesRoute
+  '/service/$port/tcp-stats': typeof ServicePortTcpStatsRoute
   '/service/$port': typeof ServicePortIndexRoute
   '/service/$port/request/$id': typeof ServicePortRequestIdRoute
+  '/service/$port/tcp-connection/$id': typeof ServicePortTcpConnectionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/service/$port/headers': typeof ServicePortHeadersRoute
   '/service/$port/paths': typeof ServicePortPathsRoute
   '/service/$port/queries': typeof ServicePortQueriesRoute
+  '/service/$port/tcp-stats': typeof ServicePortTcpStatsRoute
   '/service/$port': typeof ServicePortIndexRoute
   '/service/$port/request/$id': typeof ServicePortRequestIdRoute
+  '/service/$port/tcp-connection/$id': typeof ServicePortTcpConnectionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -69,8 +86,10 @@ export interface FileRoutesById {
   '/service/$port/headers': typeof ServicePortHeadersRoute
   '/service/$port/paths': typeof ServicePortPathsRoute
   '/service/$port/queries': typeof ServicePortQueriesRoute
+  '/service/$port/tcp-stats': typeof ServicePortTcpStatsRoute
   '/service/$port/': typeof ServicePortIndexRoute
   '/service/$port/request/$id': typeof ServicePortRequestIdRoute
+  '/service/$port/tcp-connection/$id': typeof ServicePortTcpConnectionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -79,24 +98,30 @@ export interface FileRouteTypes {
     | '/service/$port/headers'
     | '/service/$port/paths'
     | '/service/$port/queries'
+    | '/service/$port/tcp-stats'
     | '/service/$port'
     | '/service/$port/request/$id'
+    | '/service/$port/tcp-connection/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/service/$port/headers'
     | '/service/$port/paths'
     | '/service/$port/queries'
+    | '/service/$port/tcp-stats'
     | '/service/$port'
     | '/service/$port/request/$id'
+    | '/service/$port/tcp-connection/$id'
   id:
     | '__root__'
     | '/'
     | '/service/$port/headers'
     | '/service/$port/paths'
     | '/service/$port/queries'
+    | '/service/$port/tcp-stats'
     | '/service/$port/'
     | '/service/$port/request/$id'
+    | '/service/$port/tcp-connection/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -104,8 +129,10 @@ export interface RootRouteChildren {
   ServicePortHeadersRoute: typeof ServicePortHeadersRoute
   ServicePortPathsRoute: typeof ServicePortPathsRoute
   ServicePortQueriesRoute: typeof ServicePortQueriesRoute
+  ServicePortTcpStatsRoute: typeof ServicePortTcpStatsRoute
   ServicePortIndexRoute: typeof ServicePortIndexRoute
   ServicePortRequestIdRoute: typeof ServicePortRequestIdRoute
+  ServicePortTcpConnectionIdRoute: typeof ServicePortTcpConnectionIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -122,6 +149,13 @@ declare module '@tanstack/react-router' {
       path: '/service/$port'
       fullPath: '/service/$port'
       preLoaderRoute: typeof ServicePortIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service/$port/tcp-stats': {
+      id: '/service/$port/tcp-stats'
+      path: '/service/$port/tcp-stats'
+      fullPath: '/service/$port/tcp-stats'
+      preLoaderRoute: typeof ServicePortTcpStatsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/service/$port/queries': {
@@ -145,6 +179,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServicePortHeadersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/service/$port/tcp-connection/$id': {
+      id: '/service/$port/tcp-connection/$id'
+      path: '/service/$port/tcp-connection/$id'
+      fullPath: '/service/$port/tcp-connection/$id'
+      preLoaderRoute: typeof ServicePortTcpConnectionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/service/$port/request/$id': {
       id: '/service/$port/request/$id'
       path: '/service/$port/request/$id'
@@ -160,8 +201,10 @@ const rootRouteChildren: RootRouteChildren = {
   ServicePortHeadersRoute: ServicePortHeadersRoute,
   ServicePortPathsRoute: ServicePortPathsRoute,
   ServicePortQueriesRoute: ServicePortQueriesRoute,
+  ServicePortTcpStatsRoute: ServicePortTcpStatsRoute,
   ServicePortIndexRoute: ServicePortIndexRoute,
   ServicePortRequestIdRoute: ServicePortRequestIdRoute,
+  ServicePortTcpConnectionIdRoute: ServicePortTcpConnectionIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

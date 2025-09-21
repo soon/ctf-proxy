@@ -3,6 +3,7 @@ import {
 	createRootRouteWithContext,
 	useNavigate,
 	useLocation,
+	useRouterState,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanstackDevtools } from "@tanstack/react-devtools";
@@ -67,37 +68,130 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 			})) || []),
 		];
 
-		// Build breadcrumbs based on current path
+		// Build breadcrumbs from router matches
+		const matches = useRouterState({ select: (s) => s.matches });
+
 		const getBreadcrumbs = () => {
+			const items: Array<{ title: string; href?: string }> = [];
 			const path = location.pathname;
-			const items = [{ title: "Dashboard", href: "/" }];
 
-			const serviceMatch = path.match(/^\/service\/(\d+)/);
-			if (serviceMatch) {
-				const port = serviceMatch[1];
-				const service = data?.services?.find((s) => s.port === parseInt(port));
-				if (service) {
-					items.push({
-						title: `${service.name.substring(0, 4).toUpperCase()}:${service.port}`,
-						href: `/service/${port}`,
-					});
+			// Always add Dashboard as root
+			if (path !== "/") {
+				items.push({ title: "Dashboard", href: "/" });
+			} else {
+				items.push({ title: "Dashboard" });
+			}
 
-					// Check for sub-routes
-					if (path.includes("/paths")) {
-						items.push({ title: "Path Stats" });
-					} else if (path.includes("/queries")) {
-						items.push({ title: "Query Stats" });
-					} else if (path.includes("/headers")) {
-						items.push({ title: "Header Stats" });
-					} else if (path.includes("/request/")) {
-						const requestMatch = path.match(/\/request\/(\d+)/);
-						if (requestMatch) {
-							const requestId = requestMatch[1];
-							items.push({ title: `Request #${requestId}` });
+			console.log("Current pathname:", path);
+			console.log(
+				"Current matches:",
+				JSON.stringify(
+					matches.map((m) => ({
+						pathname: m.pathname,
+						id: m.id,
+						routeId: m.routeId,
+						staticData: (m as any).staticData,
+					})),
+					null,
+					2,
+				),
+			);
+			console.log("Matches length:", matches.length);
+
+			// Process matches to build breadcrumb trail
+			matches.forEach((match) => {
+				// Skip the root match
+				if (match.pathname === "/") return;
+
+				// Get breadcrumb from route's static data
+				const staticData = (match as any).staticData;
+				const breadcrumb = staticData?.breadcrumb;
+
+				// Normalize pathname by removing trailing slash
+				const normalizedPath = match.pathname.replace(/\/$/, "");
+
+				// Handle service routes
+				if (normalizedPath.match(/^\/service\/\d+$/)) {
+					const portMatch = normalizedPath.match(/\/service\/(\d+)$/);
+					if (portMatch) {
+						const port = portMatch[1];
+						const service = data?.services?.find(
+							(s) => s.port === parseInt(port),
+						);
+						if (service) {
+							items.push({
+								title: `${service.name.substring(0, 4).toUpperCase()}:${service.port}`,
+								href: normalizedPath,
+							});
 						}
 					}
 				}
-			}
+				// Handle stats pages
+				else if (breadcrumb && normalizedPath.match(/^\/service\/\d+\/.+$/)) {
+					const servicePortMatch = match.pathname.match(/\/service\/(\d+)\/.+/);
+					if (servicePortMatch) {
+						const port = servicePortMatch[1];
+						const service = data?.services?.find(
+							(s) => s.port === parseInt(port),
+						);
+						if (
+							service &&
+							!items.some((item) => item.href === `/service/${port}`)
+						) {
+							items.push({
+								title: `${service.name.substring(0, 4).toUpperCase()}:${service.port}`,
+								href: `/service/${port}`,
+							});
+						}
+					}
+					// Add the actual breadcrumb for stats pages
+					items.push({ title: breadcrumb });
+				}
+				// Handle dynamic routes like request/:id and tcp-connection/:id
+				else if (match.pathname.includes("/request/")) {
+					const requestMatch = match.pathname.match(
+						/\/service\/(\d+)\/request\/(\d+)/,
+					);
+					if (requestMatch) {
+						const port = requestMatch[1];
+						const requestId = requestMatch[2];
+						const service = data?.services?.find(
+							(s) => s.port === parseInt(port),
+						);
+						if (
+							service &&
+							!items.some((item) => item.href === `/service/${port}`)
+						) {
+							items.push({
+								title: `${service.name.substring(0, 4).toUpperCase()}:${service.port}`,
+								href: `/service/${port}`,
+							});
+						}
+						items.push({ title: `Request #${requestId}` });
+					}
+				} else if (match.pathname.includes("/tcp-connection/")) {
+					const tcpMatch = match.pathname.match(
+						/\/service\/(\d+)\/tcp-connection\/(\d+)/,
+					);
+					if (tcpMatch) {
+						const port = tcpMatch[1];
+						const connId = tcpMatch[2];
+						const service = data?.services?.find(
+							(s) => s.port === parseInt(port),
+						);
+						if (
+							service &&
+							!items.some((item) => item.href === `/service/${port}`)
+						) {
+							items.push({
+								title: `${service.name.substring(0, 4).toUpperCase()}:${service.port}`,
+								href: `/service/${port}`,
+							});
+						}
+						items.push({ title: `TCP Connection #${connId}` });
+					}
+				}
+			});
 
 			return items;
 		};

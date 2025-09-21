@@ -235,6 +235,9 @@ const pathSearchSchema = z.object({
 export const Route = createFileRoute("/service/$port/paths")({
 	component: PathStats,
 	validateSearch: pathSearchSchema,
+	staticData: {
+		breadcrumb: "Path Stats",
+	},
 });
 
 function PathStats() {

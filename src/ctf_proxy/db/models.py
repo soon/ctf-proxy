@@ -69,6 +69,7 @@ class AlertRow:
         description: str
         http_request_id: int | None = None
         http_response_id: int | None = None
+        tcp_connection_id: int | None = None
 
 
 @dataclass
@@ -85,6 +86,8 @@ class FlagRow:
         value: str
         http_request_id: int | None = None
         http_response_id: int | None = None
+        tcp_connection_id: int | None = None
+        tcp_event_id: int | None = None
         location: str | None = None
         offset: int | None = None
 
@@ -115,6 +118,9 @@ class ServiceStatsRow:
         total_flags_written: int = 0
         total_flags_retrieved: int = 0
         total_flags_blocked: int = 0
+        total_tcp_connections: int = 0
+        total_tcp_bytes_in: int = 0
+        total_tcp_bytes_out: int = 0
 
 
 @dataclass
@@ -162,6 +168,83 @@ class HttpRequestLinkRow:
     class Insert:
         from_request_id: int
         to_request_id: int
+
+
+@dataclass
+class TcpConnectionRow:
+    id: int
+    port: int
+    connection_id: int
+    start_time: int
+    duration_ms: int
+    bytes_in: int
+    bytes_out: int
+    tap_id: str | None
+    batch_id: str | None
+
+    @dataclass
+    class Insert:
+        port: int
+        connection_id: int
+        start_time: int
+        duration_ms: int
+        bytes_in: int
+        bytes_out: int
+        tap_id: str | None = None
+        batch_id: str | None = None
+
+
+@dataclass
+class TcpConnectionStatsRow:
+    id: int
+    port: int
+    read_min: int
+    read_max: int
+    write_min: int
+    write_max: int
+    count: int
+
+    @dataclass
+    class Insert:
+        port: int
+        read_min: int
+        read_max: int
+        write_min: int
+        write_max: int
+        count: int = 1
+
+    @dataclass
+    class Increment:
+        port: int
+        read_min: int
+        read_max: int
+        write_min: int
+        write_max: int
+        count: int = 1
+
+
+@dataclass
+class TcpEventRow:
+    id: int
+    connection_id: int
+    timestamp: int
+    event_type: str
+    data: bytes | None
+    data_text: str | None
+    data_size: int
+    end_stream: int
+    truncated: int
+
+    @dataclass
+    class Insert:
+        connection_id: int
+        timestamp: int
+        event_type: str
+        data: bytes | None = None
+        data_text: str | None = None
+        data_size: int = 0
+        end_stream: bool = False
+        truncated: bool = False
 
 
 class BaseTable:
@@ -271,10 +354,17 @@ class AlertTable(BaseTable):
     ) -> None:
         tx.execute(
             """
-            INSERT INTO alert (created, port, http_request_id, http_response_id, description)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO alert (created, port, http_request_id, http_response_id, tcp_connection_id, description)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (row.created, row.port, row.http_request_id, row.http_response_id, row.description),
+            (
+                row.created,
+                row.port,
+                row.http_request_id,
+                row.http_response_id,
+                row.tcp_connection_id,
+                row.description,
+            ),
         )
 
 
@@ -282,10 +372,21 @@ class FlagTable(BaseTable):
     def insert_many(self, tx: sqlite3.Cursor, flags: list[FlagRow.Insert]) -> None:
         tx.executemany(
             """
-            INSERT INTO flag (http_request_id, http_response_id, location, offset, value)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO flag (http_request_id, http_response_id, tcp_connection_id, tcp_event_id, location, offset, value)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            [(f.http_request_id, f.http_response_id, f.location, f.offset, f.value) for f in flags],
+            [
+                (
+                    f.http_request_id,
+                    f.http_response_id,
+                    f.tcp_connection_id,
+                    f.tcp_event_id,
+                    f.location,
+                    f.offset,
+                    f.value,
+                )
+                for f in flags
+            ],
         )
 
     def get_by_request_id(self, request_id: int) -> list[FlagRow]:
@@ -493,6 +594,105 @@ class HttpRequestLinkTable(BaseTable):
             return [row[0] for row in cursor.fetchall()]
 
 
+class TcpConnectionTable(BaseTable):
+    def insert(self, tx: sqlite3.Cursor, **kwargs) -> int:
+        row = (
+            TcpConnectionRow.Insert(**kwargs)
+            if not isinstance(kwargs.get("port"), TcpConnectionRow.Insert)
+            else kwargs["port"]
+        )
+        if isinstance(kwargs.get("port"), TcpConnectionRow.Insert):
+            row = kwargs["port"]
+        else:
+            row = TcpConnectionRow.Insert(**kwargs)
+
+        tx.execute(
+            """
+            INSERT INTO tcp_connection (
+                port, connection_id, start_time, duration_ms,
+                bytes_in, bytes_out, tap_id, batch_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row.port,
+                row.connection_id,
+                row.start_time,
+                row.duration_ms,
+                row.bytes_in,
+                row.bytes_out,
+                row.tap_id,
+                row.batch_id,
+            ),
+        )
+        return tx.lastrowid
+
+
+class TcpEventTable(BaseTable):
+    def insert(self, tx: sqlite3.Cursor, **kwargs) -> int:
+        row = TcpEventRow.Insert(**kwargs)
+
+        tx.execute(
+            """
+            INSERT INTO tcp_event (
+                connection_id, timestamp, event_type, data, data_text,
+                data_size, end_stream, truncated
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row.connection_id,
+                row.timestamp,
+                row.event_type,
+                row.data,
+                row.data_text,
+                row.data_size,
+                int(row.end_stream),
+                int(row.truncated),
+            ),
+        )
+        return tx.lastrowid
+
+
+class TcpConnectionStatsTable(BaseTable):
+    def increment(self, tx: sqlite3.Cursor, row: TcpConnectionStatsRow.Increment) -> RowStatus:
+        # Try to update existing record
+        tx.execute(
+            """
+            UPDATE tcp_connection_stats
+            SET count = count + ?
+            WHERE port = ? AND read_min = ? AND read_max = ? AND write_min = ? AND write_max = ?
+        """,
+            (row.count, row.port, row.read_min, row.read_max, row.write_min, row.write_max),
+        )
+
+        if tx.rowcount == 0:
+            # Insert new record if not exists
+            tx.execute(
+                """
+                INSERT INTO tcp_connection_stats (port, read_min, read_max, write_min, write_max, count)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """,
+                (row.port, row.read_min, row.read_max, row.write_min, row.write_max, row.count),
+            )
+            return RowStatus.NEW
+
+        return RowStatus.UPDATED
+
+    def get_by_port(self, port: int) -> list[TcpConnectionStatsRow]:
+        with self.get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM tcp_connection_stats
+                WHERE port = ?
+                ORDER BY read_min, write_min
+            """,
+                (port,),
+            )
+            rows = cursor.fetchall()
+            return [TcpConnectionStatsRow(**dict(row)) for row in rows]
+
+
 def make_db(path: str = "proxy_stats.db"):
     db = ProxyStatsDB(path)
     db.init_db()
@@ -514,6 +714,9 @@ class ProxyStatsDB:
         self.http_query_param_time_stats = HttpQueryParamTimeStatsTable()
         self.http_header_time_stats = HttpHeaderTimeStatsTable()
         self.http_request_links = HttpRequestLinkTable(db_file)
+        self.tcp_connections = TcpConnectionTable(db_file)
+        self.tcp_events = TcpEventTable(db_file)
+        self.tcp_connection_stats = TcpConnectionStatsTable(db_file)
         # self.conn = sqlite3.connect(self.db_file)
 
     # def transaction(self):

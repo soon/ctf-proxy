@@ -1,6 +1,7 @@
 static_resources:
   listeners:
-  - name: http_in
+  # HTTP listener
+  - name: http_listener
     address:
       socket_address:
         address: "::"
@@ -39,7 +40,6 @@ static_resources:
                 stream_id: "%STREAM_ID%"
                 bytes_in: "%BYTES_RECEIVED%"
                 bytes_out: "%BYTES_SENT%"
-
 
           http_filters:
           - name: envoy.filters.http.wasm
@@ -81,11 +81,81 @@ static_resources:
               routes:
               - match: { prefix: "/" }
                 route:
-                  cluster: passthrough
+                  cluster: http_passthrough
                   timeout: 0s
 
+  # TCP listener
+  - name: tcp_listener
+    address:
+      socket_address:
+        address: "::"
+        port_value: 15002
+        ipv4_compat: true
+    listener_filters:
+    - name: envoy.filters.listener.original_dst
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.filters.listener.original_dst.v3.OriginalDst
+
+    filter_chains:
+    - transport_socket:
+        name: envoy.transport_sockets.tap
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tap.v3.Tap
+          common_config:
+            static_config:
+              match: { any_match: true }
+              output_config:
+                sinks:
+                - format: JSON_BODY_AS_BYTES
+                  file_per_tap:
+                    path_prefix: /var/log/envoy/tcp-tap/tcp
+          transport_socket:
+            name: envoy.transport_sockets.raw_buffer
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.raw_buffer.v3.RawBuffer
+      filters:
+      # - name: envoy.filters.network.wasm
+      #   typed_config:
+      #     "@type": type.googleapis.com/envoy.extensions.filters.network.wasm.v3.Wasm
+      #     config:
+      #       name: tcp_interceptor
+      #       vm_config:
+      #         vm_id: tcp_interceptor_vm
+      #         runtime: envoy.wasm.runtime.v8
+      #         code:
+      #           local:
+      #             filename: /etc/envoy/wasm/interceptor.wasm
+      #         allow_precompiled: true
+      - name: envoy.filters.network.tcp_proxy
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+          stat_prefix: tcp
+          cluster: tcp_passthrough
+          access_log:
+          - name: envoy.access_loggers.file
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog
+              path: /var/log/envoy/tcp_access.log
+              json_format:
+                start_time: "%START_TIME%"
+                duration_ms: "%DURATION%"
+                upstream_host: "%UPSTREAM_HOST%"
+                downstream_remote_address: "%DOWNSTREAM_REMOTE_ADDRESS%"
+                downstream_local_address: "%DOWNSTREAM_LOCAL_ADDRESS%"
+                upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
+                bytes_in: "%BYTES_RECEIVED%"
+                bytes_out: "%BYTES_SENT%"
+                connection_id: "%CONNECTION_ID%"
+
   clusters:
-  - name: passthrough
+  # HTTP passthrough cluster
+  - name: http_passthrough
+    type: ORIGINAL_DST
+    lb_policy: CLUSTER_PROVIDED
+    connect_timeout: 1s
+
+  # TCP passthrough cluster
+  - name: tcp_passthrough
     type: ORIGINAL_DST
     lb_policy: CLUSTER_PROVIDED
     connect_timeout: 1s

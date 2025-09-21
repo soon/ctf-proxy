@@ -55,28 +55,37 @@ CREATE TABLE IF NOT EXISTS alert (
     port INTEGER,
     http_request_id INTEGER,
     http_response_id INTEGER,
+    tcp_connection_id INTEGER,
     FOREIGN KEY (http_request_id) REFERENCES http_request (id),
-    FOREIGN KEY (http_response_id) REFERENCES http_response (id)
+    FOREIGN KEY (http_response_id) REFERENCES http_response (id),
+    FOREIGN KEY (tcp_connection_id) REFERENCES tcp_connection (id)
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS alert_port ON alert(port);
 CREATE INDEX IF NOT EXISTS alert_http_request_id ON alert(http_request_id);
 CREATE INDEX IF NOT EXISTS alert_http_response_id ON alert(http_response_id);
+CREATE INDEX IF NOT EXISTS alert_tcp_connection_id ON alert(tcp_connection_id);
 CREATE INDEX IF NOT EXISTS alert_description ON alert(description);
 
 CREATE TABLE IF NOT EXISTS flag (
     id INTEGER PRIMARY KEY,
     http_request_id INTEGER,
     http_response_id INTEGER,
+    tcp_connection_id INTEGER,
+    tcp_event_id INTEGER,
     location TEXT,
     offset INTEGER,
     value TEXT NOT NULL,
     FOREIGN KEY (http_request_id) REFERENCES http_request (id),
-    FOREIGN KEY (http_response_id) REFERENCES http_response (id)
+    FOREIGN KEY (http_response_id) REFERENCES http_response (id),
+    FOREIGN KEY (tcp_connection_id) REFERENCES tcp_connection (id),
+    FOREIGN KEY (tcp_event_id) REFERENCES tcp_event (id)
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS flag_http_request_id ON flag(http_request_id);
 CREATE INDEX IF NOT EXISTS flag_http_response_id ON flag(http_response_id);
+CREATE INDEX IF NOT EXISTS flag_tcp_connection_id ON flag(tcp_connection_id);
+CREATE INDEX IF NOT EXISTS flag_tcp_event_id ON flag(tcp_event_id);
 
 CREATE TABLE IF NOT EXISTS service_stats (
     id INTEGER PRIMARY KEY,
@@ -155,3 +164,75 @@ CREATE TABLE IF NOT EXISTS http_request_link (
 CREATE INDEX IF NOT EXISTS http_request_link_from_request_id ON http_request_link(from_request_id);
 CREATE INDEX IF NOT EXISTS http_request_link_to_request_id ON http_request_link(to_request_id);
 CREATE UNIQUE INDEX IF NOT EXISTS http_request_link_unique ON http_request_link(from_request_id, to_request_id);
+
+CREATE TABLE IF NOT EXISTS tcp_connection (
+    id INTEGER PRIMARY KEY,
+    port INTEGER NOT NULL,
+    connection_id INTEGER NOT NULL,
+    start_time INTEGER NOT NULL,
+    duration_ms INTEGER,
+    bytes_in INTEGER NOT NULL,
+    bytes_out INTEGER NOT NULL,
+    -- trace data in archive
+    tap_id TEXT,
+    batch_id TEXT
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS tcp_connection_port ON tcp_connection(port);
+CREATE INDEX IF NOT EXISTS tcp_connection_start_time ON tcp_connection(start_time);
+CREATE INDEX IF NOT EXISTS tcp_connection_connection_id ON tcp_connection(connection_id);
+
+CREATE TABLE IF NOT EXISTS tcp_event (
+    id INTEGER PRIMARY KEY,
+    connection_id INTEGER NOT NULL,
+    timestamp INTEGER NOT NULL,
+    event_type TEXT NOT NULL, -- 'read' or 'write'
+    data BLOB,
+    data_text TEXT, -- decoded text if applicable
+    data_size INTEGER NOT NULL,
+    end_stream INTEGER NOT NULL DEFAULT 0,
+    truncated INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (connection_id) REFERENCES tcp_connection (id)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS tcp_event_connection_id ON tcp_event(connection_id);
+CREATE INDEX IF NOT EXISTS tcp_event_timestamp ON tcp_event(timestamp);
+CREATE INDEX IF NOT EXISTS tcp_event_type ON tcp_event(event_type);
+
+
+CREATE TABLE IF NOT EXISTS tcp_stats (
+    id INTEGER PRIMARY KEY,
+    port INTEGER NOT NULL,
+    total_connections INTEGER NOT NULL DEFAULT 0,
+    total_bytes_in INTEGER NOT NULL DEFAULT 0,
+    total_bytes_out INTEGER NOT NULL DEFAULT 0,
+    avg_duration_ms INTEGER NOT NULL DEFAULT 0,
+    total_flags_found INTEGER NOT NULL DEFAULT 0
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS tcp_stats_unique_port ON tcp_stats(port);
+
+CREATE TABLE IF NOT EXISTS tcp_connection_stats (
+    id INTEGER PRIMARY KEY,
+    port INTEGER NOT NULL,
+    read_min INTEGER NOT NULL,
+    read_max INTEGER NOT NULL,
+    write_min INTEGER NOT NULL,
+    write_max INTEGER NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS tcp_connection_stats_unique ON tcp_connection_stats(port, read_min, read_max, write_min, write_max);
+
+CREATE TABLE IF NOT EXISTS tcp_connection_time_stats (
+    id INTEGER PRIMARY KEY,
+    port INTEGER NOT NULL,
+    read_min INTEGER NOT NULL,
+    read_max INTEGER NOT NULL,
+    write_min INTEGER NOT NULL,
+    write_max INTEGER NOT NULL,
+    time INTEGER NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS tcp_connection_time_stats_unique ON tcp_connection_time_stats(port, read_min, read_max, write_min, write_max, time);

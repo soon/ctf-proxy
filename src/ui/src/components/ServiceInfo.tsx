@@ -18,35 +18,63 @@ export interface ServiceInfoProps {
 	onClick?: (port: number) => void;
 }
 
+function formatBytes(bytes: number): string {
+	if (bytes < 1024) return `${bytes}B`;
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+	if (bytes < 1024 * 1024 * 1024)
+		return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+	return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}GB`;
+}
+
 export function ServiceInfo({
 	service,
 	previousService,
 	onClick,
 }: ServiceInfoProps) {
 	const [deltas, setDeltas] = useState<Record<string, number>>({});
+	const isTcp = service.type === "tcp";
 
 	useEffect(() => {
 		if (previousService) {
-			setDeltas({
-				totalRequests:
-					service.stats.total_requests - previousService.stats.total_requests,
-				totalResponses:
-					service.stats.total_responses - previousService.stats.total_responses,
-				blockedRequests:
-					service.stats.blocked_requests -
-					previousService.stats.blocked_requests,
-				blockedResponses:
-					service.stats.blocked_responses -
-					previousService.stats.blocked_responses,
-				flagsWritten:
-					service.stats.flags_written - previousService.stats.flags_written,
-				flagsRetrieved:
-					service.stats.flags_retrieved - previousService.stats.flags_retrieved,
-				flagsBlocked:
-					service.stats.flags_blocked - previousService.stats.flags_blocked,
-			});
+			if (isTcp && service.stats.tcp_stats && previousService.stats.tcp_stats) {
+				setDeltas({
+					totalConnections:
+						service.stats.tcp_stats.total_connections -
+						previousService.stats.tcp_stats.total_connections,
+					totalBytesIn:
+						service.stats.tcp_stats.total_bytes_in -
+						previousService.stats.tcp_stats.total_bytes_in,
+					totalBytesOut:
+						service.stats.tcp_stats.total_bytes_out -
+						previousService.stats.tcp_stats.total_bytes_out,
+					totalFlags:
+						service.stats.tcp_stats.total_flags_found -
+						previousService.stats.tcp_stats.total_flags_found,
+				});
+			} else {
+				setDeltas({
+					totalRequests:
+						service.stats.total_requests - previousService.stats.total_requests,
+					totalResponses:
+						service.stats.total_responses -
+						previousService.stats.total_responses,
+					blockedRequests:
+						service.stats.blocked_requests -
+						previousService.stats.blocked_requests,
+					blockedResponses:
+						service.stats.blocked_responses -
+						previousService.stats.blocked_responses,
+					flagsWritten:
+						service.stats.flags_written - previousService.stats.flags_written,
+					flagsRetrieved:
+						service.stats.flags_retrieved -
+						previousService.stats.flags_retrieved,
+					flagsBlocked:
+						service.stats.flags_blocked - previousService.stats.flags_blocked,
+				});
+			}
 		}
-	}, [service, previousService]);
+	}, [service, previousService, isTcp]);
 
 	const getStatusColor = () => {
 		if (service.stats.alerts_count > 0) return "error";
@@ -91,71 +119,115 @@ export function ServiceInfo({
 				styles={{ body: { padding: "8px" } }}
 			>
 				<div className="space-y-1">
-					{/* Flags Section */}
-					<div className="bg-blue-50 p-1 rounded">
-						<div className="flex items-center gap-1 mb-0.5">
-							<FlagOutlined className="text-blue-600 text-xs" />
-							<Text strong className="text-xs">
-								Flags
-							</Text>
-						</div>
-						<div className="flex justify-between text-xs">
-							<span>
-								↓{service.stats.flags_written}
-								<span className="text-gray-400 ml-0.5">
-									{deltas.flagsWritten ? formatDelta(deltas.flagsWritten) : ""}
+					{/* Flags Section for HTTP or Data Transfer for TCP */}
+					{isTcp && service.stats.tcp_stats ? (
+						<div className="bg-blue-50 p-1 rounded">
+							<div className="flex items-center gap-1 mb-0.5">
+								<SwapOutlined className="text-blue-600 text-xs" />
+								<Text strong className="text-xs">
+									Data Transfer
+								</Text>
+							</div>
+							<div className="flex justify-between text-xs">
+								<span title="Bytes In">
+									↓{formatBytes(service.stats.tcp_stats.total_bytes_in)}
 								</span>
-							</span>
-							<span>
-								↑{service.stats.flags_retrieved}
-								<span className="text-gray-400 ml-0.5">
-									{deltas.flagsRetrieved
-										? formatDelta(deltas.flagsRetrieved)
-										: ""}
+								<span title="Bytes Out">
+									↑{formatBytes(service.stats.tcp_stats.total_bytes_out)}
 								</span>
-							</span>
-							<span
-								className={
-									service.stats.flags_blocked > 0 ? "text-red-500" : ""
-								}
-							>
-								✖{service.stats.flags_blocked}
-							</span>
+							</div>
 						</div>
-					</div>
+					) : (
+						<div className="bg-blue-50 p-1 rounded">
+							<div className="flex items-center gap-1 mb-0.5">
+								<FlagOutlined className="text-blue-600 text-xs" />
+								<Text strong className="text-xs">
+									Flags
+								</Text>
+							</div>
+							<div className="flex justify-between text-xs">
+								<span>
+									↓{service.stats.flags_written}
+									<span className="text-gray-400 ml-0.5">
+										{deltas.flagsWritten
+											? formatDelta(deltas.flagsWritten)
+											: ""}
+									</span>
+								</span>
+								<span>
+									↑{service.stats.flags_retrieved}
+									<span className="text-gray-400 ml-0.5">
+										{deltas.flagsRetrieved
+											? formatDelta(deltas.flagsRetrieved)
+											: ""}
+									</span>
+								</span>
+								<span
+									className={
+										service.stats.flags_blocked > 0 ? "text-red-500" : ""
+									}
+								>
+									✖{service.stats.flags_blocked}
+								</span>
+							</div>
+						</div>
+					)}
 
 					{/* Traffic Section */}
 					<div className="bg-green-50 p-1 rounded">
 						<div className="flex items-center gap-1 mb-0.5">
 							<SwapOutlined className="text-green-600 text-xs" />
 							<Text strong className="text-xs">
-								Traffic
+								{isTcp ? "Connections" : "Traffic"}
 							</Text>
 						</div>
-						<div className="flex justify-between text-xs">
-							<span>
-								→{service.stats.total_requests}
-								<span className="text-gray-400 ml-0.5">
-									{deltas.totalRequests
-										? formatDelta(deltas.totalRequests)
-										: ""}
+						{isTcp && service.stats.tcp_stats ? (
+							<div className="flex justify-between text-xs">
+								<span>
+									{service.stats.tcp_stats.total_connections} conn
+									<span className="text-gray-400 ml-0.5">
+										{deltas.totalConnections
+											? formatDelta(deltas.totalConnections)
+											: ""}
+									</span>
 								</span>
-							</span>
-							<span>
-								←{service.stats.total_responses}
-								<span className="text-gray-400 ml-0.5">
-									{deltas.totalResponses
-										? formatDelta(deltas.totalResponses)
-										: ""}
+								<span title="Flags found">
+									{service.stats.tcp_stats.total_flags_found > 0 && (
+										<>
+											<FlagOutlined className="text-red-500" />
+											{service.stats.tcp_stats.total_flags_found}
+										</>
+									)}
 								</span>
-							</span>
-						</div>
-						{(service.stats.blocked_requests > 0 ||
-							service.stats.blocked_responses > 0) && (
-							<div className="flex justify-between text-xs text-red-500 mt-0.5">
-								<span>✖→{service.stats.blocked_requests}</span>
-								<span>✖←{service.stats.blocked_responses}</span>
 							</div>
+						) : (
+							<>
+								<div className="flex justify-between text-xs">
+									<span>
+										→{service.stats.total_requests}
+										<span className="text-gray-400 ml-0.5">
+											{deltas.totalRequests
+												? formatDelta(deltas.totalRequests)
+												: ""}
+										</span>
+									</span>
+									<span>
+										←{service.stats.total_responses}
+										<span className="text-gray-400 ml-0.5">
+											{deltas.totalResponses
+												? formatDelta(deltas.totalResponses)
+												: ""}
+										</span>
+									</span>
+								</div>
+								{(service.stats.blocked_requests > 0 ||
+									service.stats.blocked_responses > 0) && (
+									<div className="flex justify-between text-xs text-red-500 mt-0.5">
+										<span>✖→{service.stats.blocked_requests}</span>
+										<span>✖←{service.stats.blocked_responses}</span>
+									</div>
+								)}
+							</>
 						)}
 					</div>
 

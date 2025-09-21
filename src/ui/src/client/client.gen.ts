@@ -21,12 +21,8 @@ export type CreateClientConfig<T extends DefaultClientOptions = ClientOptions> =
 		override?: Config<DefaultClientOptions & T>,
 	) => Config<Required<DefaultClientOptions> & T>;
 
-// Initialize with stored URL or default
-const storedUrl = localStorage.getItem("ctf-proxy-api-url");
-const initialUrl = storedUrl || "http://localhost:8080";
-
 export const client = createClient(
 	createConfig<ClientOptions>({
-		baseUrl: initialUrl,
+		baseUrl: "http://localhost:8080",
 	}),
 );

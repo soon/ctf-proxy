@@ -215,6 +215,9 @@ const querySearchSchema = z.object({
 export const Route = createFileRoute("/service/$port/queries")({
 	component: QueryStats,
 	validateSearch: querySearchSchema,
+	staticData: {
+		breadcrumb: "Query Stats",
+	},
 });
 
 function QueryStats() {

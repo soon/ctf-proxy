@@ -23,6 +23,13 @@ from ctf_proxy.dashboard.models import (
     ResponseDetail,
     ServiceListItem,
     ServiceListResponse,
+    TCPConnectionDetail,
+    TCPConnectionItem,
+    TCPConnectionListResponse,
+    TCPConnectionStatsItem,
+    TCPConnectionStatsResponse,
+    TCPEventItem,
+    TCPStats,
 )
 from ctf_proxy.dashboard.models import (
     ServiceStats as ServiceStatsModel,
@@ -89,7 +96,7 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "backend": "ctf-proxy-dashboard",
-        "version": "1.0.0"
+        "version": "1.0.0",
     }
 
 
@@ -103,6 +110,10 @@ async def get_services() -> ServiceListResponse:
     for service in config.services:
         stats_obj = ServiceStats(service.port, db)
         current_stats = stats_obj.get_current_stats()
+
+        tcp_stats = None
+        if service.type.value == "tcp":
+            tcp_stats = get_tcp_stats_for_port(service.port)
 
         stats_model = ServiceStatsModel(
             total_requests=current_stats["total_requests"],
@@ -122,6 +133,7 @@ async def get_services() -> ServiceListResponse:
             total_flags=current_stats["total_flags"],
             unique_headers=current_stats["unique_headers"],
             unique_header_values=current_stats["unique_header_values"],
+            tcp_stats=tcp_stats,
         )
 
         service_item = ServiceListItem(
@@ -683,4 +695,271 @@ async def get_service_header_stats(
         service_port=port,
         ignored_headers=ignored_headers,
         window_minutes=actual_window,
+    )
+
+
+def get_tcp_stats_for_port(port: int) -> TCPStats | None:
+    if db is None:
+        return None
+
+    with db.connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                total_connections,
+                total_bytes_in,
+                total_bytes_out,
+                avg_duration_ms,
+                total_flags_found
+            FROM tcp_stats
+            WHERE port = ?
+        """,
+            (port,),
+        )
+
+        row = cursor.fetchone()
+        if not row:
+            return TCPStats(
+                total_connections=0,
+                total_bytes_in=0,
+                total_bytes_out=0,
+                avg_duration_ms=0,
+                total_flags_found=0,
+            )
+
+        return TCPStats(
+            total_connections=row[0],
+            total_bytes_in=row[1],
+            total_bytes_out=row[2],
+            avg_duration_ms=row[3],
+            total_flags_found=row[4],
+        )
+
+
+@app.get("/api/services/{port}/tcp-connections", response_model=TCPConnectionListResponse)
+async def get_tcp_connections(
+    port: int,
+    page: int = 1,
+    page_size: int = 30,
+) -> TCPConnectionListResponse:
+    if config is None or db is None:
+        raise HTTPException(status_code=500, detail="Server not properly initialized")
+
+    service = config.get_service_by_port(port)
+    if not service:
+        raise HTTPException(status_code=404, detail=f"Service not found on port {port}")
+
+    if service.type.value != "tcp":
+        raise HTTPException(status_code=400, detail=f"Service on port {port} is not a TCP service")
+
+    offset = (page - 1) * page_size
+
+    with db.connect() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT COUNT(*) FROM tcp_connection WHERE port = ?
+        """,
+            (port,),
+        )
+        total = cursor.fetchone()[0]
+
+        cursor.execute(
+            """
+            SELECT
+                tc.id, tc.connection_id, tc.start_time, tc.duration_ms,
+                tc.bytes_in, tc.bytes_out,
+                (SELECT COUNT(*) FROM flag f
+                 WHERE f.tcp_connection_id = tc.id AND f.location = 'read') as flags_in,
+                (SELECT COUNT(*) FROM flag f
+                 WHERE f.tcp_connection_id = tc.id AND f.location = 'write') as flags_out
+            FROM tcp_connection tc
+            WHERE tc.port = ?
+            ORDER BY tc.start_time DESC
+            LIMIT ? OFFSET ?
+        """,
+            (port, page_size, offset),
+        )
+
+        connections = []
+        for row in cursor.fetchall():
+            connections.append(
+                TCPConnectionItem(
+                    id=row[0],
+                    connection_id=row[1],
+                    timestamp=datetime.fromtimestamp(row[2] / 1000),
+                    duration_ms=row[3],
+                    bytes_in=row[4],
+                    bytes_out=row[5],
+                    flags_in=row[6],
+                    flags_out=row[7],
+                )
+            )
+
+    total_pages = (total + page_size - 1) // page_size
+
+    return TCPConnectionListResponse(
+        connections=connections,
+        total=total,
+        service_name=service.name,
+        service_port=port,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
+
+
+@app.get("/api/tcp-connections/{connection_id}", response_model=TCPConnectionDetail)
+async def get_tcp_connection_detail(connection_id: int) -> TCPConnectionDetail:
+    if db is None:
+        raise HTTPException(status_code=500, detail="Server not properly initialized")
+
+    with db.connect() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                tc.id, tc.connection_id, tc.port, tc.start_time, tc.duration_ms,
+                tc.bytes_in, tc.bytes_out
+            FROM tcp_connection tc
+            WHERE tc.id = ?
+        """,
+            (connection_id,),
+        )
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(
+                status_code=404, detail=f"TCP connection not found: {connection_id}"
+            )
+
+        cursor.execute(
+            """
+            SELECT
+                te.id, te.timestamp, te.event_type, te.data_size, te.data,
+                te.truncated, te.end_stream
+            FROM tcp_event te
+            WHERE te.connection_id = ?
+            ORDER BY te.timestamp
+        """,
+            (connection_id,),
+        )
+
+        events = []
+        for event_row in cursor.fetchall():
+            event_id = event_row[0]
+
+            cursor.execute(
+                """
+                SELECT value FROM flag WHERE tcp_event_id = ?
+            """,
+                (event_id,),
+            )
+            flags = [f[0] for f in cursor.fetchall()]
+
+            # Convert binary data to base64 if present
+            data_bytes = None
+            if event_row[4] is not None:
+                import base64
+
+                data_bytes = base64.b64encode(event_row[4]).decode("ascii")
+
+            events.append(
+                TCPEventItem(
+                    id=event_id,
+                    timestamp=datetime.fromtimestamp(event_row[1] / 1000),
+                    event_type=event_row[2],
+                    data_size=event_row[3],
+                    data_bytes=data_bytes,
+                    truncated=bool(event_row[5]),
+                    end_stream=bool(event_row[6]),
+                    flags=flags,
+                )
+            )
+
+        cursor.execute(
+            """
+            SELECT COUNT(*) FROM flag WHERE tcp_connection_id = ?
+        """,
+            (connection_id,),
+        )
+        total_flags = cursor.fetchone()[0]
+
+        return TCPConnectionDetail(
+            id=row[0],
+            connection_id=row[1],
+            port=row[2],
+            timestamp=datetime.fromtimestamp(row[3] / 1000),
+            duration_ms=row[4],
+            bytes_in=row[5],
+            bytes_out=row[6],
+            events=events,
+            total_flags=total_flags,
+        )
+
+
+@app.get("/api/services/{port}/tcp-connection-stats", response_model=TCPConnectionStatsResponse)
+def get_tcp_connection_stats(port: int, window_minutes: int = 60) -> TCPConnectionStatsResponse:
+    service = config.get_service_by_port(port)
+    if not service:
+        raise HTTPException(status_code=404, detail=f"Service not found on port {port}")
+
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+    start_time = now - timedelta(minutes=window_minutes)
+    start_timestamp = int(start_time.timestamp() * 1000)
+
+    precision = service.tcp_connection_stats_precision
+
+    with db.connect() as conn:
+        cursor = conn.cursor()
+
+        # Get time-based stats for the window
+        cursor.execute(
+            """
+            SELECT read_min, read_max, write_min, write_max, time, SUM(count) as count
+            FROM tcp_connection_time_stats
+            WHERE port = ? AND time >= ?
+            GROUP BY read_min, read_max, write_min, write_max, time
+            ORDER BY read_min, write_min, time
+        """,
+            (port, start_timestamp),
+        )
+
+        # Group by byte ranges and create time series
+        stats_map = {}
+        for row in cursor.fetchall():
+            read_min, read_max, write_min, write_max, time, count = row
+            key = (read_min, read_max, write_min, write_max)
+
+            if key not in stats_map:
+                stats_map[key] = {"total_count": 0, "time_points": []}
+
+            stats_map[key]["total_count"] += count
+            stats_map[key]["time_points"].append({"timestamp": time, "count": count})
+
+        # Convert to response format
+        stats = []
+        for (read_min, read_max, write_min, write_max), data in stats_map.items():
+            stats.append(
+                TCPConnectionStatsItem(
+                    read_min=read_min,
+                    read_max=read_max,
+                    write_min=write_min,
+                    write_max=write_max,
+                    count=data["total_count"],
+                    time_series=data["time_points"],
+                )
+            )
+
+    return TCPConnectionStatsResponse(
+        stats=stats,
+        service_name=service.name,
+        service_port=port,
+        precision=precision,
+        window_minutes=window_minutes,
     )

@@ -2,13 +2,18 @@
 
 import {
 	type Options,
+	healthCheckApiHealthGet,
 	getServicesApiServicesGet,
 	getServiceByPortApiServicesPortGet,
 	getServiceRequestsApiServicesPortRequestsGet,
 	getRequestDetailApiRequestsRequestIdGet,
+	getRequestRawApiRequestsRequestIdRawGet,
 	getServicePathStatsApiServicesPortPathsGet,
 	getServiceQueryStatsApiServicesPortQueriesGet,
 	getServiceHeaderStatsApiServicesPortHeadersGet,
+	getTcpConnectionsApiServicesPortTcpConnectionsGet,
+	getTcpConnectionDetailApiTcpConnectionsConnectionIdGet,
+	getTcpConnectionStatsApiServicesPortTcpConnectionStatsGet,
 } from "../sdk.gen";
 import {
 	queryOptions,
@@ -16,15 +21,22 @@ import {
 	type InfiniteData,
 } from "@tanstack/react-query";
 import type {
+	HealthCheckApiHealthGetData,
 	GetServicesApiServicesGetData,
 	GetServiceByPortApiServicesPortGetData,
 	GetServiceRequestsApiServicesPortRequestsGetData,
 	GetServiceRequestsApiServicesPortRequestsGetError,
 	GetServiceRequestsApiServicesPortRequestsGetResponse,
 	GetRequestDetailApiRequestsRequestIdGetData,
+	GetRequestRawApiRequestsRequestIdRawGetData,
 	GetServicePathStatsApiServicesPortPathsGetData,
 	GetServiceQueryStatsApiServicesPortQueriesGetData,
 	GetServiceHeaderStatsApiServicesPortHeadersGetData,
+	GetTcpConnectionsApiServicesPortTcpConnectionsGetData,
+	GetTcpConnectionsApiServicesPortTcpConnectionsGetError,
+	GetTcpConnectionsApiServicesPortTcpConnectionsGetResponse,
+	GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetData,
+	GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetData,
 } from "../types.gen";
 import { client } from "../client.gen";
 
@@ -66,6 +78,30 @@ const createQueryKey = <TOptions extends Options>(
 		params.query = options.query;
 	}
 	return [params];
+};
+
+export const healthCheckApiHealthGetQueryKey = (
+	options?: Options<HealthCheckApiHealthGetData>,
+) => createQueryKey("healthCheckApiHealthGet", options);
+
+/**
+ * Health Check
+ */
+export const healthCheckApiHealthGetOptions = (
+	options?: Options<HealthCheckApiHealthGetData>,
+) => {
+	return queryOptions({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await healthCheckApiHealthGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: healthCheckApiHealthGetQueryKey(options),
+	});
 };
 
 export const getServicesApiServicesGetQueryKey = (
@@ -254,6 +290,30 @@ export const getRequestDetailApiRequestsRequestIdGetOptions = (
 	});
 };
 
+export const getRequestRawApiRequestsRequestIdRawGetQueryKey = (
+	options: Options<GetRequestRawApiRequestsRequestIdRawGetData>,
+) => createQueryKey("getRequestRawApiRequestsRequestIdRawGet", options);
+
+/**
+ * Get Request Raw
+ */
+export const getRequestRawApiRequestsRequestIdRawGetOptions = (
+	options: Options<GetRequestRawApiRequestsRequestIdRawGetData>,
+) => {
+	return queryOptions({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getRequestRawApiRequestsRequestIdRawGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getRequestRawApiRequestsRequestIdRawGetQueryKey(options),
+	});
+};
+
 export const getServicePathStatsApiServicesPortPathsGetQueryKey = (
 	options: Options<GetServicePathStatsApiServicesPortPathsGetData>,
 ) => createQueryKey("getServicePathStatsApiServicesPortPathsGet", options);
@@ -325,3 +385,156 @@ export const getServiceHeaderStatsApiServicesPortHeadersGetOptions = (
 		queryKey: getServiceHeaderStatsApiServicesPortHeadersGetQueryKey(options),
 	});
 };
+
+export const getTcpConnectionsApiServicesPortTcpConnectionsGetQueryKey = (
+	options: Options<GetTcpConnectionsApiServicesPortTcpConnectionsGetData>,
+) =>
+	createQueryKey("getTcpConnectionsApiServicesPortTcpConnectionsGet", options);
+
+/**
+ * Get Tcp Connections
+ */
+export const getTcpConnectionsApiServicesPortTcpConnectionsGetOptions = (
+	options: Options<GetTcpConnectionsApiServicesPortTcpConnectionsGetData>,
+) => {
+	return queryOptions({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getTcpConnectionsApiServicesPortTcpConnectionsGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey:
+			getTcpConnectionsApiServicesPortTcpConnectionsGetQueryKey(options),
+	});
+};
+
+export const getTcpConnectionsApiServicesPortTcpConnectionsGetInfiniteQueryKey =
+	(
+		options: Options<GetTcpConnectionsApiServicesPortTcpConnectionsGetData>,
+	): QueryKey<Options<GetTcpConnectionsApiServicesPortTcpConnectionsGetData>> =>
+		createQueryKey(
+			"getTcpConnectionsApiServicesPortTcpConnectionsGet",
+			options,
+			true,
+		);
+
+/**
+ * Get Tcp Connections
+ */
+export const getTcpConnectionsApiServicesPortTcpConnectionsGetInfiniteOptions =
+	(options: Options<GetTcpConnectionsApiServicesPortTcpConnectionsGetData>) => {
+		return infiniteQueryOptions<
+			GetTcpConnectionsApiServicesPortTcpConnectionsGetResponse,
+			GetTcpConnectionsApiServicesPortTcpConnectionsGetError,
+			InfiniteData<GetTcpConnectionsApiServicesPortTcpConnectionsGetResponse>,
+			QueryKey<Options<GetTcpConnectionsApiServicesPortTcpConnectionsGetData>>,
+			| number
+			| Pick<
+					QueryKey<
+						Options<GetTcpConnectionsApiServicesPortTcpConnectionsGetData>
+					>[0],
+					"body" | "headers" | "path" | "query"
+			  >
+		>(
+			// @ts-ignore
+			{
+				queryFn: async ({ pageParam, queryKey, signal }) => {
+					// @ts-ignore
+					const page: Pick<
+						QueryKey<
+							Options<GetTcpConnectionsApiServicesPortTcpConnectionsGetData>
+						>[0],
+						"body" | "headers" | "path" | "query"
+					> =
+						typeof pageParam === "object"
+							? pageParam
+							: {
+									query: {
+										page: pageParam,
+									},
+								};
+					const params = createInfiniteParams(queryKey, page);
+					const { data } =
+						await getTcpConnectionsApiServicesPortTcpConnectionsGet({
+							...options,
+							...params,
+							signal,
+							throwOnError: true,
+						});
+					return data;
+				},
+				queryKey:
+					getTcpConnectionsApiServicesPortTcpConnectionsGetInfiniteQueryKey(
+						options,
+					),
+			},
+		);
+	};
+
+export const getTcpConnectionDetailApiTcpConnectionsConnectionIdGetQueryKey = (
+	options: Options<GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetData>,
+) =>
+	createQueryKey(
+		"getTcpConnectionDetailApiTcpConnectionsConnectionIdGet",
+		options,
+	);
+
+/**
+ * Get Tcp Connection Detail
+ */
+export const getTcpConnectionDetailApiTcpConnectionsConnectionIdGetOptions = (
+	options: Options<GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetData>,
+) => {
+	return queryOptions({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } =
+				await getTcpConnectionDetailApiTcpConnectionsConnectionIdGet({
+					...options,
+					...queryKey[0],
+					signal,
+					throwOnError: true,
+				});
+			return data;
+		},
+		queryKey:
+			getTcpConnectionDetailApiTcpConnectionsConnectionIdGetQueryKey(options),
+	});
+};
+
+export const getTcpConnectionStatsApiServicesPortTcpConnectionStatsGetQueryKey =
+	(
+		options: Options<GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetData>,
+	) =>
+		createQueryKey(
+			"getTcpConnectionStatsApiServicesPortTcpConnectionStatsGet",
+			options,
+		);
+
+/**
+ * Get Tcp Connection Stats
+ */
+export const getTcpConnectionStatsApiServicesPortTcpConnectionStatsGetOptions =
+	(
+		options: Options<GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetData>,
+	) => {
+		return queryOptions({
+			queryFn: async ({ queryKey, signal }) => {
+				const { data } =
+					await getTcpConnectionStatsApiServicesPortTcpConnectionStatsGet({
+						...options,
+						...queryKey[0],
+						signal,
+						throwOnError: true,
+					});
+				return data;
+			},
+			queryKey:
+				getTcpConnectionStatsApiServicesPortTcpConnectionStatsGetQueryKey(
+					options,
+				),
+		});
+	};

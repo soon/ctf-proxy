@@ -52,6 +52,9 @@ class Service(BaseModel):
         ],
         description="Cookie names to track for session management",
     )
+    tcp_connection_stats_precision: int = Field(
+        default=100, description="Precision for TCP connection stats buckets (bytes)"
+    )
 
 
 class ConfigError(Exception):
@@ -75,6 +78,7 @@ class ConfigModel(BaseModel):
 
 class Config:
     flag_format: str
+    tcp_connection_stats_precision: int
     services: list[Service]
 
     def __init__(self, config_path: str | Path):

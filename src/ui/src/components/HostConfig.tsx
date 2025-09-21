@@ -88,9 +88,9 @@ export function HostConfig({ visible, currentUrl, error }: HostConfigProps) {
 							{ required: true, message: "Please enter API server URL" },
 							{ type: "url", message: "Please enter a valid URL" },
 						]}
-						help="Enter the full URL of your backend server (e.g., http://localhost:8080)"
+						help="Enter the full URL of your backend server (e.g., http://localhost:48955)"
 					>
-						<Input placeholder="http://localhost:8080" size="large" />
+						<Input placeholder="http://localhost:48955" size="large" />
 					</Form.Item>
 
 					{testResult && (
