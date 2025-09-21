@@ -51,8 +51,12 @@ class TapProcessor:
         if not log_entry:
             log_entry = {}
 
-        with open(tap_file_path) as f:
-            data = json.load(f)
+        try:
+            with open(tap_file_path) as f:
+                data = json.load(f)
+        except Exception as e:
+            logger.error(f"Error reading {tap_file_path}: {e}")
+            return
 
         http_trace = data.get("http_buffered_trace", {})
         request = http_trace.get("request", {})

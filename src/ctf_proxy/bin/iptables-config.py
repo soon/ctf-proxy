@@ -286,6 +286,7 @@ def setup_family(ipt: str, label: str, ports: list[int], excl_ifs: list[str]):
             ],
         )
 
+
     print(f"[✓] ({label}) Setup complete.")
 
 
@@ -365,6 +366,7 @@ def teardown_family(ipt: str, label: str, ports: list[int]):
                 "DROP",
             ],
         )
+
 
     print(f"[✓] ({label}) Teardown complete.")
 
@@ -727,6 +729,7 @@ def show_rules_family(ipt: str, label: str):
             format_rules_table(protection_rules, "protection rules")
         else:
             print("  (error reading raw PREROUTING rules)")
+
 
 
 def info():

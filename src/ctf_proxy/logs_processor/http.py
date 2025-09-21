@@ -12,7 +12,7 @@ class HttpAccessLogReader:
         self.log_position = 0
         self.stream_id_to_log: dict[str, dict] = {}
 
-        self.load_log_position()
+        # self.load_log_position()
 
     def load_log_position(self):
         try:

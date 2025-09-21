@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 
 from ctf_proxy.config.config import Config
 from ctf_proxy.db.models import make_db
+import heapq
 
 from .http import HttpAccessLogReader
 from .tap_processor import TapProcessor
@@ -67,18 +68,21 @@ class BatchProcessor:
     def wait_or_shutdown(self, duration):
         return self.shutdown_event.wait(timeout=duration)
 
-    def get_tap_files(self):
-        # todo rewrite with iterative walk
+    def get_tap_files(self, max_files=100):
         if not os.path.exists(self.tap_folder):
             return []
 
-        json_files = []
-        for file in os.listdir(self.tap_folder):
-            if file.endswith(".json"):
-                json_files.append(os.path.join(self.tap_folder, file))
+        paths = []
+        with os.scandir(self.tap_folder) as it:
+            for entry in it:
+                if len(paths) >= max_files:
+                    break
+                if entry.is_file() and entry.name.endswith(".json"):
+                    tap_id = self.get_tap_id(entry.path)
+                    if not self.is_tap_ignored(tap_id):
+                        paths.append(entry.path)
 
-        json_files.sort(key=os.path.getctime)
-        return json_files[: self.max_files_per_batch]
+        return paths
 
     def get_next_batch_unique_id(self):
         return self.db.get_next_batch_unique_id()
@@ -88,6 +92,15 @@ class BatchProcessor:
         batch_id = f"batch_{datetime_str}_{self.next_batch_count}"
         self.next_batch_count += 1
         return batch_id
+    
+    def get_tap_id(self, tap_file_path: str) -> str:
+        return os.path.basename(tap_file_path).replace(".json", "")
+    
+    def is_tap_ignored(self, tap_id: str) -> bool:
+        if tap_id not in self.ignored_taps:
+            return False
+        ignored_since = self.ignored_taps[tap_id]
+        return datetime.now() - ignored_since <= timedelta(seconds=IGNORED_TAP_TIMEOUT_SECONDS)
 
     def process_batch(self, batch_id: str, tap_files: list[str]):
         self.http_access_log.read_new_entries()
@@ -159,7 +172,12 @@ class BatchProcessor:
     def process_taps(self):
         while self.running:
             try:
+                tap_files_start = datetime.now()
                 tap_files = self.get_tap_files()
+                tap_files_duration = (datetime.now() - tap_files_start).total_seconds() * 1000
+                logger.info(
+                    f"Found {len(tap_files)} tap files in {tap_files_duration:.2f} ms"
+                )
 
                 if not tap_files:
                     logger.debug(f"No tap files found in {self.tap_folder}, waiting...")

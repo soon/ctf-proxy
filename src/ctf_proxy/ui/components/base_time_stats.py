@@ -11,27 +11,29 @@ class BaseTimeStats:
     def __init__(self, db: ProxyStatsDB):
         self.db = db
 
-    def get_time_series_with_totals(self, port: int) -> dict[tuple[str, ...], dict]:
-        """Get time series data for all key combinations on a specific port for the last hour with 1-minute precision, including totals."""
+    def get_time_series_with_totals(
+        self, port: int, window_minutes: int = 60
+    ) -> dict[tuple[str, ...], dict]:
+        """Get time series data for all key combinations on a specific port for the specified time window with 1-minute precision, including totals."""
         with self.db.connect() as conn:
             cursor = conn.cursor()
 
-            # Get current time and 1 hour ago
+            # Get current time
             now = datetime.now()
 
             # Convert to timestamps (milliseconds) and truncate to minute boundaries
             now_ms = convert_datetime_to_timestamp(now)
             now_truncated = (now_ms // 60000) * 60000  # Truncate current time to minute
 
-            # Calculate 1 hour ago from the current truncated minute
-            one_hour_ago_truncated = now_truncated - (
-                59 * 60000
-            )  # 59 minutes ago to include current minute
+            # Calculate window start from the current truncated minute
+            window_start_truncated = now_truncated - (
+                (window_minutes - 1) * 60000
+            )  # N minutes ago to include current minute
 
-            # Create 60 time buckets (1 minute each) for the last hour including current minute
+            # Create time buckets (1 minute each) for the window including current minute
             time_buckets = []
-            for i in range(60):
-                bucket_time_ms = one_hour_ago_truncated + (i * 60000)  # Add i minutes
+            for i in range(window_minutes):
+                bucket_time_ms = window_start_truncated + (i * 60000)  # Add i minutes
                 time_buckets.append(bucket_time_ms)
 
             # Build query dynamically based on key columns
@@ -43,7 +45,7 @@ class BaseTimeStats:
                 ORDER BY {key_columns_str}, time
             """
 
-            cursor.execute(query, [port, one_hour_ago_truncated])
+            cursor.execute(query, [port, window_start_truncated])
 
             # Collect all key combinations and their data
             result = {}
@@ -86,12 +88,67 @@ class BaseTimeStats:
             )
 
             for key in sorted_keys:
-                time_series_list = [
-                    result[key]["time_series"][bucket_time] for bucket_time in time_buckets
-                ]
+                # Create timestamp-count pairs, excluding zeros
+                time_series_list = []
+                for bucket_time in time_buckets:
+                    count = result[key]["time_series"][bucket_time]
+                    if count > 0:  # Only include non-zero counts
+                        time_series_list.append({"timestamp": bucket_time, "count": count})
+
                 sorted_results[key] = {
                     "time_series": time_series_list,
                     "total_count": result[key]["total_count"],
                 }
+
+            return sorted_results
+
+    def get_time_series_for_range(
+        self, port: int, start_time: datetime, end_time: datetime
+    ) -> dict[tuple[str, ...], dict]:
+        """Get time series data for a specific time range."""
+        with self.db.connect() as conn:
+            cursor = conn.cursor()
+
+            # Convert to timestamps (milliseconds)
+            start_ms = convert_datetime_to_timestamp(start_time)
+            end_ms = convert_datetime_to_timestamp(end_time)
+
+            # Build query
+            key_columns_str = ", ".join(self.key_columns)
+            query = f"""
+                SELECT {key_columns_str}, time, count
+                FROM {self.table_name}
+                WHERE port = ? AND time >= ? AND time < ?
+                ORDER BY {key_columns_str}, time
+            """
+
+            cursor.execute(query, [port, start_ms, end_ms])
+
+            # Collect all key combinations and their data
+            result = {}
+            for row in cursor.fetchall():
+                # Extract key values
+                key_values = row[:-2]
+                time_val = row[-2]
+                count = row[-1]
+
+                key = tuple(key_values)
+                if key not in result:
+                    result[key] = {"time_series": [], "total_count": 0}
+
+                # Add to time series and total
+                result[key]["time_series"].append({"timestamp": time_val, "count": count})
+                result[key]["total_count"] += count
+
+            # Sort by total count
+            sorted_results = {}
+            sorted_keys = sorted(
+                result.keys(),
+                key=lambda k: result[k]["total_count"],
+                reverse=True,
+            )
+
+            for key in sorted_keys:
+                sorted_results[key] = result[key]
 
             return sorted_results

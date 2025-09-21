@@ -22,12 +22,14 @@ test-cov:
 
 lint:
 	./uv.sh run ruff check .
+	cd ui && npm run lint
 
 fmt:
 	./uv.sh run ruff format .
 	./uv.sh run ruff check --fix .
 	cd interceptor && go fmt
 	cd interceptor/test && go fmt
+	cd ui && npm run format -- --write .
 
 check: lint test
 

@@ -3,6 +3,8 @@ __pycache__/
 *.pyo
 *.pyd
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.log
 *.env
@@ -14,3 +16,8 @@ http_*.json
 
 .venv/
 .venv_vm/
+
+.playwright-mcp/*.png
+config.yml
+
+*.local.json

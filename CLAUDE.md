@@ -23,13 +23,17 @@ You're a senior software engineer. When working follow engineering principles:
   - Proxy: The core component that forwards traffic, supports plugins, and logs all traffic. Located in `src/ctf_proxy/proxy`.
   - Post-processor: A component that processes the logs and extracts useful information. Located in `src/ctf_proxy/logs_processor`.
   - Interceptor: Interrupt or modify requests on the fly. Located in `src/interceptor`
-  - CLI dashboard: A terminal-based dashboard to monitor services and traffic. Located in `src/ctf_proxy/ui`.
+  - CLI dashboard: A terminal-based dashboard to monitor services and traffic. Located in `src/ctf_proxy/ui`. In the process of deprecation. 
   - DB: A SQLite database to store logs and statistics. Located in `src/ctf_proxy/db`.
+  - Dashboard backend: A backend service, providing endpoints for the dashboard. Located in `src/ctf_proxy/dashboard`.
+  - UI: Frontend service, located in `src/ui`.
 4. **Tech stack**:
   - Proxy: Envoy
   - Post-processor: Python, SQLite
   - Plugins: Go
   - CLI dashboard: Python, SQLite, Textual
+  - Dashboard backend: Python, SQLite, FastAPI
+  - UI: React, Vite, Antd
 5. **Ignored files**: Ignore files in "outdated" folder - it contains old version of the similar project.
 
 
@@ -43,13 +47,14 @@ You're a senior software engineer. When working follow engineering principles:
 
 # How to work with the project:
 
-1. **Use uv.sh**: ALWAYS use uv.sh to run python scripts or install dependencies. It is required to set correct venv. You can pass arguments to it similar to regular uv.
+1. **Use uv.sh**: ALWAYS use `uv.sh` from `src` directory to run python scripts or install dependencies. It is required to set correct venv. You can pass arguments to it similar to regular uv.
 2. **Use tests**: The project has tests, use them to verify your changes.
 3. **Use ruff**: Use ruff to lint your code.
 4. **Use make dev**: Use `make dev <target>` from `src` directory to execute development tasks. Supported commands are:
    - `make dev test` - run tests
    - `make dev lint` - run linter
    - `make dev fmt` - format code
+5. **Use playwright**: You have access to browser, use it when checking your UI and backend changes.
 
 
 # How to work with vm:

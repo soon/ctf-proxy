@@ -1,6 +1,5 @@
 install: 
 	./ctf_proxy/bin/setup.sh
-	make ui
 
 ui:
 	docker compose run --rm ui
