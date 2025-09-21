@@ -6,7 +6,7 @@ from ctf_proxy.db import ProxyStatsDB
 
 
 def fetch_raw_request(
-    request_id: int, db: ProxyStatsDB, archive_folder: str = "/var/log/envoy/archive"
+    request_id: int, db: ProxyStatsDB, archive_folder: str = "/app/logs-archive"
 ) -> dict | None:
     """
     Fetch raw JSON for a request by:
@@ -32,7 +32,7 @@ def fetch_raw_request(
     if not os.path.exists(archive_file):
         return {"error": f"Archive file not found: {archive_file}"}
 
-    tap_filename = f"{tap_id}.json"
+    tap_filename = tap_id
 
     try:
         with tarfile.open(archive_file, "r:gz") as tar:
