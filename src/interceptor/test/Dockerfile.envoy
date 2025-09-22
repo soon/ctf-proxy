@@ -2,7 +2,7 @@ FROM golang:1.24.5-alpine AS wasm-builder
 
 WORKDIR /build
 
-COPY interceptor.go helpers.go types.go utils.go go.mod go.sum ./
+COPY entrypoint.go http_interceptor.go tcp_interceptor.go helpers.go types.go utils.go go.mod go.sum ./
 COPY test/test_interceptors.go ./main.go
 
 RUN env GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o interceptor.wasm .

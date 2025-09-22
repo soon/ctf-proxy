@@ -173,6 +173,7 @@ CREATE TABLE IF NOT EXISTS tcp_connection (
     duration_ms INTEGER,
     bytes_in INTEGER NOT NULL,
     bytes_out INTEGER NOT NULL,
+    is_blocked INTEGER NOT NULL,
     -- trace data in archive
     tap_id TEXT,
     batch_id TEXT

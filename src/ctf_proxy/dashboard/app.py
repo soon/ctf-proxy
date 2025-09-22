@@ -774,7 +774,8 @@ async def get_tcp_connections(
                 (SELECT COUNT(*) FROM flag f
                  WHERE f.tcp_connection_id = tc.id AND f.location = 'read') as flags_in,
                 (SELECT COUNT(*) FROM flag f
-                 WHERE f.tcp_connection_id = tc.id AND f.location = 'write') as flags_out
+                 WHERE f.tcp_connection_id = tc.id AND f.location = 'write') as flags_out,
+                tc.is_blocked
             FROM tcp_connection tc
             WHERE tc.port = ?
             ORDER BY tc.start_time DESC
@@ -795,6 +796,7 @@ async def get_tcp_connections(
                     bytes_out=row[5],
                     flags_in=row[6],
                     flags_out=row[7],
+                    is_blocked=bool(row[8]),
                 )
             )
 
@@ -823,7 +825,7 @@ async def get_tcp_connection_detail(connection_id: int) -> TCPConnectionDetail:
             """
             SELECT
                 tc.id, tc.connection_id, tc.port, tc.start_time, tc.duration_ms,
-                tc.bytes_in, tc.bytes_out
+                tc.bytes_in, tc.bytes_out, tc.is_blocked
             FROM tcp_connection tc
             WHERE tc.id = ?
         """,
@@ -898,6 +900,7 @@ async def get_tcp_connection_detail(connection_id: int) -> TCPConnectionDetail:
             bytes_out=row[6],
             events=events,
             total_flags=total_flags,
+            is_blocked=bool(row[7]),
         )
 
 

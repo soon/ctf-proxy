@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getTcpConnectionDetailApiTcpConnectionsConnectionIdGetOptions } from "@/client/@tanstack/react-query.gen";
 import {
-	Card,
 	Descriptions,
 	Table,
 	Tag,
@@ -11,9 +10,7 @@ import {
 	Empty,
 	Spin,
 	Typography,
-	Tabs,
 	Radio,
-	Tooltip,
 } from "antd";
 import {
 	ArrowLeftOutlined,
@@ -271,11 +268,24 @@ function TcpConnectionDetail() {
 						<Text type="secondary">None</Text>
 					)}
 				</Descriptions.Item>
+				<Descriptions.Item label="Status">
+					{connection.is_blocked ? (
+						<Tag color="error" className="text-xs">
+							BLOCKED
+						</Tag>
+					) : (
+						<Tag color="success" className="text-xs">
+							ALLOWED
+						</Tag>
+					)}
+				</Descriptions.Item>
 			</Descriptions>
 
-			<Card
-				title={`Events (${connection.events?.length || 0})`}
-				extra={
+			<div className="mt-6">
+				<div className="flex justify-between items-center mb-4">
+					<h3 className="text-lg font-medium">
+						Events ({connection.events?.length || 0})
+					</h3>
 					<Radio.Group
 						value={displayMode}
 						onChange={(e) => setDisplayMode(e.target.value)}
@@ -285,8 +295,7 @@ function TcpConnectionDetail() {
 						<Radio.Button value="ascii">ASCII</Radio.Button>
 						<Radio.Button value="hex">HEX</Radio.Button>
 					</Radio.Group>
-				}
-			>
+				</div>
 				{connection.events && connection.events.length > 0 ? (
 					<Table
 						columns={eventColumns}
@@ -303,7 +312,7 @@ function TcpConnectionDetail() {
 				) : (
 					<Empty description="No events recorded" />
 				)}
-			</Card>
+			</div>
 		</div>
 	);
 }

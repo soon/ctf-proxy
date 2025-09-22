@@ -179,6 +179,7 @@ class TcpConnectionRow:
     duration_ms: int
     bytes_in: int
     bytes_out: int
+    is_blocked: bool
     tap_id: str | None
     batch_id: str | None
 
@@ -190,6 +191,7 @@ class TcpConnectionRow:
         duration_ms: int
         bytes_in: int
         bytes_out: int
+        is_blocked: bool = 0
         tap_id: str | None = None
         batch_id: str | None = None
 
@@ -610,8 +612,8 @@ class TcpConnectionTable(BaseTable):
             """
             INSERT INTO tcp_connection (
                 port, connection_id, start_time, duration_ms,
-                bytes_in, bytes_out, tap_id, batch_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                bytes_in, bytes_out, is_blocked, tap_id, batch_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row.port,
@@ -620,6 +622,7 @@ class TcpConnectionTable(BaseTable):
                 row.duration_ms,
                 row.bytes_in,
                 row.bytes_out,
+                int(row.is_blocked),
                 row.tap_id,
                 row.batch_id,
             ),

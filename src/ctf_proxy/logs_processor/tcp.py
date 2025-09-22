@@ -120,6 +120,7 @@ class TcpTapProcessor:
         bytes_in = log_entry.get("bytes_in", 0)
         bytes_out = log_entry.get("bytes_out", 0)
         duration_ms = log_entry.get("duration_ms", 0)
+        is_blocked = log_entry.get("interceptor_message", "") == "blocked"
 
         total_read_bytes = 0
         total_write_bytes = 0
@@ -171,6 +172,7 @@ class TcpTapProcessor:
                 duration_ms=duration_ms,
                 bytes_in=bytes_in,
                 bytes_out=bytes_out,
+                is_blocked=is_blocked,
                 tap_id=tap_id,
                 batch_id=batch_id,
             )

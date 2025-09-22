@@ -36,8 +36,8 @@ func MatchMethod(expected string) func(string) bool {
 	}
 }
 
-func MatchHttpRequest(matcher Matcher) func(ctx *WhenContext) bool {
-	return func(ctx *WhenContext) bool {
+func MatchHttpRequest(matcher Matcher) func(ctx *HttpWhenContext) bool {
+	return func(ctx *HttpWhenContext) bool {
 		if ctx.Data == nil {
 			ctx.Data = &MatcherResult{
 				Path:    matcher.Path == nil,
@@ -78,8 +78,8 @@ func MatchHttpRequest(matcher Matcher) func(ctx *WhenContext) bool {
 	}
 }
 
-func ModifyHttpResponseBody(modifyFunc func([]byte) []byte) func(ctx *DoContext) bool {
-	return func(ctx *DoContext) bool {
+func ModifyHttpResponseBody(modifyFunc func([]byte) []byte) func(ctx *HttpDoContext) bool {
+	return func(ctx *HttpDoContext) bool {
 		if ctx.Stage == StageResponseHeaders {
 			ctx.DelResponseHeader("content-length")
 			ctx.DelResponseHeader("content-encoding")
@@ -108,19 +108,19 @@ func ModifyHttpResponseBody(modifyFunc func([]byte) []byte) func(ctx *DoContext)
 	}
 }
 
-func DoReplaceHttpResponseBody(newBody []byte) func(ctx *DoContext) bool {
+func DoReplaceHttpResponseBody(newBody []byte) func(ctx *HttpDoContext) bool {
 	return ModifyHttpResponseBody(func(_ []byte) []byte {
 		return newBody
 	})
 }
 
-func DoPause(ctx *DoContext) bool {
+func DoHttpPause(ctx *HttpDoContext) bool {
 	proxywasm.ReplaceHttpRequestTrailer("x-blocked", "1")
 	ctx.Pause()
 	return true
 }
 
-func DoBlock(ctx *DoContext) bool {
+func DoHttpBlock(ctx *HttpDoContext) bool {
 	if ctx.Data == nil {
 		proxywasm.ReplaceHttpRequestTrailer("x-blocked", "1")
 		ctx.Data = ""
@@ -255,7 +255,7 @@ var bomb = []byte{
 	0xf6, 0x37, 0x45, 0x98, 0x81, 0xa0, 0x89, 0x67, 0x00, 0x00,
 }
 
-func DoBomb(ctx *DoContext) bool {
+func DoHttpBomb(ctx *HttpDoContext) bool {
 	proxywasm.ReplaceHttpRequestTrailer("x-blocked", "1")
 
 	if ctx.Stage != StageResponseHeaders {
@@ -271,4 +271,11 @@ func DoBomb(ctx *DoContext) bool {
 
 	ctx.Pause()
 	return true
+}
+
+func DoTcpBlock(ctx *TcpDoContext) bool {
+	ctx.MarkBlocked()
+	proxywasm.CloseDownstream()
+	proxywasm.CloseUpstream()
+	return false
 }

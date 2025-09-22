@@ -181,6 +181,7 @@ class TCPConnectionItem(BaseModel):
     bytes_out: int
     flags_in: int
     flags_out: int
+    is_blocked: bool
 
 
 class TCPConnectionListResponse(BaseModel):
@@ -231,3 +232,4 @@ class TCPConnectionDetail(BaseModel):
     bytes_out: int
     events: list[TCPEventItem]
     total_flags: int
+    is_blocked: bool

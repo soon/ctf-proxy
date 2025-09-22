@@ -516,6 +516,18 @@ function ServiceDetail() {
 					</Tag>
 				) : null,
 		},
+		{
+			title: "Blocked",
+			dataIndex: "is_blocked",
+			key: "is_blocked",
+			width: 70,
+			render: (blocked: boolean) =>
+				blocked ? (
+					<Tag color="error" className="text-xs">
+						BLOCKED
+					</Tag>
+				) : null,
+		},
 	];
 
 	if (serviceLoading || !service) {

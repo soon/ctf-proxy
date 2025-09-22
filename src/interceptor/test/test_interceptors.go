@@ -4,26 +4,29 @@ import (
 	"strings"
 )
 
-func registerInterceptors() {
-	RegisterInterceptor(15001, "/blocked path",
+func registerHttpInterceptors() {
+	RegisterHttpInterceptor(15001, "/blocked path",
 		MatchHttpRequest(Matcher{
 			Path: MatchPrefix("/blocked"),
-		}), DoBlock)
+		}), DoHttpBlock)
 
-	RegisterInterceptor(15001, "/paused path",
+	RegisterHttpInterceptor(15001, "/paused path",
 		MatchHttpRequest(Matcher{
 			Path: MatchPrefix("/paused"),
-		}), DoPause)
+		}), DoHttpPause)
 
-	RegisterInterceptor(15001, "/modified path",
+	RegisterHttpInterceptor(15001, "/modified path",
 		MatchHttpRequest(Matcher{
 			Path: MatchPrefix("/modified"),
 		}), ModifyHttpResponseBody(func(body []byte) []byte {
 			return []byte(strings.ToUpper(string(body)))
 		}))
 
-	RegisterInterceptor(15001, "/replaced path",
+	RegisterHttpInterceptor(15001, "/replaced path",
 		MatchHttpRequest(Matcher{
 			Path: MatchPrefix("/replaced"),
 		}), DoReplaceHttpResponseBody([]byte("new response body")))
+}
+
+func registerTcpInterceptors() {
 }

@@ -52,7 +52,7 @@ static_resources:
                   runtime: envoy.wasm.runtime.v8
                   code:
                     local:
-                      filename: /etc/envoy/wasm/interceptor.wasm
+                      filename: /etc/envoy/wasm/interceptor_http.wasm
                   allow_precompiled: true
 
           - name: envoy.filters.http.tap
@@ -114,18 +114,18 @@ static_resources:
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.transport_sockets.raw_buffer.v3.RawBuffer
       filters:
-      # - name: envoy.filters.network.wasm
-      #   typed_config:
-      #     "@type": type.googleapis.com/envoy.extensions.filters.network.wasm.v3.Wasm
-      #     config:
-      #       name: tcp_interceptor
-      #       vm_config:
-      #         vm_id: tcp_interceptor_vm
-      #         runtime: envoy.wasm.runtime.v8
-      #         code:
-      #           local:
-      #             filename: /etc/envoy/wasm/interceptor.wasm
-      #         allow_precompiled: true
+      - name: envoy.filters.network.wasm
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.wasm.v3.Wasm
+          config:
+            name: tcp_interceptor
+            vm_config:
+              vm_id: tcp_interceptor_vm
+              runtime: envoy.wasm.runtime.v8
+              code:
+                local:
+                  filename: /etc/envoy/wasm/interceptor_tcp.wasm
+              allow_precompiled: true
       - name: envoy.filters.network.tcp_proxy
         typed_config:
           "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
@@ -146,6 +146,7 @@ static_resources:
                 bytes_in: "%BYTES_RECEIVED%"
                 bytes_out: "%BYTES_SENT%"
                 connection_id: "%CONNECTION_ID%"
+                interceptor_message: "%FILTER_STATE(envoy.string)%"
 
   clusters:
   # HTTP passthrough cluster

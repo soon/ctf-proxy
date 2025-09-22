@@ -4,25 +4,30 @@ import (
 	"github.com/proxy-wasm/proxy-wasm-go-sdk/proxywasm/types"
 )
 
-// Stage represents the current HTTP lifecycle stage.
-type Stage int
+// HttpStage represents the current HTTP lifecycle stage.
+type HttpStage int
 
-// An Interceptor is a pair of When/Do functions.
-type Interceptor struct {
+// TcpStage represents the current TCP lifecycle stage.
+type TcpStage int
+
+const undefinedAction types.Action = 0xFFFFFFFF
+
+// An HttpInterceptor is a pair of When/Do functions.
+type HttpInterceptor struct {
 	// A unique name within a port, for tracing.
 	Name string
 
 	// When is called at every stage of the HTTP lifecycle; once it returns true for a stream, it is no longer called for that stream.
-	When func(*WhenContext) bool
+	When func(*HttpWhenContext) bool
 
 	// Do will be called once the When matched, at every subsequent stage (including the matching one), until Do returns true.
-	Do func(*DoContext) bool
+	Do func(*HttpDoContext) bool
 }
 
-// WhenContext provides read-only access for condition evaluation.
-type WhenContext struct {
+// HttpWhenContext provides read-only access for condition evaluation.
+type HttpWhenContext struct {
 	// Current stage
-	Stage Stage
+	Stage HttpStage
 	// endOfStream (only meaningful on body stages)
 	End bool
 	// buffered size visible to the filter
@@ -31,7 +36,7 @@ type WhenContext struct {
 	Data interface{}
 
 	// Interceptor being executed
-	interceptor *Interceptor
+	interceptor *HttpInterceptor
 
 	// Retrieves request header by name. Returns "" if not present or not in request stage.
 	GetRequestHeader func(name string) string
@@ -52,9 +57,9 @@ type WhenContext struct {
 	resultAction types.Action
 }
 
-// DoContext provides full access to modify requests and responses.
-type DoContext struct {
-	Stage Stage
+// HttpDoContext provides full access to modify requests and responses.
+type HttpDoContext struct {
+	Stage HttpStage
 	Port  int64
 	// endOfStream (only meaningful on body stages)
 	End bool
@@ -63,7 +68,7 @@ type DoContext struct {
 	// Any data needed to persist between calls by the When function
 	Data interface{}
 
-	interceptor *Interceptor
+	interceptor *HttpInterceptor
 
 	// Retrieves request header by name. Returns "" if not present or not in request stage.
 	GetRequestHeader func(name string) string
@@ -111,7 +116,64 @@ type httpCtx struct {
 	// Skip any further stream processing using this action (undefinedAction by default)
 	skip types.Action
 	// When contexts for all interceptors defined for this port (if any)
-	whenContexts []*WhenContext
+	whenContexts []*HttpWhenContext
 	// Do context, once When matched
-	doContext *DoContext
+	doContext *HttpDoContext
+}
+
+// A TcpInterceptor is a pair of When/Do functions.
+type TcpInterceptor struct {
+	// A unique name within a port, for tracing.
+	Name string
+
+	// When is called at every stage of the TCP connection; once it returns true for a connection, it is no longer called for that connection.
+	When func(*TcpWhenContext) bool
+
+	// Do will be called once the When matched, at every subsequent stage (including the matching one), until Do returns true.
+	Do func(*TcpDoContext) bool
+}
+
+type TcpWhenContext struct {
+	// Current stage
+	Stage TcpStage
+	// Size of the TCP segment
+	Size int
+	// endOfStream (only meaningful on body stages)
+	End bool
+
+	// Any data needed to persist between calls by the When function
+	Data interface{}
+
+	// Interceptor being executed
+	interceptor *TcpInterceptor
+
+	// Logs info message to proxy logs with interceptor name prefix
+	LogInfo func(message string)
+
+	// By default ActionContinue; set to ActionPause by Pause().
+	resultAction types.Action
+}
+
+type TcpDoContext struct {
+	Stage TcpStage
+	Size  int
+	// endOfStream (only meaningful on body stages)
+	End bool
+	// Any data needed to persist between calls by the When function
+	Data interface{}
+
+	interceptor *TcpInterceptor
+	// By default ActionContinue; set to ActionPause by Pause().
+	resultAction types.Action
+}
+
+// Context for a single TCP connection.
+type tcpCtx struct {
+	types.DefaultTcpContext
+	// Skip any further stream processing using this action (undefinedAction by default)
+	skip types.Action
+	// When contexts for all interceptors defined for this port (if any)
+	whenContexts []*TcpWhenContext
+	// Do context, once When matched
+	doContext *TcpDoContext
 }

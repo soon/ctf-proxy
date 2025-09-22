@@ -22,7 +22,7 @@ func getIntProperty(path []string) (int64, error) {
 }
 
 // Human-readable representation of the stage.
-func (s Stage) String() string {
+func (s HttpStage) String() string {
 	switch s {
 	case StageRequestHeaders:
 		return "req:headers"
@@ -32,6 +32,17 @@ func (s Stage) String() string {
 		return "resp:headers"
 	case StageResponseBody:
 		return "resp:body"
+	default:
+		return "unknown"
+	}
+}
+
+func (s TcpStage) String() string {
+	switch s {
+	case TcpStageDownstreamData:
+		return "down:data"
+	case TcpStageUpstreamData:
+		return "up:date"
 	default:
 		return "unknown"
 	}

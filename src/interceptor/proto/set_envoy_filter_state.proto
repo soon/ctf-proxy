@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package main;
+
+option go_package = "github.com/andrey/ctf-proxy/proto;proto";
+
+enum LifeSpan {
+  FilterChain = 0;
+  DownstreamRequest = 1;
+  DownstreamConnection = 2;
+};
+
+message SetEnvoyFilterStateArguments {
+  // path is the filter state key
+  string path = 1;
+  // value is the filter state object factory input
+  string value = 2;
+  // span is the life span of the filter state object
+  LifeSpan span = 3;
+};

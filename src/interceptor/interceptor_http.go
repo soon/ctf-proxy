@@ -9,34 +9,32 @@ import (
 )
 
 const (
-	StageRequestHeaders Stage = iota
+	StageRequestHeaders HttpStage = iota
 	StageRequestBody
 	StageResponseHeaders
 	StageResponseBody
 )
 
-const undefinedAction types.Action = 0xFFFFFFFF
+// Pause makes the current hook return ActionPause (caller should then expect a
+// re-entry with more data or with End=true).
+func (c *HttpWhenContext) Pause() { c.resultAction = types.ActionPause }
 
 // Pause makes the current hook return ActionPause (caller should then expect a
 // re-entry with more data or with End=true).
-func (c *WhenContext) Pause() { c.resultAction = types.ActionPause }
+func (c *HttpDoContext) Pause() { c.resultAction = types.ActionPause }
 
-// Pause makes the current hook return ActionPause (caller should then expect a
-// re-entry with more data or with End=true).
-func (c *DoContext) Pause() { c.resultAction = types.ActionPause }
-
-// Interceptor registry port -> []Interceptor
-var reg = map[int64][]Interceptor{}
+// Interceptor registry port -> []HttpInterceptor
+var httpReg = map[int64][]HttpInterceptor{}
 
 // Registers an interceptor for a service port
-func RegisterInterceptor(port int64, name string, when func(*WhenContext) bool, do func(*DoContext) bool) {
-	i := Interceptor{
+func RegisterHttpInterceptor(port int64, name string, when func(*HttpWhenContext) bool, do func(*HttpDoContext) bool) {
+	i := HttpInterceptor{
 		Name: name,
 		When: when,
 		Do:   do,
 	}
-	reg[port] = append(reg[port], i)
-	proxywasm.LogInfo(fmt.Sprintf("registered interceptor name=%s port=%d", name, port))
+	httpReg[port] = append(httpReg[port], i)
+	proxywasm.LogInfo(fmt.Sprintf("registered http interceptor name=%s port=%d", name, port))
 }
 
 func (h *httpCtx) OnHttpRequestHeaders(n int, end bool) types.Action {
@@ -56,7 +54,7 @@ func (h *httpCtx) OnHttpResponseBody(n int, end bool) types.Action {
 // 1) Short-circuit if possible
 // 2) Check if any interceptor matches
 // 3) Execute Do if matched
-func (h *httpCtx) run(stage Stage, n int, end bool, isReq bool) types.Action {
+func (h *httpCtx) run(stage HttpStage, n int, end bool, isReq bool) types.Action {
 	if h.skip != undefinedAction {
 		return h.skip
 	}
@@ -64,7 +62,7 @@ func (h *httpCtx) run(stage Stage, n int, end bool, isReq bool) types.Action {
 runDo:
 	if h.doContext != nil {
 		doCtx := h.doContext
-		updateDoCtx(doCtx, stage, n, end)
+		updateHttpDoCtx(doCtx, stage, n, end)
 		ignoreFurtherCalls := doCtx.interceptor.Do(doCtx)
 		if ignoreFurtherCalls {
 			h.doContext = nil
@@ -79,7 +77,7 @@ runDo:
 		return types.ActionContinue
 	}
 
-	ints := reg[port]
+	ints := httpReg[port]
 	if len(ints) == 0 {
 		h.skip = types.ActionContinue
 		return types.ActionContinue
@@ -88,7 +86,7 @@ runDo:
 	// Create WhenContext once for all interceptors
 	whenContexts := h.whenContexts
 	if whenContexts == nil {
-		whenContexts = make([]*WhenContext, len(ints))
+		whenContexts = make([]*HttpWhenContext, len(ints))
 		for i, it := range ints {
 			whenContexts[i] = h.makeWhenCtx(stage, port, n, end, isReq, &it)
 		}
@@ -98,7 +96,7 @@ runDo:
 	anyPaused := false
 
 	for _, wc := range whenContexts {
-		updateWhenCtx(wc, stage, n, end)
+		updateHttpWhenCtx(wc, stage, n, end)
 
 		it := wc.interceptor
 		if it == nil || it.When == nil {
@@ -107,7 +105,7 @@ runDo:
 		if it.When(wc) {
 			wc.LogInfo(fmt.Sprintf("when matched stage=%s", stage.String()))
 			h.trace(isReq, it.Name)
-			h.doContext = makeDoCtx(stage, port, n, end, it)
+			h.doContext = makeHttpDoCtx(stage, port, n, end, it)
 			goto runDo
 		}
 		if wc.resultAction == types.ActionPause {
@@ -121,8 +119,8 @@ runDo:
 	return types.ActionContinue
 }
 
-func (h *httpCtx) makeWhenCtx(stage Stage, port int64, n int, end bool, isReq bool, interceptor *Interceptor) *WhenContext {
-	c := &WhenContext{
+func (h *httpCtx) makeWhenCtx(stage HttpStage, port int64, n int, end bool, isReq bool, interceptor *HttpInterceptor) *HttpWhenContext {
+	c := &HttpWhenContext{
 		Stage:        stage,
 		BodySize:     n,
 		End:          end,
@@ -169,15 +167,15 @@ func (h *httpCtx) makeWhenCtx(stage Stage, port int64, n int, end bool, isReq bo
 	return c
 }
 
-func updateWhenCtx(c *WhenContext, stage Stage, n int, end bool) {
+func updateHttpWhenCtx(c *HttpWhenContext, stage HttpStage, n int, end bool) {
 	c.Stage = stage
 	c.BodySize = n
 	c.End = end
 	c.resultAction = types.ActionContinue
 }
 
-func makeDoCtx(stage Stage, port int64, n int, end bool, interceptor *Interceptor) *DoContext {
-	c := &DoContext{
+func makeHttpDoCtx(stage HttpStage, port int64, n int, end bool, interceptor *HttpInterceptor) *HttpDoContext {
+	c := &HttpDoContext{
 		Stage:        stage,
 		Port:         port,
 		BodySize:     n,
@@ -280,7 +278,7 @@ func makeDoCtx(stage Stage, port int64, n int, end bool, interceptor *Intercepto
 	return c
 }
 
-func updateDoCtx(c *DoContext, stage Stage, n int, end bool) {
+func updateHttpDoCtx(c *HttpDoContext, stage HttpStage, n int, end bool) {
 	c.Stage = stage
 	c.BodySize = n
 	c.End = end
@@ -293,16 +291,4 @@ func (h *httpCtx) trace(isReq bool, name string) {
 	} else {
 		proxywasm.ReplaceHttpResponseHeader("x-intercepted-by", name)
 	}
-}
-
-func main() {}
-
-func init() {
-	registerInterceptors()
-
-	proxywasm.SetHttpContext(func(contextID uint32) types.HttpContext {
-		proxywasm.LogInfo(fmt.Sprintf("creating new HTTP context id=%d", contextID))
-		return &httpCtx{skip: undefinedAction}
-	})
-	proxywasm.LogInfo("initialized WASM HTTP context factory")
 }
