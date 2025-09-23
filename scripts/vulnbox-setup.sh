@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 set -Eeuo pipefail
-set -x
 
 echo 'Creating ctf-proxy user...'
 useradd -m ctf-proxy
