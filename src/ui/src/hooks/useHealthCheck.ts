@@ -13,7 +13,7 @@ export function useHealthCheck(): HealthCheckResult {
 	const [isChecking, setIsChecking] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
-	const storedUrl = localStorage.getItem("ctf-proxy-api-url");
+	const storedUrl = localStorage.getItem("ctf-proxy-api-host");
 	const apiUrl = storedUrl || "http://localhost:48955";
 
 	useEffect(() => {
@@ -49,7 +49,7 @@ export function useHealthCheck(): HealthCheckResult {
 }
 
 export function updateApiUrl(url: string) {
-	localStorage.setItem("ctf-proxy-api-url", url);
+	localStorage.setItem("ctf-proxy-api-host", url);
 	client.setConfig({ baseUrl: url });
 	window.location.reload();
 }

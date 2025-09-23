@@ -15,9 +15,16 @@ import { useQuery } from "@tanstack/react-query";
 import { getServicesApiServicesGetOptions } from "@/client/@tanstack/react-query.gen";
 
 import { Breadcrumb, Layout, Menu, theme, Spin } from "antd";
-import { DashboardOutlined, ApiOutlined } from "@ant-design/icons";
+import {
+	DashboardOutlined,
+	ApiOutlined,
+	SettingOutlined,
+} from "@ant-design/icons";
 import { useHealthCheck } from "@/hooks/useHealthCheck";
 import { HostConfig } from "@/components/HostConfig";
+import SettingsModal from "@/components/SettingsModal";
+import { useState } from "react";
+import { Button } from "antd";
 
 const { Header, Content, Footer } = Layout;
 
@@ -33,6 +40,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 		const navigate = useNavigate();
 		const location = useLocation();
 		const { isHealthy, isChecking, error, apiUrl } = useHealthCheck();
+		const [settingsOpen, setSettingsOpen] = useState(false);
 
 		const { data } = useQuery({
 			...getServicesApiServicesGetOptions(),
@@ -227,6 +235,14 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 							items={menuItems}
 							style={{ flex: 1, minWidth: 0 }}
 						/>
+						<Button
+							type="text"
+							icon={<SettingOutlined />}
+							onClick={() => setSettingsOpen(true)}
+							style={{ color: "white" }}
+						>
+							Settings
+						</Button>
 					</Header>
 					<Content style={{ padding: "0 48px" }}>
 						<div
@@ -278,6 +294,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 						},
 						TanStackQueryDevtools,
 					]}
+				/>
+				<SettingsModal
+					open={settingsOpen}
+					onClose={() => setSettingsOpen(false)}
 				/>
 			</>
 		);

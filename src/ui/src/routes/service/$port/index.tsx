@@ -403,7 +403,7 @@ function ServiceDetail() {
 
 						try {
 							const apiUrl =
-								localStorage.getItem("ctf-proxy-api-url") ||
+								localStorage.getItem("ctf-proxy-api-host") ||
 								"http://localhost:48955";
 							const response = await fetch(
 								`${apiUrl}/api/requests/${record.id}/raw`,
