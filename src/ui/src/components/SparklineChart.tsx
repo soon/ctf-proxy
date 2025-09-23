@@ -57,7 +57,8 @@ export function SparklineChart({
 	}
 
 	// Skip rendering if no data at all
-	if (completeData.length === 0 || completeData.every((v) => v === 0)) {
+	const hasAnyData = completeData.length > 0 && completeData.some((v) => v > 0);
+	if (!hasAnyData) {
 		return (
 			<div
 				style={{

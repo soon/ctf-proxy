@@ -2,7 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getTcpConnectionStatsApiServicesPortTcpConnectionStatsGetOptions } from "@/client/@tanstack/react-query.gen";
 import type { TcpConnectionStatsItem } from "@/client/types.gen";
-import { Table, Spin, Empty, Typography, Select, Space, Button } from "antd";
+import {
+	Table,
+	Spin,
+	Empty,
+	Typography,
+	Select,
+	Space,
+	Button,
+	Tag,
+} from "antd";
 import { ReloadOutlined, ClockCircleOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { useState } from "react";
@@ -88,6 +97,26 @@ function TcpConnectionStats() {
 			key: "count",
 			width: 80,
 			sorter: (a, b) => a.count - b.count,
+		},
+		{
+			title: "Blocked",
+			key: "blocked",
+			width: 100,
+			render: (_, record) => {
+				if (record.blocked_count > 0) {
+					const percentage = (
+						(record.blocked_count / record.count) *
+						100
+					).toFixed(1);
+					return (
+						<Text className="font-mono text-xs text-red-600">
+							{record.blocked_count} ({percentage}%)
+						</Text>
+					);
+				}
+				return <Text className="font-mono text-xs text-gray-400">-</Text>;
+			},
+			sorter: (a, b) => a.blocked_count - b.blocked_count,
 		},
 		{
 			title: "Activity",

@@ -940,10 +940,30 @@ def get_tcp_connection_stats(port: int, window_minutes: int = 60) -> TCPConnecti
             key = (read_min, read_max, write_min, write_max)
 
             if key not in stats_map:
-                stats_map[key] = {"total_count": 0, "time_points": []}
+                stats_map[key] = {"total_count": 0, "blocked_count": 0, "time_points": []}
 
             stats_map[key]["total_count"] += count
             stats_map[key]["time_points"].append({"timestamp": time, "count": count})
+
+        # Get blocked counts for each byte range pattern
+        cursor.execute(
+            """
+            SELECT bytes_in, bytes_out, COUNT(*) as blocked_count
+            FROM tcp_connection
+            WHERE port = ? AND start_time >= ? AND is_blocked = 1
+            GROUP BY bytes_in, bytes_out
+        """,
+            (port, start_timestamp),
+        )
+
+        # Map blocked counts to the corresponding ranges
+        for row in cursor.fetchall():
+            bytes_in, bytes_out, blocked_count = row
+            # Find the matching range in stats_map
+            for (read_min, read_max, write_min, write_max), data in stats_map.items():
+                if read_min <= bytes_in <= read_max and write_min <= bytes_out <= write_max:
+                    data["blocked_count"] += blocked_count
+                    break
 
         # Convert to response format
         stats = []
@@ -955,6 +975,7 @@ def get_tcp_connection_stats(port: int, window_minutes: int = 60) -> TCPConnecti
                     write_min=write_min,
                     write_max=write_max,
                     count=data["total_count"],
+                    blocked_count=data["blocked_count"],
                     time_series=data["time_points"],
                 )
             )

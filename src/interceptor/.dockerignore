@@ -1,6 +1,3 @@
-# Ignore the original main.go (will be replaced with test version)
-main.go
-
 # Ignore test artifacts that aren't needed for build
 test/docker-compose.yml
 test/Dockerfile.build

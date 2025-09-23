@@ -211,6 +211,7 @@ class TCPConnectionStatsItem(BaseModel):
     write_min: int
     write_max: int
     count: int
+    blocked_count: int
     time_series: list[dict[str, int]] = []
 
 

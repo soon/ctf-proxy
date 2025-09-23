@@ -1,0 +1,14 @@
+FROM golang:1.24.5-alpine AS builder
+
+WORKDIR /build
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY *.go ./
+
+RUN GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o wasm/interceptor_tcp.wasm  -tags tcp  .
+RUN GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o wasm/interceptor_http.wasm -tags http .
+
+FROM scratch AS export-stage
+COPY --from=builder /build/wasm/ /wasm/

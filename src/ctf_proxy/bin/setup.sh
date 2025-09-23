@@ -18,6 +18,8 @@ sudo cp ~/config.yml data/config.yml
 echo 'Setting up iptables rules for proxying...'
 sudo PORTS_FILE=data/config.yml python3 ./ctf_proxy/bin/iptables-config.py setup
 
-# run all services
+echo 'Building interceptor...'
+sudo make -C ./interceptor build
+
 echo 'Starting all services...'
 docker-compose up -d --build --force-recreate

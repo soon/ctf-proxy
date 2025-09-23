@@ -647,6 +647,10 @@ export type TcpConnectionStatsItem = {
 	 */
 	count: number;
 	/**
+	 * Blocked Count
+	 */
+	blocked_count: number;
+	/**
 	 * Time Series
 	 */
 	time_series?: Array<{
