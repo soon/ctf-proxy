@@ -19,3 +19,12 @@ chmod 700 /home/ctf-proxy/.ssh
 chmod 600 /home/ctf-proxy/.ssh/authorized_keys
 
 usermod -s /bin/bash ctf-proxy
+
+echo 'Installing proxy...'
+su - ctf-proxy
+cd ~
+git clone https://github.com/soon/ctf-proxy.git
+cd ctf-proxy/src
+make
+
+echo 'Setup complete! You can now login as ctf-proxy user.'
