@@ -89,14 +89,17 @@ class BatchProcessor:
 
     def process_batch(self):
         total_processed = 0
-        for processor in self.processors:
-            try:
-                batch_id = self.create_batch_id()
-                processed = processor.process_new_access_log_entries(batch_id)
-                total_processed += len(processed)
-                self.save_archive(batch_id, processed)
-            except Exception as e:
-                logger.error(f"Error processing entries by {processor.__class__.__name__}: {e}")
+        with self.db.connect() as conn:
+            tx = conn.cursor()
+
+            for processor in self.processors:
+                try:
+                    batch_id = self.create_batch_id()
+                    processed = processor.process_new_access_log_entries(tx, batch_id)
+                    total_processed += len(processed)
+                    self.save_archive(batch_id, processed)
+                except Exception as e:
+                    logger.error(f"Error processing entries by {processor.__class__.__name__}: {e}")
 
         return total_processed
 

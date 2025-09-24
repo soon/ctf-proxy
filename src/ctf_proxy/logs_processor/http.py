@@ -1,6 +1,7 @@
 import base64
 import logging
 import re
+import sqlite3
 from datetime import datetime
 from urllib.parse import parse_qs, urlparse
 
@@ -81,7 +82,7 @@ class HttpProcessor:
         self.taps_folder = HttpTapsFolder(taps_dir)
         self.tap_processor = HttpTapProcessor(db, config)
 
-    def process_new_access_log_entries(self, batch_id: str):
+    def process_new_access_log_entries(self, tx: sqlite3.Cursor, batch_id: str):
         new_entries = self.access_log.read_new_entries(max_entries=1000)
         self.taps_folder.refresh()
 
@@ -109,6 +110,7 @@ class HttpProcessor:
             to_archive[tap_filename] = tap_data
             try:
                 self.tap_processor.process_tap(
+                    tx=tx,
                     data=tap_data,
                     tap_id=tap_filename,
                     batch_id=batch_id,
@@ -132,7 +134,9 @@ class HttpTapProcessor:
         self.config = config
         self.sessions = SessionsStorage(self.config)
 
-    def process_tap(self, data: dict, tap_id: str, batch_id: str, log_entry: dict):
+    def process_tap(
+        self, tx: sqlite3.Cursor, data: dict, tap_id: str, batch_id: str, log_entry: dict
+    ):
         http_trace = data.get("http_buffered_trace", {})
         request = http_trace.get("request", {})
         response = http_trace.get("response", {})
@@ -195,169 +199,167 @@ class HttpTapProcessor:
         req_body = self.extract_body(request.get("body"))
         resp_body = self.extract_body(response.get("body"))
 
-        with self.db.connect() as conn:
-            tx = conn.cursor()
-            request_id = self.db.http_requests.insert(
-                tx=tx,
-                port=port or 0,
-                start_time=convert_datetime_to_timestamp(start_time),
-                path=full_path,
-                method=method or "",
-                user_agent=user_agent,
-                body=req_body,
-                is_blocked=is_blocked,
-                tap_id=tap_id,
-                batch_id=batch_id,
+        request_id = self.db.http_requests.insert(
+            tx=tx,
+            port=port or 0,
+            start_time=convert_datetime_to_timestamp(start_time),
+            path=full_path,
+            method=method or "",
+            user_agent=user_agent,
+            body=req_body,
+            is_blocked=is_blocked,
+            tap_id=tap_id,
+            batch_id=batch_id,
+        )
+
+        response_id = self.db.http_responses.insert(
+            tx=tx, request_id=request_id, status=status, body=resp_body
+        )
+
+        headers = [
+            *(
+                HttpHeaderRow.Insert(request_id=request_id, name=key, value=value)
+                for key, value in request_headers
+            ),
+            *(
+                HttpHeaderRow.Insert(response_id=response_id, name=key, value=value)
+                for key, value in response_headers
+            ),
+        ]
+        if headers:
+            self.db.http_headers.insert_many(tx=tx, headers=headers)
+
+        flags_written = [
+            FlagRow.Insert(
+                value=flag,
+                http_request_id=request_id,
+                location="body",
+                offset=offset,
             )
-
-            response_id = self.db.http_responses.insert(
-                tx=tx, request_id=request_id, status=status, body=resp_body
+            for offset, flag in find_body_flags(req_body or "", self.config.flag_format)
+        ]
+        flags_retrieved = [
+            FlagRow.Insert(
+                value=flag,
+                http_response_id=response_id,
+                location="body",
+                offset=offset,
             )
-
-            headers = [
-                *(
-                    HttpHeaderRow.Insert(request_id=request_id, name=key, value=value)
-                    for key, value in request_headers
+            for offset, flag in find_body_flags(resp_body or "", self.config.flag_format)
+        ]
+        flags = [
+            *flags_written,
+            *flags_retrieved,
+        ]
+        if flags:
+            self.db.flags.insert_many(tx=tx, flags=flags)
+        if port:
+            self.db.service_stats.increment(
+                tx,
+                ServiceStatsRow.Increment(
+                    port=port,
+                    total_requests=1,
+                    total_responses=1 if not is_blocked else 0,
+                    total_blocked_requests=1 if is_blocked else 0,
+                    total_flags_written=len(flags_written),
+                    total_flags_retrieved=len(flags_retrieved),
                 ),
-                *(
-                    HttpHeaderRow.Insert(response_id=response_id, name=key, value=value)
-                    for key, value in response_headers
+            )
+            self.db.http_response_code_stats.increment(
+                tx,
+                HttpResponseCodeStatsRow.Increment(
+                    port=port,
+                    status_code=status,
+                    count=1,
                 ),
-            ]
-            if headers:
-                self.db.http_headers.insert_many(tx=tx, headers=headers)
-
-            flags_written = [
-                FlagRow.Insert(
-                    value=flag,
-                    http_request_id=request_id,
-                    location="body",
-                    offset=offset,
-                )
-                for offset, flag in find_body_flags(req_body or "", self.config.flag_format)
-            ]
-            flags_retrieved = [
-                FlagRow.Insert(
-                    value=flag,
-                    http_response_id=response_id,
-                    location="body",
-                    offset=offset,
-                )
-                for offset, flag in find_body_flags(resp_body or "", self.config.flag_format)
-            ]
-            flags = [
-                *flags_written,
-                *flags_retrieved,
-            ]
-            if flags:
-                self.db.flags.insert_many(tx=tx, flags=flags)
-            if port:
-                self.db.service_stats.increment(
+            )
+            path_stats_result = self.db.http_path_stats.increment(
+                tx,
+                HttpPathStatsRow.Increment(
+                    port=port,
+                    path=path,
+                    count=1,
+                ),
+            )
+            if path_stats_result == RowStatus.NEW:
+                self.db.alerts.insert(
                     tx,
-                    ServiceStatsRow.Increment(
+                    AlertRow.Insert(
                         port=port,
-                        total_requests=1,
-                        total_responses=1 if not is_blocked else 0,
-                        total_blocked_requests=1 if is_blocked else 0,
-                        total_flags_written=len(flags_written),
-                        total_flags_retrieved=len(flags_retrieved),
+                        created=now_timestamp(),
+                        description=f"New path: '{full_path}'",
+                        http_request_id=request_id,
+                        http_response_id=response_id,
                     ),
                 )
-                self.db.http_response_code_stats.increment(
+            if not service_config or not any(
+                re.fullmatch(ignored.path, path) and method == ignored.method
+                for ignored in service_config.ignore_path_stats
+            ):
+                self.db.http_path_time_stats.increment(
                     tx,
-                    HttpResponseCodeStatsRow.Increment(
+                    HttpPathTimeStatsRow.Increment(
                         port=port,
-                        status_code=status,
-                        count=1,
-                    ),
-                )
-                path_stats_result = self.db.http_path_stats.increment(
-                    tx,
-                    HttpPathStatsRow.Increment(
-                        port=port,
+                        method=method,
                         path=path,
+                        time=start_minute_ts,
                         count=1,
                     ),
                 )
-                if path_stats_result == RowStatus.NEW:
-                    self.db.alerts.insert(
-                        tx,
-                        AlertRow.Insert(
-                            port=port,
-                            created=now_timestamp(),
-                            description=f"New path: '{full_path}'",
-                            http_request_id=request_id,
-                            http_response_id=response_id,
-                        ),
-                    )
-                if not service_config or not any(
-                    re.fullmatch(ignored.path, path) and method == ignored.method
-                    for ignored in service_config.ignore_path_stats
-                ):
-                    self.db.http_path_time_stats.increment(
-                        tx,
-                        HttpPathTimeStatsRow.Increment(
-                            port=port,
-                            method=method,
-                            path=path,
-                            time=start_minute_ts,
-                            count=1,
-                        ),
-                    )
-                for param, values in query_params.items():
-                    reg = (
-                        re.compile(service_config.ignore_query_param_stats[param])
-                        if service_config and param in service_config.ignore_query_param_stats
-                        else None
-                    )
-                    for value in values:
-                        if reg and reg.fullmatch(value):
-                            continue
-                        self.db.http_query_param_time_stats.increment(
-                            tx,
-                            HttpQueryParamTimeStatsRow.Increment(
-                                port=port,
-                                param=param,
-                                value=value,
-                                time=start_minute_ts,
-                                count=1,
-                            ),
-                        )
-                for key, value in request_headers:
-                    if key in IGNORED_HEADER_STATS:
-                        continue
-                    reg = (
-                        re.compile(service_config.ignore_header_stats[key])
-                        if service_config and key in service_config.ignore_header_stats
-                        else None
-                    )
+            for param, values in query_params.items():
+                reg = (
+                    re.compile(service_config.ignore_query_param_stats[param])
+                    if service_config and param in service_config.ignore_query_param_stats
+                    else None
+                )
+                for value in values:
                     if reg and reg.fullmatch(value):
                         continue
-                    self.db.http_header_time_stats.increment(
+                    self.db.http_query_param_time_stats.increment(
                         tx,
-                        HttpHeaderTimeStatsRow.Increment(
+                        HttpQueryParamTimeStatsRow.Increment(
                             port=port,
-                            name=key,
+                            param=param,
                             value=value,
                             time=start_minute_ts,
                             count=1,
                         ),
                     )
-                self.sessions.add_request(
-                    port=port,
-                    request_id=request_id,
-                    start_time=start_time_ts,
-                    request_headers=request_headers,
-                    response_headers=response_headers,
+            for key, value in request_headers:
+                if key in IGNORED_HEADER_STATS:
+                    continue
+                reg = (
+                    re.compile(service_config.ignore_header_stats[key])
+                    if service_config and key in service_config.ignore_header_stats
+                    else None
                 )
-                for link in self.sessions.get_links(port, request_id):
-                    self.db.http_request_links.insert(
-                        tx,
-                        HttpRequestLinkRow.Insert(
-                            from_request_id=link.from_request_id,
-                            to_request_id=link.to_request_id,
-                        ),
-                    )
+                if reg and reg.fullmatch(value):
+                    continue
+                self.db.http_header_time_stats.increment(
+                    tx,
+                    HttpHeaderTimeStatsRow.Increment(
+                        port=port,
+                        name=key,
+                        value=value,
+                        time=start_minute_ts,
+                        count=1,
+                    ),
+                )
+            self.sessions.add_request(
+                port=port,
+                request_id=request_id,
+                start_time=start_time_ts,
+                request_headers=request_headers,
+                response_headers=response_headers,
+            )
+            for link in self.sessions.get_links(port, request_id):
+                self.db.http_request_links.insert(
+                    tx,
+                    HttpRequestLinkRow.Insert(
+                        from_request_id=link.from_request_id,
+                        to_request_id=link.to_request_id,
+                    ),
+                )
 
     def extract_body(self, body_data):
         if not body_data:

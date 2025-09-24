@@ -1,5 +1,6 @@
 import base64
 import logging
+import sqlite3
 from datetime import datetime
 
 from ctf_proxy.config.config import Config
@@ -52,7 +53,7 @@ class TcpProcessor:
         self.taps_folder = TcpTapsFolder(taps_dir)
         self.tap_processor = TcpTapProcessor(db, config)
 
-    def process_new_access_log_entries(self, batch_id: str):
+    def process_new_access_log_entries(self, tx: sqlite3.Cursor, batch_id: str):
         new_entries = self.access_log.read_new_entries(max_entries=1000)
         self.taps_folder.refresh()
 
@@ -80,6 +81,7 @@ class TcpProcessor:
             to_archive[tap_filename] = tap_data
             try:
                 self.tap_processor.process_tap(
+                    tx=tx,
                     data=tap_data,
                     tap_id=tap_filename,
                     batch_id=batch_id,
@@ -101,7 +103,9 @@ class TcpTapProcessor:
         self.db = db
         self.config = config
 
-    def process_tap(self, data: dict, tap_id: str, batch_id: str, log_entry: dict):
+    def process_tap(
+        self, tx: sqlite3.Cursor, data: dict, tap_id: str, batch_id: str, log_entry: dict
+    ):
         socket_trace = data.get("socket_buffered_trace", {})
         events = socket_trace.get("events", [])
 
@@ -161,132 +165,128 @@ class TcpTapProcessor:
                 except Exception as e:
                     logger.error(f"Error processing write event in tap {tap_id}: {e}")
 
-        with self.db.connect() as conn:
-            tx = conn.cursor()
+        tcp_connection_id = self.db.tcp_connections.insert(
+            tx=tx,
+            port=port,
+            connection_id=connection_id_from_log or 0,
+            start_time=start_time_ts,
+            duration_ms=duration_ms,
+            bytes_in=bytes_in,
+            bytes_out=bytes_out,
+            is_blocked=is_blocked,
+            tap_id=tap_id,
+            batch_id=batch_id,
+        )
 
-            tcp_connection_id = self.db.tcp_connections.insert(
-                tx=tx,
-                port=port,
-                connection_id=connection_id_from_log or 0,
-                start_time=start_time_ts,
-                duration_ms=duration_ms,
-                bytes_in=bytes_in,
-                bytes_out=bytes_out,
-                is_blocked=is_blocked,
-                tap_id=tap_id,
-                batch_id=batch_id,
+        for event in events:
+            timestamp = int(
+                datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")).timestamp() * 1000
             )
 
-            for event in events:
-                timestamp = int(
-                    datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")).timestamp()
-                    * 1000
+            if "read" in event:
+                read_data = event["read"]["data"]
+                data_bytes = base64.b64decode(read_data.get("as_bytes", ""))
+                truncated = read_data.get("truncated", False)
+
+                self.db.tcp_events.insert(
+                    tx=tx,
+                    connection_id=tcp_connection_id,
+                    timestamp=timestamp,
+                    event_type="read",
+                    data=data_bytes,
+                    data_size=len(data_bytes),
+                    truncated=truncated,
                 )
 
-                if "read" in event:
-                    read_data = event["read"]["data"]
-                    data_bytes = base64.b64decode(read_data.get("as_bytes", ""))
-                    truncated = read_data.get("truncated", False)
+            elif "write" in event:
+                write_data = event["write"]["data"]
+                data_bytes = base64.b64decode(write_data.get("as_bytes", ""))
+                end_stream = event["write"].get("end_stream", False)
+                truncated = write_data.get("truncated", False)
 
-                    self.db.tcp_events.insert(
-                        tx=tx,
-                        connection_id=tcp_connection_id,
-                        timestamp=timestamp,
-                        event_type="read",
-                        data=data_bytes,
-                        data_size=len(data_bytes),
-                        truncated=truncated,
-                    )
-
-                elif "write" in event:
-                    write_data = event["write"]["data"]
-                    data_bytes = base64.b64decode(write_data.get("as_bytes", ""))
-                    end_stream = event["write"].get("end_stream", False)
-                    truncated = write_data.get("truncated", False)
-
-                    self.db.tcp_events.insert(
-                        tx=tx,
-                        connection_id=tcp_connection_id,
-                        timestamp=timestamp,
-                        event_type="write",
-                        data=data_bytes,
-                        data_size=len(data_bytes),
-                        end_stream=end_stream,
-                        truncated=truncated,
-                    )
-
-                elif "closed" in event:
-                    self.db.tcp_events.insert(
-                        tx=tx,
-                        connection_id=tcp_connection_id,
-                        timestamp=timestamp,
-                        event_type="closed",
-                        data=b"",
-                        data_size=0,
-                        end_stream=True,
-                        truncated=False,
-                    )
-
-            # Insert flags
-            if flags_found:
-                flags_to_insert = [
-                    FlagRow.Insert(
-                        value=flag,
-                        tcp_connection_id=tcp_connection_id,
-                        location=location,
-                        offset=offset,
-                    )
-                    for location, offset, flag in flags_found
-                ]
-                self.db.flags.insert_many(tx=tx, flags=flags_to_insert)
-
-            # Update service statistics
-            if port:
-                flags_written = sum(1 for loc, _, _ in flags_found if loc == "write")
-                flags_retrieved = sum(1 for loc, _, _ in flags_found if loc == "read")
-
-                self.db.service_stats.increment(
-                    tx,
-                    ServiceStatsRow.Increment(
-                        port=port,
-                        total_tcp_connections=1,
-                        total_tcp_bytes_in=bytes_in,
-                        total_tcp_bytes_out=bytes_out,
-                        total_flags_written=flags_written,
-                        total_flags_retrieved=flags_retrieved,
-                    ),
+                self.db.tcp_events.insert(
+                    tx=tx,
+                    connection_id=tcp_connection_id,
+                    timestamp=timestamp,
+                    event_type="write",
+                    data=data_bytes,
+                    data_size=len(data_bytes),
+                    end_stream=end_stream,
+                    truncated=truncated,
                 )
 
-                # Update TCP connection stats
-                service = self.config.get_service_by_port(port)
-                precision = service.tcp_connection_stats_precision if service else 100
-                # Calculate buckets
-                read_min = (total_read_bytes // precision) * precision
-                read_max = read_min + precision
-                write_min = (total_write_bytes // precision) * precision
-                write_max = write_min + precision
-
-                self.db.tcp_connection_stats.increment(
-                    tx,
-                    TcpConnectionStatsRow.Increment(
-                        port=port,
-                        read_min=read_min,
-                        read_max=read_max,
-                        write_min=write_min,
-                        write_max=write_max,
-                        count=1,
-                    ),
+            elif "closed" in event:
+                self.db.tcp_events.insert(
+                    tx=tx,
+                    connection_id=tcp_connection_id,
+                    timestamp=timestamp,
+                    event_type="closed",
+                    data=b"",
+                    data_size=0,
+                    end_stream=True,
+                    truncated=False,
                 )
 
-                # Update time-based TCP connection stats (round to minute)
-                time_bucket = (start_time_ts // 60000) * 60000
-
-                tx.execute(
-                    """
-                    INSERT INTO tcp_connection_time_stats (port, read_min, read_max, write_min, write_max, time, count)
-                    VALUES (?, ?, ?, ?, ?, ?, 1)
-                    ON CONFLICT(port, read_min, read_max, write_min, write_max, time)
-                    DO UPDATE SET count = count + 1
-                """,
-                    (port, read_min, read_max, write_min, write_max, time_bucket),
+        # Insert flags
+        if flags_found:
+            flags_to_insert = [
+                FlagRow.Insert(
+                    value=flag,
+                    tcp_connection_id=tcp_connection_id,
+                    location=location,
+                    offset=offset,
                 )
+                for location, offset, flag in flags_found
+            ]
+            self.db.flags.insert_many(tx=tx, flags=flags_to_insert)
+
+        # Update service statistics
+        if port:
+            flags_written = sum(1 for loc, _, _ in flags_found if loc == "write")
+            flags_retrieved = sum(1 for loc, _, _ in flags_found if loc == "read")
+
+            self.db.service_stats.increment(
+                tx,
+                ServiceStatsRow.Increment(
+                    port=port,
+                    total_tcp_connections=1,
+                    total_tcp_bytes_in=bytes_in,
+                    total_tcp_bytes_out=bytes_out,
+                    total_flags_written=flags_written,
+                    total_flags_retrieved=flags_retrieved,
+                ),
+            )
+
+            # Update TCP connection stats
+            service = self.config.get_service_by_port(port)
+            precision = service.tcp_connection_stats_precision if service else 100
+            # Calculate buckets
+            read_min = (total_read_bytes // precision) * precision
+            read_max = read_min + precision
+            write_min = (total_write_bytes // precision) * precision
+            write_max = write_min + precision
+
+            self.db.tcp_connection_stats.increment(
+                tx,
+                TcpConnectionStatsRow.Increment(
+                    port=port,
+                    read_min=read_min,
+                    read_max=read_max,
+                    write_min=write_min,
+                    write_max=write_max,
+                    count=1,
+                ),
+            )
+
+            # Update time-based TCP connection stats (round to minute)
+            time_bucket = (start_time_ts // 60000) * 60000
+
+            tx.execute(
+                """
+                INSERT INTO tcp_connection_time_stats (port, read_min, read_max, write_min, write_max, time, count)
+                VALUES (?, ?, ?, ?, ?, ?, 1)
+                ON CONFLICT(port, read_min, read_max, write_min, write_max, time)
+                DO UPDATE SET count = count + 1
+            """,
+                (port, read_min, read_max, write_min, write_max, time_bucket),
+            )
