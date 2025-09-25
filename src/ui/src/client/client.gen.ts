@@ -20,18 +20,8 @@ export type CreateClientConfig<T extends ClientOptions = ClientOptions2> = (
 	override?: Config<ClientOptions & T>,
 ) => Config<Required<ClientOptions> & T>;
 
-const STORAGE_KEY = "ctf-proxy-api-host";
-const DEFAULT_API_HOST = "http://localhost:48955";
-
-const getApiHost = () => {
-	if (typeof window !== "undefined") {
-		return localStorage.getItem(STORAGE_KEY) || DEFAULT_API_HOST;
-	}
-	return DEFAULT_API_HOST;
-};
-
 export const client = createClient(
 	createConfig<ClientOptions2>({
-		baseUrl: getApiHost(),
+		baseUrl: "http://localhost:8080",
 	}),
 );

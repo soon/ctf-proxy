@@ -99,22 +99,6 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 				items.push({ title: "Dashboard" });
 			}
 
-			console.log("Current pathname:", path);
-			console.log(
-				"Current matches:",
-				JSON.stringify(
-					matches.map((m) => ({
-						pathname: m.pathname,
-						id: m.id,
-						routeId: m.routeId,
-						staticData: (m as any).staticData,
-					})),
-					null,
-					2,
-				),
-			);
-			console.log("Matches length:", matches.length);
-
 			// Process matches to build breadcrumb trail
 			matches.forEach((match) => {
 				// Skip the root match

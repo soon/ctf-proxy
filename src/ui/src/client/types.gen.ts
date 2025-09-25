@@ -17,9 +17,9 @@ export type FlagItem = {
 	 */
 	flag: string;
 	/**
-	 * Reason
+	 * Location
 	 */
-	reason: string | null;
+	location: string | null;
 };
 
 /**
@@ -118,6 +118,10 @@ export type LinkedRequestItem = {
 	 * Direction
 	 */
 	direction: string;
+	/**
+	 * Session Key
+	 */
+	session_key?: string | null;
 };
 
 /**
@@ -788,6 +792,78 @@ export type HealthCheckApiHealthGetData = {
 };
 
 export type HealthCheckApiHealthGetResponses = {
+	/**
+	 * Successful Response
+	 */
+	200: unknown;
+};
+
+export type ExecuteSqlApiSqlPostData = {
+	/**
+	 * Request
+	 */
+	body: {
+		[key: string]: unknown;
+	};
+	path?: never;
+	query?: never;
+	url: "/api/sql";
+};
+
+export type ExecuteSqlApiSqlPostErrors = {
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
+};
+
+export type ExecuteSqlApiSqlPostError =
+	ExecuteSqlApiSqlPostErrors[keyof ExecuteSqlApiSqlPostErrors];
+
+export type ExecuteSqlApiSqlPostResponses = {
+	/**
+	 * Successful Response
+	 */
+	200: unknown;
+};
+
+export type GetSqlSchemaApiSqlSchemaGetData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/sql/schema";
+};
+
+export type GetSqlSchemaApiSqlSchemaGetResponses = {
+	/**
+	 * Successful Response
+	 */
+	200: unknown;
+};
+
+export type ExportSqlCsvApiSqlExportPostData = {
+	/**
+	 * Request
+	 */
+	body: {
+		[key: string]: unknown;
+	};
+	path?: never;
+	query?: never;
+	url: "/api/sql/export";
+};
+
+export type ExportSqlCsvApiSqlExportPostErrors = {
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
+};
+
+export type ExportSqlCsvApiSqlExportPostError =
+	ExportSqlCsvApiSqlExportPostErrors[keyof ExportSqlCsvApiSqlExportPostErrors];
+
+export type ExportSqlCsvApiSqlExportPostResponses = {
 	/**
 	 * Successful Response
 	 */

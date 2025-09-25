@@ -1,5 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import {
+	getSqlSchemaApiSqlSchemaGetOptions,
+	executeSqlApiSqlPostMutation,
+	exportSqlCsvApiSqlExportPostMutation,
+} from "@/client/@tanstack/react-query.gen";
 import {
 	Button,
 	Input,
@@ -15,7 +21,6 @@ import {
 	PlayCircleOutlined,
 	DownloadOutlined,
 	ClearOutlined,
-	ConsoleSqlOutlined,
 	OpenAIOutlined,
 } from "@ant-design/icons";
 
@@ -39,25 +44,14 @@ function SqlExecutor() {
 	const [timeout, setTimeout] = useState<number>(10);
 	const [aiModalVisible, setAiModalVisible] = useState(false);
 	const [aiQuery, setAiQuery] = useState("");
-	const [schema, setSchema] = useState<string>("");
 
-	useEffect(() => {
-		fetchSchema();
-	}, []);
+	// Fetch schema using React Query
+	const { data: schemaData } = useQuery(getSqlSchemaApiSqlSchemaGetOptions());
+	const schema = (schemaData as any)?.schema || "";
 
-	const fetchSchema = async () => {
-		try {
-			const apiHost =
-				localStorage.getItem("apiHost") || "http://localhost:8080";
-			const response = await fetch(`${apiHost}/api/sql/schema`);
-			if (response.ok) {
-				const data = await response.json();
-				setSchema(data.schema);
-			}
-		} catch (err) {
-			console.error("Failed to fetch schema:", err);
-		}
-	};
+	// Mutations for SQL operations
+	const executeSqlMutation = useMutation(executeSqlApiSqlPostMutation());
+	const exportCsvMutation = useMutation(exportSqlCsvApiSqlExportPostMutation());
 
 	const executeQuery = async () => {
 		setLoading(true);
@@ -65,22 +59,10 @@ function SqlExecutor() {
 		const startTime = Date.now();
 
 		try {
-			const apiHost =
-				localStorage.getItem("apiHost") || "http://localhost:8080";
-			const response = await fetch(`${apiHost}/api/sql`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({ query, timeout }),
+			const result = await executeSqlMutation.mutateAsync({
+				body: { query, timeout },
 			});
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.detail || "Query execution failed");
-			}
-
-			const data = await response.json();
+			const data = result as any;
 			setExecutionTime(Date.now() - startTime);
 
 			if (data.rows && data.rows.length > 0) {
@@ -106,8 +88,10 @@ function SqlExecutor() {
 				setResults([]);
 				message.info("Query executed successfully but returned no rows");
 			}
-		} catch (err) {
-			setError(err instanceof Error ? err.message : "Unknown error occurred");
+		} catch (err: any) {
+			const errorMessage =
+				err?.body?.detail || err?.message || "Unknown error occurred";
+			setError(errorMessage);
 			setResults([]);
 			setColumns([]);
 		} finally {
@@ -122,22 +106,12 @@ function SqlExecutor() {
 		}
 
 		try {
-			const apiHost =
-				localStorage.getItem("apiHost") || "http://localhost:8080";
-			const response = await fetch(`${apiHost}/api/sql/export`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({ query, timeout }),
+			const result = await exportCsvMutation.mutateAsync({
+				body: { query, timeout },
 			});
 
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.detail || "Export failed");
-			}
-
-			const blob = await response.blob();
+			// The mutation returns the blob data, need to handle download
+			const blob = new Blob([result as any], { type: "text/csv" });
 			const url = URL.createObjectURL(blob);
 			const link = document.createElement("a");
 			link.setAttribute("href", url);
@@ -148,8 +122,9 @@ function SqlExecutor() {
 			document.body.removeChild(link);
 			URL.revokeObjectURL(url);
 			message.success("Results exported to CSV");
-		} catch (err) {
-			message.error(err instanceof Error ? err.message : "Export failed");
+		} catch (err: any) {
+			const errorMessage = err?.body?.detail || err?.message || "Export failed";
+			message.error(errorMessage);
 		}
 	};
 

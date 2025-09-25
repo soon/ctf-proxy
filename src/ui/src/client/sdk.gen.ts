@@ -3,6 +3,12 @@
 import type { Client, Options as Options2, TDataShape } from "./client";
 import { client } from "./client.gen";
 import type {
+	ExecuteSqlApiSqlPostData,
+	ExecuteSqlApiSqlPostErrors,
+	ExecuteSqlApiSqlPostResponses,
+	ExportSqlCsvApiSqlExportPostData,
+	ExportSqlCsvApiSqlExportPostErrors,
+	ExportSqlCsvApiSqlExportPostResponses,
 	GetRequestDetailApiRequestsRequestIdGetData,
 	GetRequestDetailApiRequestsRequestIdGetErrors,
 	GetRequestDetailApiRequestsRequestIdGetResponses,
@@ -26,6 +32,8 @@ import type {
 	GetServiceRequestsApiServicesPortRequestsGetResponses,
 	GetServicesApiServicesGetData,
 	GetServicesApiServicesGetResponses,
+	GetSqlSchemaApiSqlSchemaGetData,
+	GetSqlSchemaApiSqlSchemaGetResponses,
 	GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetData,
 	GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetErrors,
 	GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetResponses,
@@ -69,6 +77,66 @@ export const healthCheckApiHealthGet = <ThrowOnError extends boolean = false>(
 	>({
 		url: "/api/health",
 		...options,
+	});
+};
+
+/**
+ * Execute Sql
+ */
+export const executeSqlApiSqlPost = <ThrowOnError extends boolean = false>(
+	options: Options<ExecuteSqlApiSqlPostData, ThrowOnError>,
+) => {
+	return (options.client ?? client).post<
+		ExecuteSqlApiSqlPostResponses,
+		ExecuteSqlApiSqlPostErrors,
+		ThrowOnError
+	>({
+		url: "/api/sql",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+};
+
+/**
+ * Get Sql Schema
+ */
+export const getSqlSchemaApiSqlSchemaGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options?: Options<GetSqlSchemaApiSqlSchemaGetData, ThrowOnError>,
+) => {
+	return (options?.client ?? client).get<
+		GetSqlSchemaApiSqlSchemaGetResponses,
+		unknown,
+		ThrowOnError
+	>({
+		url: "/api/sql/schema",
+		...options,
+	});
+};
+
+/**
+ * Export Sql Csv
+ */
+export const exportSqlCsvApiSqlExportPost = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<ExportSqlCsvApiSqlExportPostData, ThrowOnError>,
+) => {
+	return (options.client ?? client).post<
+		ExportSqlCsvApiSqlExportPostResponses,
+		ExportSqlCsvApiSqlExportPostErrors,
+		ThrowOnError
+	>({
+		url: "/api/sql/export",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 };
 

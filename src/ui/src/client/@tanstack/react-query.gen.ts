@@ -4,10 +4,13 @@ import {
 	type InfiniteData,
 	infiniteQueryOptions,
 	queryOptions,
+	type UseMutationOptions,
 } from "@tanstack/react-query";
 
 import { client } from "../client.gen";
 import {
+	executeSqlApiSqlPost,
+	exportSqlCsvApiSqlExportPost,
 	getRequestDetailApiRequestsRequestIdGet,
 	getRequestRawApiRequestsRequestIdRawGet,
 	getServiceByPortApiServicesPortGet,
@@ -16,6 +19,7 @@ import {
 	getServiceQueryStatsApiServicesPortQueriesGet,
 	getServiceRequestsApiServicesPortRequestsGet,
 	getServicesApiServicesGet,
+	getSqlSchemaApiSqlSchemaGet,
 	getTcpConnectionDetailApiTcpConnectionsConnectionIdGet,
 	getTcpConnectionsApiServicesPortTcpConnectionsGet,
 	getTcpConnectionStatsApiServicesPortTcpConnectionStatsGet,
@@ -23,6 +27,10 @@ import {
 	type Options,
 } from "../sdk.gen";
 import type {
+	ExecuteSqlApiSqlPostData,
+	ExecuteSqlApiSqlPostError,
+	ExportSqlCsvApiSqlExportPostData,
+	ExportSqlCsvApiSqlExportPostError,
 	GetRequestDetailApiRequestsRequestIdGetData,
 	GetRequestRawApiRequestsRequestIdRawGetData,
 	GetServiceByPortApiServicesPortGetData,
@@ -33,6 +41,7 @@ import type {
 	GetServiceRequestsApiServicesPortRequestsGetError,
 	GetServiceRequestsApiServicesPortRequestsGetResponse,
 	GetServicesApiServicesGetData,
+	GetSqlSchemaApiSqlSchemaGetData,
 	GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetData,
 	GetTcpConnectionsApiServicesPortTcpConnectionsGetData,
 	GetTcpConnectionsApiServicesPortTcpConnectionsGetError,
@@ -103,6 +112,84 @@ export const healthCheckApiHealthGetOptions = (
 		},
 		queryKey: healthCheckApiHealthGetQueryKey(options),
 	});
+};
+
+/**
+ * Execute Sql
+ */
+export const executeSqlApiSqlPostMutation = (
+	options?: Partial<Options<ExecuteSqlApiSqlPostData>>,
+): UseMutationOptions<
+	unknown,
+	ExecuteSqlApiSqlPostError,
+	Options<ExecuteSqlApiSqlPostData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		unknown,
+		ExecuteSqlApiSqlPostError,
+		Options<ExecuteSqlApiSqlPostData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await executeSqlApiSqlPost({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getSqlSchemaApiSqlSchemaGetQueryKey = (
+	options?: Options<GetSqlSchemaApiSqlSchemaGetData>,
+) => createQueryKey("getSqlSchemaApiSqlSchemaGet", options);
+
+/**
+ * Get Sql Schema
+ */
+export const getSqlSchemaApiSqlSchemaGetOptions = (
+	options?: Options<GetSqlSchemaApiSqlSchemaGetData>,
+) => {
+	return queryOptions({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getSqlSchemaApiSqlSchemaGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getSqlSchemaApiSqlSchemaGetQueryKey(options),
+	});
+};
+
+/**
+ * Export Sql Csv
+ */
+export const exportSqlCsvApiSqlExportPostMutation = (
+	options?: Partial<Options<ExportSqlCsvApiSqlExportPostData>>,
+): UseMutationOptions<
+	unknown,
+	ExportSqlCsvApiSqlExportPostError,
+	Options<ExportSqlCsvApiSqlExportPostData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		unknown,
+		ExportSqlCsvApiSqlExportPostError,
+		Options<ExportSqlCsvApiSqlExportPostData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await exportSqlCsvApiSqlExportPost({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
 };
 
 export const getServicesApiServicesGetQueryKey = (

@@ -306,8 +306,6 @@ function RequestDetail() {
 						const sessionKey = request.linked_requests.find(
 							(r: any) => r.session_key,
 						)?.session_key;
-						console.log("Linked requests:", request.linked_requests);
-						console.log("Session key found:", sessionKey);
 
 						// Combine all requests for the flow
 						const requestFlow = [
