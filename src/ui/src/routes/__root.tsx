@@ -54,6 +54,9 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 			if (path === "/") {
 				return "dashboard";
 			}
+			if (path === "/sql") {
+				return "sql";
+			}
 			const serviceMatch = path.match(/^\/service\/(\d+)/);
 			if (serviceMatch) {
 				return `service-${serviceMatch[1]}`;
@@ -74,6 +77,12 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 				icon: <ApiOutlined />,
 				onClick: () => navigate({ to: `/service/${service.port}` }),
 			})) || []),
+			{
+				key: "sql",
+				label: "SQL",
+				icon: <ApiOutlined />,
+				onClick: () => navigate({ to: "/sql" }),
+			},
 		];
 
 		// Build breadcrumbs from router matches
@@ -198,6 +207,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 						}
 						items.push({ title: `TCP Connection #${connId}` });
 					}
+				}
+				// Handle SQL route
+				else if (match.pathname === "/sql" && breadcrumb) {
+					items.push({ title: breadcrumb });
 				}
 			});
 

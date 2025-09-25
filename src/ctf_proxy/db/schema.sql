@@ -153,17 +153,23 @@ CREATE TABLE IF NOT EXISTS http_header_time_stats (
 
 CREATE UNIQUE INDEX IF NOT EXISTS http_header_time_stats_unique ON http_header_time_stats(port, name, value, time);
 
-CREATE TABLE IF NOT EXISTS http_request_link (
+CREATE TABLE IF NOT EXISTS session (
     id INTEGER PRIMARY KEY,
-    from_request_id INTEGER NOT NULL,
-    to_request_id INTEGER NOT NULL,
-    FOREIGN KEY (from_request_id) REFERENCES http_request (id),
-    FOREIGN KEY (to_request_id) REFERENCES http_request (id)
+    port INTEGER NOT NULL,
+    key TEXT NOT NULL
+) STRICT;
+CREATE UNIQUE INDEX IF NOT EXISTS session_unique ON session(port, key);
+
+CREATE TABLE IF NOT EXISTS session_link (
+    id INTEGER PRIMARY KEY,
+    session_id INTEGER NOT NULL,
+    http_request_id INTEGER,
+    FOREIGN KEY (session_id) REFERENCES session (id),
+    FOREIGN KEY (http_request_id) REFERENCES http_request (id)
 ) STRICT;
 
-CREATE INDEX IF NOT EXISTS http_request_link_from_request_id ON http_request_link(from_request_id);
-CREATE INDEX IF NOT EXISTS http_request_link_to_request_id ON http_request_link(to_request_id);
-CREATE UNIQUE INDEX IF NOT EXISTS http_request_link_unique ON http_request_link(from_request_id, to_request_id);
+CREATE INDEX IF NOT EXISTS session_link_session_id ON session_link(session_id);
+CREATE INDEX IF NOT EXISTS session_link_http_request_id ON session_link(http_request_id);
 
 CREATE TABLE IF NOT EXISTS tcp_connection (
     id INTEGER PRIMARY KEY,

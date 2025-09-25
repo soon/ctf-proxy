@@ -123,7 +123,7 @@ class SessionsStorage:
         start_time: Timestamp,
         request_headers: Headers,
         response_headers: Headers,
-    ) -> None:
+    ) -> list[str]:
         in_session = self.get_in_session(request_headers, port)
         out_session = self.get_out_session(response_headers, port)
 
@@ -134,6 +134,8 @@ class SessionsStorage:
             self.request_sessions[(port, in_session)].add_request(start_time, request_id)
         if out_session:
             self.response_sessions[(port, out_session)].add_request(start_time, request_id)
+
+        return [s for s in (in_session, out_session) if s is not None]
 
     def get_links(self, port: Port, request_id: RequestID) -> list[Link]:
         links: list[Link] = []

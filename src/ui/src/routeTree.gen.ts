@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SqlRouteImport } from './routes/sql'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ServicePortIndexRouteImport } from './routes/service/$port/index'
 import { Route as ServicePortTcpStatsRouteImport } from './routes/service/$port/tcp-stats'
@@ -18,6 +19,11 @@ import { Route as ServicePortHeadersRouteImport } from './routes/service/$port/h
 import { Route as ServicePortTcpConnectionIdRouteImport } from './routes/service/$port/tcp-connection/$id'
 import { Route as ServicePortRequestIdRouteImport } from './routes/service/$port/request/$id'
 
+const SqlRoute = SqlRouteImport.update({
+  id: '/sql',
+  path: '/sql',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -62,6 +68,7 @@ const ServicePortRequestIdRoute = ServicePortRequestIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/sql': typeof SqlRoute
   '/service/$port/headers': typeof ServicePortHeadersRoute
   '/service/$port/paths': typeof ServicePortPathsRoute
   '/service/$port/queries': typeof ServicePortQueriesRoute
@@ -72,6 +79,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/sql': typeof SqlRoute
   '/service/$port/headers': typeof ServicePortHeadersRoute
   '/service/$port/paths': typeof ServicePortPathsRoute
   '/service/$port/queries': typeof ServicePortQueriesRoute
@@ -83,6 +91,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/sql': typeof SqlRoute
   '/service/$port/headers': typeof ServicePortHeadersRoute
   '/service/$port/paths': typeof ServicePortPathsRoute
   '/service/$port/queries': typeof ServicePortQueriesRoute
@@ -95,6 +104,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/sql'
     | '/service/$port/headers'
     | '/service/$port/paths'
     | '/service/$port/queries'
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/sql'
     | '/service/$port/headers'
     | '/service/$port/paths'
     | '/service/$port/queries'
@@ -115,6 +126,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/sql'
     | '/service/$port/headers'
     | '/service/$port/paths'
     | '/service/$port/queries'
@@ -126,6 +138,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SqlRoute: typeof SqlRoute
   ServicePortHeadersRoute: typeof ServicePortHeadersRoute
   ServicePortPathsRoute: typeof ServicePortPathsRoute
   ServicePortQueriesRoute: typeof ServicePortQueriesRoute
@@ -137,6 +150,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sql': {
+      id: '/sql'
+      path: '/sql'
+      fullPath: '/sql'
+      preLoaderRoute: typeof SqlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -198,6 +218,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SqlRoute: SqlRoute,
   ServicePortHeadersRoute: ServicePortHeadersRoute,
   ServicePortPathsRoute: ServicePortPathsRoute,
   ServicePortQueriesRoute: ServicePortQueriesRoute,

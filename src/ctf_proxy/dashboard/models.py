@@ -83,7 +83,7 @@ class HeaderItem(BaseModel):
 class FlagItem(BaseModel):
     id: int
     flag: str
-    reason: str | None
+    location: str | None
 
 
 class LinkedRequestItem(BaseModel):
@@ -92,6 +92,7 @@ class LinkedRequestItem(BaseModel):
     path: str
     time: str
     direction: str  # "incoming" or "outgoing"
+    session_key: str | None = None
 
 
 class RequestDetail(BaseModel):

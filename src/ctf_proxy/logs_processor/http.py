@@ -11,11 +11,11 @@ from ctf_proxy.db.models import (
     FlagRow,
     HttpHeaderRow,
     HttpPathStatsRow,
-    HttpRequestLinkRow,
     HttpResponseCodeStatsRow,
     ProxyStatsDB,
     RowStatus,
     ServiceStatsRow,
+    SessionLinkRow,
 )
 from ctf_proxy.db.stats import (
     HttpHeaderTimeStatsRow,
@@ -345,19 +345,20 @@ class HttpTapProcessor:
                         count=1,
                     ),
                 )
-            self.sessions.add_request(
+            sessions = self.sessions.add_request(
                 port=port,
                 request_id=request_id,
                 start_time=start_time_ts,
                 request_headers=request_headers,
                 response_headers=response_headers,
             )
-            for link in self.sessions.get_links(port, request_id):
-                self.db.http_request_links.insert(
+            for session in sessions:
+                self.db.session_links.insert(
                     tx,
-                    HttpRequestLinkRow.Insert(
-                        from_request_id=link.from_request_id,
-                        to_request_id=link.to_request_id,
+                    SessionLinkRow.Insert(
+                        port=port,
+                        session_key=session,
+                        http_request_id=request_id,
                     ),
                 )
 

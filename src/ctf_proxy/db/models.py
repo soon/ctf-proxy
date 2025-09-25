@@ -3,6 +3,7 @@
 import logging
 import os
 import sqlite3
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -163,11 +164,11 @@ class HttpPathStatsRow:
         count: int = 0
 
 
-class HttpRequestLinkRow:
-    @dataclass
-    class Insert:
-        from_request_id: int
-        to_request_id: int
+@dataclass
+class SessionRow:
+    id: int
+    port: int
+    key: str
 
 
 @dataclass
@@ -564,36 +565,101 @@ WHERE port = ? AND path = ?;
         return RowStatus.UPDATED
 
 
-class HttpRequestLinkTable(BaseTable):
-    def insert(self, tx: sqlite3.Cursor, row: HttpRequestLinkRow.Insert) -> None:
+@dataclass
+class SessionLinkRow:
+    id: int
+    session_id: int
+    http_request_id: int
+
+    @dataclass
+    class Insert:
+        session_key: str
+        port: int
+        http_request_id: int
+
+
+class SessionTable(BaseTable):
+    def get_or_create(self, tx: sqlite3.Cursor, port: int, key: str) -> int:
+        tx.execute(
+            "SELECT id FROM session WHERE port = ? AND key = ?",
+            (port, key),
+        )
+        result = tx.fetchone()
+        if result:
+            return result[0]
+
+        tx.execute(
+            "INSERT INTO session (port, key) VALUES (?, ?)",
+            (port, key),
+        )
+        return tx.lastrowid
+
+    def get_by_key(self, port: int, key: str) -> SessionRow | None:
+        with self.get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM session WHERE port = ? AND key = ?",
+                (port, key),
+            )
+            row = cursor.fetchone()
+            if row:
+                return SessionRow(**dict(row))
+            return None
+
+
+class SessionLinkTable(BaseTable):
+    def insert(self, tx: sqlite3.Cursor, row: SessionLinkRow.Insert) -> None:
+        session_table = SessionTable(self.db_file)
+        session_id = session_table.get_or_create(tx, row.port, row.session_key)
+
         tx.execute(
             """
-            INSERT OR IGNORE
-            INTO http_request_link (from_request_id, to_request_id)
+            INSERT OR IGNORE INTO session_link (session_id, http_request_id)
             VALUES (?, ?)
             """,
-            (row.from_request_id, row.to_request_id),
+            (session_id, row.http_request_id),
         )
 
-    def get_outgoing_links(self, request_id: int) -> list[int]:
-        """Get request IDs that this request links to (next requests in chain)"""
+    def get_requests_by_session(self, port: int, session_key: str) -> list[int]:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT to_request_id FROM http_request_link WHERE from_request_id = ?",
-                (request_id,),
+                """
+                SELECT sl.http_request_id
+                FROM session_link sl
+                JOIN session s ON s.id = sl.session_id
+                WHERE s.port = ? AND s.key = ?
+                ORDER BY sl.http_request_id
+                """,
+                (port, session_key),
             )
             return [row[0] for row in cursor.fetchall()]
 
-    def get_incoming_links(self, request_id: int) -> list[int]:
-        """Get request IDs that link to this request (previous requests in chain)"""
+    def get_session_for_request(self, request_id: int) -> tuple[int, str] | None:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT from_request_id FROM http_request_link WHERE to_request_id = ?",
+                """
+                SELECT s.port, s.key
+                FROM session s
+                JOIN session_link sl ON sl.session_id = s.id
+                WHERE sl.http_request_id = ?
+                """,
                 (request_id,),
             )
-            return [row[0] for row in cursor.fetchall()]
+            result = cursor.fetchone()
+            if result:
+                return result
+            return None
+
+    def get_related_requests(self, request_id: int) -> list[int]:
+        session_info = self.get_session_for_request(request_id)
+        if not session_info:
+            return []
+        port, session_key = session_info
+        requests = self.get_requests_by_session(port, session_key)
+        return [r for r in requests if r != request_id]
 
 
 class TcpConnectionTable(BaseTable):
@@ -716,7 +782,8 @@ class ProxyStatsDB:
         self.http_path_time_stats = HttpPathTimeStatsTable()
         self.http_query_param_time_stats = HttpQueryParamTimeStatsTable()
         self.http_header_time_stats = HttpHeaderTimeStatsTable()
-        self.http_request_links = HttpRequestLinkTable(db_file)
+        self.sessions = SessionTable(db_file)
+        self.session_links = SessionLinkTable(db_file)
         self.tcp_connections = TcpConnectionTable(db_file)
         self.tcp_events = TcpEventTable(db_file)
         self.tcp_connection_stats = TcpConnectionStatsTable(db_file)
@@ -754,3 +821,76 @@ class ProxyStatsDB:
         return {
             "total_requests": total_requests,
         }
+
+    def execute_sql(
+        self, query: str, default_limit: int = 1000, timeout: float = 10.0
+    ) -> tuple[list[dict], list[str]]:
+        """Execute a SQL query and return results as list of dicts with column names.
+
+        Args:
+            query: The SQL query to execute (must be a SELECT query)
+            default_limit: Default limit to apply if query doesn't have one
+            timeout: Query execution timeout in seconds (default: 10.0)
+
+        Returns:
+            Tuple of (results list, column names list)
+
+        Raises:
+            ValueError: If query is not a SELECT statement
+            sqlite3.Error: If query execution fails
+            TimeoutError: If query execution exceeds timeout
+        """
+        query = query.strip()
+        query_upper = query.upper()
+
+        if not query_upper.startswith("SELECT"):
+            raise ValueError("Only SELECT queries are allowed")
+
+        if default_limit and "LIMIT" not in query_upper:
+            query = f"{query} LIMIT {default_limit}"
+
+        results = []
+        columns = []
+        exception = None
+        conn = None
+
+        def execute_query():
+            nonlocal results, columns, exception, conn
+            try:
+                conn = sqlite3.connect(self.db_file)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute(query)
+                rows = cursor.fetchall()
+
+                if rows:
+                    columns = list(rows[0].keys())
+                    results = [dict(row) for row in rows]
+                else:
+                    columns = []
+                    results = []
+            except Exception as e:
+                exception = e
+            finally:
+                if conn:
+                    conn.close()
+
+        thread = threading.Thread(target=execute_query)
+        thread.daemon = True
+        thread.start()
+        thread.join(timeout=timeout)
+
+        if thread.is_alive():
+            # Query is still running after timeout
+            # Interrupt the connection to stop the query
+            if conn:
+                try:
+                    conn.interrupt()
+                except Exception:
+                    pass
+            raise TimeoutError(f"Query execution exceeded {timeout} seconds timeout")
+
+        if exception:
+            raise exception
+
+        return results, columns

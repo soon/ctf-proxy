@@ -22,3 +22,5 @@ tcp_*.json
 config.yml
 
 *.local.json
+
+*.csv

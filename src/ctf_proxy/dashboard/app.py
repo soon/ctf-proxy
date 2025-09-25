@@ -1,9 +1,13 @@
+import csv
+import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime
+from io import StringIO
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from ctf_proxy.config import Config
 from ctf_proxy.dashboard.models import (
@@ -35,6 +39,7 @@ from ctf_proxy.dashboard.models import (
     ServiceStats as ServiceStatsModel,
 )
 from ctf_proxy.db import ProxyStatsDB
+from ctf_proxy.db.utils import convert_timestamp_to_datetime
 from ctf_proxy.ui.components.header_stats import HeaderStats
 from ctf_proxy.ui.components.path_stats import PathStats
 from ctf_proxy.ui.components.query_param_stats import QueryParamStats
@@ -98,6 +103,95 @@ async def health_check():
         "backend": "ctf-proxy-dashboard",
         "version": "1.0.0",
     }
+
+
+@app.post("/api/sql")
+async def execute_sql(request: dict):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    query = request.get("query", "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Query is required")
+
+    timeout = request.get("timeout", 10.0)
+    if timeout:
+        try:
+            timeout = float(timeout)
+            if timeout <= 0 or timeout > 60:
+                raise ValueError("Timeout must be between 0 and 60 seconds")
+        except (TypeError, ValueError):
+            timeout = 10.0
+
+    try:
+        rows, columns = db.execute_sql(query, timeout=timeout)
+        return {"rows": rows, "count": len(rows)}
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    except TimeoutError as e:
+        raise HTTPException(status_code=408, detail=str(e)) from e
+    except sqlite3.Error as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.get("/api/sql/schema")
+async def get_sql_schema():
+    schema_path = Path(__file__).parent.parent / "db" / "schema.sql"
+
+    try:
+        with open(schema_path) as f:
+            schema_content = f.read()
+        return {"schema": schema_content}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail="Schema file not found") from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading schema: {str(e)}") from e
+
+
+@app.post("/api/sql/export")
+async def export_sql_csv(request: dict):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    query = request.get("query", "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Query is required")
+
+    timeout = request.get("timeout", 10.0)
+    if timeout:
+        try:
+            timeout = float(timeout)
+            if timeout <= 0 or timeout > 60:
+                raise ValueError("Timeout must be between 0 and 60 seconds")
+        except (TypeError, ValueError):
+            timeout = 10.0
+
+    try:
+        rows, columns = db.execute_sql(query, default_limit=10000, timeout=timeout)
+
+        if not rows:
+            raise HTTPException(status_code=404, detail="No data to export")
+
+        output = StringIO()
+        writer = csv.DictWriter(output, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(rows)
+
+        output.seek(0)
+
+        return StreamingResponse(
+            iter([output.read()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=query_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    except TimeoutError as e:
+        raise HTTPException(status_code=408, detail=str(e)) from e
+    except sqlite3.Error as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @app.get("/api/services", response_model=ServiceListResponse)
@@ -253,8 +347,16 @@ async def get_service_requests(
                 req.user_agent,
                 (SELECT COUNT(*) FROM flag WHERE flag.http_request_id = req.id) as req_flags_count,
                 (SELECT COUNT(*) FROM flag WHERE flag.http_response_id = resp.id) as resp_flags_count,
-                (SELECT COUNT(*) FROM http_request_link WHERE to_request_id = req.id) as incoming_links,
-                (SELECT COUNT(*) FROM http_request_link WHERE from_request_id = req.id) as outgoing_links
+                (SELECT COUNT(DISTINCT sl2.http_request_id)
+                 FROM session_link sl1
+                 JOIN session_link sl2 ON sl1.session_id = sl2.session_id
+                 WHERE sl1.http_request_id = req.id
+                   AND sl2.http_request_id < req.id) as incoming_links,
+                (SELECT COUNT(DISTINCT sl2.http_request_id)
+                 FROM session_link sl1
+                 JOIN session_link sl2 ON sl1.session_id = sl2.session_id
+                 WHERE sl1.http_request_id = req.id
+                   AND sl2.http_request_id > req.id) as outgoing_links
             {base_query}
             ORDER BY req.start_time DESC
             LIMIT ? OFFSET ?
@@ -279,10 +381,8 @@ async def get_service_requests(
                 outgoing_links,
             ) = row
 
-            # Convert nanosecond timestamp to seconds
-            timestamp = (
-                datetime.fromtimestamp(start_time / 1_000_000_000) if start_time else datetime.now()
-            )
+            # Convert timestamp
+            timestamp = convert_timestamp_to_datetime(start_time) if start_time else datetime.now()
 
             requests.append(
                 RequestListItem(
@@ -392,34 +492,36 @@ async def get_request_detail(request_id: int) -> RequestDetailResponse:
             (request_id,),
         )
         request_flags = [
-            FlagItem(id=id, flag=value, reason=location)
+            FlagItem(id=id, flag=value, location=location)
             for id, value, location in cursor.fetchall()
         ]
 
         # Get linked requests
         linked_requests = []
 
-        # Incoming links
+        # Get all requests in the same session with session key
         cursor.execute(
             """
-            SELECT from_request_id
-            FROM http_request_link
-            WHERE to_request_id = ?
+            SELECT DISTINCT sl2.http_request_id,
+                   CASE
+                     WHEN sl2.http_request_id < ? THEN 'incoming'
+                     WHEN sl2.http_request_id > ? THEN 'outgoing'
+                   END as direction,
+                   s.key as session_key
+            FROM session_link sl1
+            JOIN session_link sl2 ON sl1.session_id = sl2.session_id
+            JOIN session s ON s.id = sl1.session_id
+            WHERE sl1.http_request_id = ?
+              AND sl2.http_request_id != ?
+            ORDER BY sl2.http_request_id
             """,
-            (request_id,),
+            (request_id, request_id, request_id, request_id),
         )
-        incoming_ids = [row[0] for row in cursor.fetchall()]
 
-        # Outgoing links
-        cursor.execute(
-            """
-            SELECT to_request_id
-            FROM http_request_link
-            WHERE from_request_id = ?
-            """,
-            (request_id,),
-        )
-        outgoing_ids = [row[0] for row in cursor.fetchall()]
+        linked_info = cursor.fetchall()
+        incoming_ids = [row[0] for row in linked_info if row[1] == "incoming"]
+        outgoing_ids = [row[0] for row in linked_info if row[1] == "outgoing"]
+        session_key = linked_info[0][2] if linked_info else None
 
         # Get info for all linked requests
         all_linked_ids = incoming_ids + outgoing_ids
@@ -443,7 +545,7 @@ async def get_request_detail(request_id: int) -> RequestDetailResponse:
 
                 # Convert timestamp
                 link_timestamp = (
-                    datetime.fromtimestamp(link_start_time / 1_000_000_000)
+                    convert_timestamp_to_datetime(link_start_time)
                     if link_start_time
                     else datetime.now()
                 )
@@ -456,13 +558,12 @@ async def get_request_detail(request_id: int) -> RequestDetailResponse:
                         path=link_path_part,
                         time=link_timestamp.strftime("%H:%M:%S"),
                         direction=direction,
+                        session_key=session_key,
                     )
                 )
 
-        # Convert nanosecond timestamp to seconds
-        timestamp = (
-            datetime.fromtimestamp(start_time / 1_000_000_000) if start_time else datetime.now()
-        )
+        # Convert timestamp
+        timestamp = convert_timestamp_to_datetime(start_time) if start_time else datetime.now()
 
         request_detail = RequestDetail(
             id=request_id,
@@ -506,7 +607,7 @@ async def get_request_detail(request_id: int) -> RequestDetailResponse:
                 (response_id,),
             )
             response_flags = [
-                FlagItem(id=id, flag=value, reason=location)
+                FlagItem(id=id, flag=value, location=location)
                 for id, value, location in cursor.fetchall()
             ]
 
