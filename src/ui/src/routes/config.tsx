@@ -27,6 +27,13 @@ import {
 } from "@ant-design/icons";
 import Editor from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import {
+	getConfigApiConfigGetOptions,
+	saveConfigApiConfigPostMutation,
+	validateConfigApiConfigValidatePostMutation,
+} from "@/client/@tanstack/react-query.gen";
+import { getConfigRevisionApiConfigRevisionFilenameGet } from "@/client/sdk.gen";
 
 const { Text } = Typography;
 
@@ -40,53 +47,35 @@ interface ConfigRevision {
 	size: number;
 }
 
-interface ConfigResponse {
-	content: string;
-	revisions: ConfigRevision[];
-}
-
-interface ValidationResult {
-	valid: boolean;
-	errors: string[];
-}
-
 function ConfigEditor() {
 	const { notification, modal } = App.useApp();
 	const [configContent, setConfigContent] = useState<string>("");
 	const [originalContent, setOriginalContent] = useState<string>("");
 	const [revisions, setRevisions] = useState<ConfigRevision[]>([]);
 	const [isModified, setIsModified] = useState(false);
-	const [isSaving, setIsSaving] = useState(false);
-	const [isLoading, setIsLoading] = useState(true);
 	const [isValidating, setIsValidating] = useState(false);
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const [selectedRevision, setSelectedRevision] = useState<string | null>(null);
 	const [revisionContent, setRevisionContent] = useState<string>("");
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 
-	const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8082";
-
-	const fetchConfig = async () => {
-		setIsLoading(true);
-		try {
-			const response = await fetch(`${apiUrl}/api/config`);
-			if (!response.ok) throw new Error("Failed to fetch config");
-			const data: ConfigResponse = await response.json();
-			setConfigContent(data.content);
-			setOriginalContent(data.content);
-			setRevisions(data.revisions || []);
-			setIsModified(false);
-		} catch (error) {
-			message.error("Failed to load configuration");
-			console.error(error);
-		} finally {
-			setIsLoading(false);
-		}
-	};
+	const {
+		data: configData,
+		isLoading,
+		refetch,
+	} = useQuery({
+		...getConfigApiConfigGetOptions(),
+		refetchInterval: false,
+	});
 
 	useEffect(() => {
-		fetchConfig();
-	}, []);
+		if (configData) {
+			setConfigContent(configData.content);
+			setOriginalContent(configData.content);
+			setRevisions(configData.revisions || []);
+			setIsModified(false);
+		}
+	}, [configData]);
 
 	const handleEditorChange = (value: string | undefined) => {
 		if (value !== undefined) {
@@ -95,15 +84,9 @@ function ConfigEditor() {
 		}
 	};
 
-	const handleValidate = async () => {
-		setIsValidating(true);
-		try {
-			const response = await fetch(`${apiUrl}/api/config/validate`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ content: configContent }),
-			});
-			const result: ValidationResult = await response.json();
+	const validateMutation = useMutation({
+		...validateConfigApiConfigValidatePostMutation(),
+		onSuccess: (result) => {
 			if (result.valid) {
 				notification.success({
 					message: "Configuration Valid",
@@ -122,25 +105,61 @@ function ConfigEditor() {
 					duration: 0,
 				});
 			}
-		} catch (error) {
+		},
+		onError: () => {
 			notification.error({
 				message: "Validation Failed",
 				description: "Failed to validate configuration",
 			});
-		} finally {
-			setIsValidating(false);
-		}
+		},
+	});
+
+	const saveValidateMutation = useMutation({
+		...validateConfigApiConfigValidatePostMutation(),
+		onError: () => {
+			notification.error({
+				message: "Validation Failed",
+				description: "Failed to validate configuration",
+			});
+		},
+	});
+
+	const handleValidate = () => {
+		validateMutation.mutate({ body: { content: configContent } });
 	};
+
+	const saveMutation = useMutation({
+		...saveConfigApiConfigPostMutation(),
+		onSuccess: (result) => {
+			notification.success({
+				message: "Configuration Saved",
+				description: result.message || "Configuration saved successfully",
+			});
+			setOriginalContent(configContent);
+			setIsModified(false);
+			refetch();
+		},
+		onError: (error: any) => {
+			if (error?.validation_errors) {
+				notification.error({
+					message: "Validation Failed",
+					description: error.validation_errors.join(", "),
+				});
+			} else {
+				notification.error({
+					message: "Save Failed",
+					description: error?.detail || "Failed to save configuration",
+				});
+			}
+		},
+	});
 
 	const handleSave = async () => {
 		const hide = message.loading("Validating configuration...", 0);
 		try {
-			const validateResponse = await fetch(`${apiUrl}/api/config/validate`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ content: configContent }),
+			const validationResult = await saveValidateMutation.mutateAsync({
+				body: { content: configContent },
 			});
-			const validationResult = await validateResponse.json();
 			hide();
 
 			if (!validationResult.valid) {
@@ -157,64 +176,16 @@ function ConfigEditor() {
 							<p>Do you want to save anyway?</p>
 						</div>
 					),
-					onOk: () => saveConfig(),
+					onOk: () => saveMutation.mutate({ body: { content: configContent } }),
 					okText: "Save Anyway",
 					okType: "danger",
 				});
 				return;
 			}
-			await saveConfig();
+			saveMutation.mutate({ body: { content: configContent } });
 		} catch (error) {
 			hide();
 			message.error("Failed to validate configuration");
-		}
-	};
-
-	const saveConfig = async () => {
-		setIsSaving(true);
-		const hide = message.loading("Saving configuration...", 0);
-		try {
-			const response = await fetch(`${apiUrl}/api/config`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ content: configContent }),
-			});
-			hide();
-
-			if (!response.ok) {
-				const error = await response.json();
-				if (error.detail?.validation_errors) {
-					notification.error({
-						message: "Validation Failed",
-						description: error.detail.validation_errors.join(", "),
-					});
-				} else {
-					notification.error({
-						message: "Save Failed",
-						description: error.detail || "Failed to save configuration",
-					});
-				}
-				setIsSaving(false);
-				return;
-			}
-
-			const result = await response.json();
-			notification.success({
-				message: "Configuration Saved",
-				description: result.message || "Configuration saved successfully",
-			});
-			setOriginalContent(configContent);
-			setIsModified(false);
-			await fetchConfig();
-		} catch (error) {
-			hide();
-			notification.error({
-				message: "Save Failed",
-				description: "Failed to save configuration",
-			});
-			console.error(error);
-		} finally {
-			setIsSaving(false);
 		}
 	};
 
@@ -229,13 +200,13 @@ function ConfigEditor() {
 		});
 	};
 
-	const fetchRevisionContent = async (filename: string) => {
+	const handleFetchRevision = async (filename: string) => {
+		setSelectedRevision(filename);
 		try {
-			const response = await fetch(`${apiUrl}/api/config/revision/${filename}`);
-			if (!response.ok) throw new Error("Failed to fetch revision");
-			const data = await response.json();
+			const { data } = await getConfigRevisionApiConfigRevisionFilenameGet({
+				path: { filename },
+			});
 			setRevisionContent(data.content);
-			setSelectedRevision(filename);
 		} catch (error) {
 			message.error("Failed to load revision");
 		}
@@ -312,7 +283,7 @@ function ConfigEditor() {
 						<Button
 							icon={<CheckCircleOutlined />}
 							onClick={handleValidate}
-							loading={isValidating}
+							loading={validateMutation.isPending}
 						>
 							Validate
 						</Button>
@@ -333,7 +304,7 @@ function ConfigEditor() {
 							type="primary"
 							icon={<SaveOutlined />}
 							onClick={handleSave}
-							loading={isSaving}
+							loading={saveMutation.isPending}
 							disabled={!isModified}
 						>
 							Save
@@ -383,7 +354,7 @@ function ConfigEditor() {
 									<Button
 										key="view"
 										size="small"
-										onClick={() => fetchRevisionContent(revision.filename)}
+										onClick={() => handleFetchRevision(revision.filename)}
 									>
 										View
 									</Button>,

@@ -11,6 +11,8 @@ import { client } from "../client.gen";
 import {
 	executeSqlApiSqlPost,
 	exportSqlCsvApiSqlExportPost,
+	getConfigApiConfigGet,
+	getConfigRevisionApiConfigRevisionFilenameGet,
 	getRequestDetailApiRequestsRequestIdGet,
 	getRequestRawApiRequestsRequestIdRawGet,
 	getServiceByPortApiServicesPortGet,
@@ -25,12 +27,16 @@ import {
 	getTcpConnectionStatsApiServicesPortTcpConnectionStatsGet,
 	healthCheckApiHealthGet,
 	type Options,
+	saveConfigApiConfigPost,
+	validateConfigApiConfigValidatePost,
 } from "../sdk.gen";
 import type {
 	ExecuteSqlApiSqlPostData,
 	ExecuteSqlApiSqlPostError,
 	ExportSqlCsvApiSqlExportPostData,
 	ExportSqlCsvApiSqlExportPostError,
+	GetConfigApiConfigGetData,
+	GetConfigRevisionApiConfigRevisionFilenameGetData,
 	GetRequestDetailApiRequestsRequestIdGetData,
 	GetRequestRawApiRequestsRequestIdRawGetData,
 	GetServiceByPortApiServicesPortGetData,
@@ -48,6 +54,12 @@ import type {
 	GetTcpConnectionsApiServicesPortTcpConnectionsGetResponse,
 	GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetData,
 	HealthCheckApiHealthGetData,
+	SaveConfigApiConfigPostData,
+	SaveConfigApiConfigPostError,
+	SaveConfigApiConfigPostResponse,
+	ValidateConfigApiConfigValidatePostData,
+	ValidateConfigApiConfigValidatePostError,
+	ValidateConfigApiConfigValidatePostResponse,
 } from "../types.gen";
 
 export type QueryKey<TOptions extends Options> = [
@@ -626,3 +638,109 @@ export const getTcpConnectionStatsApiServicesPortTcpConnectionStatsGetOptions =
 				),
 		});
 	};
+
+export const getConfigApiConfigGetQueryKey = (
+	options?: Options<GetConfigApiConfigGetData>,
+) => createQueryKey("getConfigApiConfigGet", options);
+
+/**
+ * Get Config
+ * Get current config content and list of revisions.
+ */
+export const getConfigApiConfigGetOptions = (
+	options?: Options<GetConfigApiConfigGetData>,
+) => {
+	return queryOptions({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getConfigApiConfigGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getConfigApiConfigGetQueryKey(options),
+	});
+};
+
+/**
+ * Save Config
+ * Save config after validation and create a backup.
+ */
+export const saveConfigApiConfigPostMutation = (
+	options?: Partial<Options<SaveConfigApiConfigPostData>>,
+): UseMutationOptions<
+	SaveConfigApiConfigPostResponse,
+	SaveConfigApiConfigPostError,
+	Options<SaveConfigApiConfigPostData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		SaveConfigApiConfigPostResponse,
+		SaveConfigApiConfigPostError,
+		Options<SaveConfigApiConfigPostData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await saveConfigApiConfigPost({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getConfigRevisionApiConfigRevisionFilenameGetQueryKey = (
+	options: Options<GetConfigRevisionApiConfigRevisionFilenameGetData>,
+) => createQueryKey("getConfigRevisionApiConfigRevisionFilenameGet", options);
+
+/**
+ * Get Config Revision
+ * Get content of a specific config revision.
+ */
+export const getConfigRevisionApiConfigRevisionFilenameGetOptions = (
+	options: Options<GetConfigRevisionApiConfigRevisionFilenameGetData>,
+) => {
+	return queryOptions({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getConfigRevisionApiConfigRevisionFilenameGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getConfigRevisionApiConfigRevisionFilenameGetQueryKey(options),
+	});
+};
+
+/**
+ * Validate Config
+ * Validate config without saving.
+ */
+export const validateConfigApiConfigValidatePostMutation = (
+	options?: Partial<Options<ValidateConfigApiConfigValidatePostData>>,
+): UseMutationOptions<
+	ValidateConfigApiConfigValidatePostResponse,
+	ValidateConfigApiConfigValidatePostError,
+	Options<ValidateConfigApiConfigValidatePostData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ValidateConfigApiConfigValidatePostResponse,
+		ValidateConfigApiConfigValidatePostError,
+		Options<ValidateConfigApiConfigValidatePostData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await validateConfigApiConfigValidatePost({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};

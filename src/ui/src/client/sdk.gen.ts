@@ -9,6 +9,11 @@ import type {
 	ExportSqlCsvApiSqlExportPostData,
 	ExportSqlCsvApiSqlExportPostErrors,
 	ExportSqlCsvApiSqlExportPostResponses,
+	GetConfigApiConfigGetData,
+	GetConfigApiConfigGetResponses,
+	GetConfigRevisionApiConfigRevisionFilenameGetData,
+	GetConfigRevisionApiConfigRevisionFilenameGetErrors,
+	GetConfigRevisionApiConfigRevisionFilenameGetResponses,
 	GetRequestDetailApiRequestsRequestIdGetData,
 	GetRequestDetailApiRequestsRequestIdGetErrors,
 	GetRequestDetailApiRequestsRequestIdGetResponses,
@@ -45,6 +50,12 @@ import type {
 	GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetResponses,
 	HealthCheckApiHealthGetData,
 	HealthCheckApiHealthGetResponses,
+	SaveConfigApiConfigPostData,
+	SaveConfigApiConfigPostErrors,
+	SaveConfigApiConfigPostResponses,
+	ValidateConfigApiConfigValidatePostData,
+	ValidateConfigApiConfigValidatePostErrors,
+	ValidateConfigApiConfigValidatePostResponses,
 } from "./types.gen";
 
 export type Options<
@@ -354,5 +365,88 @@ export const getTcpConnectionStatsApiServicesPortTcpConnectionStatsGet = <
 	>({
 		url: "/api/services/{port}/tcp-connection-stats",
 		...options,
+	});
+};
+
+/**
+ * Get Config
+ * Get current config content and list of revisions.
+ */
+export const getConfigApiConfigGet = <ThrowOnError extends boolean = false>(
+	options?: Options<GetConfigApiConfigGetData, ThrowOnError>,
+) => {
+	return (options?.client ?? client).get<
+		GetConfigApiConfigGetResponses,
+		unknown,
+		ThrowOnError
+	>({
+		url: "/api/config",
+		...options,
+	});
+};
+
+/**
+ * Save Config
+ * Save config after validation and create a backup.
+ */
+export const saveConfigApiConfigPost = <ThrowOnError extends boolean = false>(
+	options: Options<SaveConfigApiConfigPostData, ThrowOnError>,
+) => {
+	return (options.client ?? client).post<
+		SaveConfigApiConfigPostResponses,
+		SaveConfigApiConfigPostErrors,
+		ThrowOnError
+	>({
+		url: "/api/config",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+};
+
+/**
+ * Get Config Revision
+ * Get content of a specific config revision.
+ */
+export const getConfigRevisionApiConfigRevisionFilenameGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<
+		GetConfigRevisionApiConfigRevisionFilenameGetData,
+		ThrowOnError
+	>,
+) => {
+	return (options.client ?? client).get<
+		GetConfigRevisionApiConfigRevisionFilenameGetResponses,
+		GetConfigRevisionApiConfigRevisionFilenameGetErrors,
+		ThrowOnError
+	>({
+		url: "/api/config/revision/{filename}",
+		...options,
+	});
+};
+
+/**
+ * Validate Config
+ * Validate config without saving.
+ */
+export const validateConfigApiConfigValidatePost = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<ValidateConfigApiConfigValidatePostData, ThrowOnError>,
+) => {
+	return (options.client ?? client).post<
+		ValidateConfigApiConfigValidatePostResponses,
+		ValidateConfigApiConfigValidatePostErrors,
+		ThrowOnError
+	>({
+		url: "/api/config/validate",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 };
