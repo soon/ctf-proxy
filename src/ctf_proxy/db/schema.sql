@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS http_request_time_stats (
     port INTEGER NOT NULL,
     time INTEGER NOT NULL,
     count INTEGER NOT NULL DEFAULT 0,
-    blocked_count INTEGER NOT NULL DEFAULT 0,
+    blocked_count INTEGER NOT NULL DEFAULT 0
 ) STRICT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS http_request_time_stats_unique ON http_request_time_stats(port, time);
