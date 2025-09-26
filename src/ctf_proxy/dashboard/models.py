@@ -21,8 +21,7 @@ class TCPStats(BaseModel):
 class ServiceStats(BaseModel):
     total_requests: int
     blocked_requests: int
-    total_responses: int
-    blocked_responses: int
+    requests_delta: int
     error_responses: int
     success_responses: int
     redirect_responses: int

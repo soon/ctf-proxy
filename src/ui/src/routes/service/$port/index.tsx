@@ -36,7 +36,7 @@ import {
 	CodeOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
 const { Search } = Input;
@@ -77,6 +77,8 @@ function ServiceDetail() {
 	);
 	const [rawRequestData, setRawRequestData] = useState<any>(null);
 	const [loadingRawData, setLoadingRawData] = useState(false);
+	const [newRequestsAvailable, setNewRequestsAvailable] = useState(0);
+	const lastRequestCountRef = useRef<number>(0);
 
 	const {
 		data: service,
@@ -105,7 +107,6 @@ function ServiceDetail() {
 			},
 		}),
 		enabled: !isTcpService && !!service,
-		refetchInterval: 5000,
 	});
 
 	// Fetch TCP connections for TCP services
@@ -122,7 +123,6 @@ function ServiceDetail() {
 			},
 		}),
 		enabled: isTcpService && !!service,
-		refetchInterval: 5000,
 	});
 
 	const handleSearch = useCallback((value: string) => {
@@ -151,6 +151,44 @@ function ServiceDetail() {
 			setFilters({ filter_path: trimmed });
 		}
 	}, []);
+
+	// Check for new requests periodically
+	useEffect(() => {
+		if (!isTcpService && service) {
+			const checkInterval = setInterval(async () => {
+				try {
+					const apiUrl =
+						localStorage.getItem("ctf-proxy-api-host") ||
+						"http://localhost:48955";
+					const response = await fetch(
+						`${apiUrl}/api/services/${portNumber}/requests?page=1&page_size=1`,
+					);
+					if (response.ok) {
+						const data = await response.json();
+						if (
+							lastRequestCountRef.current > 0 &&
+							data.total > lastRequestCountRef.current
+						) {
+							setNewRequestsAvailable(data.total - lastRequestCountRef.current);
+						} else if (lastRequestCountRef.current === 0) {
+							lastRequestCountRef.current = data.total;
+						}
+					}
+				} catch (error) {
+					console.error("Failed to check for new requests:", error);
+				}
+			}, 5000);
+
+			return () => clearInterval(checkInterval);
+		}
+	}, [isTcpService, service, portNumber]);
+
+	// Update last request count when data changes
+	useEffect(() => {
+		if (requestsData?.total) {
+			lastRequestCountRef.current = requestsData.total;
+		}
+	}, [requestsData]);
 
 	const clearFilters = () => {
 		setFilters({});
@@ -593,6 +631,7 @@ function ServiceDetail() {
 						refetchTcpConnections();
 					} else {
 						refetchRequests();
+						setNewRequestsAvailable(0);
 					}
 				}}
 			>
@@ -689,6 +728,26 @@ function ServiceDetail() {
 					</Card>
 				</Col>
 			</Row>
+
+			{/* New requests notification */}
+			{!isTcpService && newRequestsAvailable > 0 && (
+				<div className="bg-blue-50 border border-blue-200 rounded px-4 py-2 mb-2 flex justify-between items-center">
+					<span className="text-sm">
+						<span className="font-medium">{newRequestsAvailable}</span> new
+						request{newRequestsAvailable > 1 ? "s" : ""} available
+					</span>
+					<Button
+						type="primary"
+						size="small"
+						onClick={() => {
+							refetchRequests();
+							setNewRequestsAvailable(0);
+						}}
+					>
+						Load New Requests
+					</Button>
+				</div>
+			)}
 
 			{/* Requests Table for HTTP services or TCP Connections Table for TCP services */}
 			{isTcpService ? (

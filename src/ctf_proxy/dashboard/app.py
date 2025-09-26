@@ -1,5 +1,6 @@
 import csv
 import sqlite3
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from io import StringIO
@@ -196,12 +197,13 @@ async def export_sql_csv(request: dict):
 
 def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
     """Fetch stats for all services in optimized batch queries."""
-
     with db_instance.connect() as conn:
         cursor = conn.cursor()
 
         # Build placeholders for IN clause
         placeholders = ",".join("?" * len(ports))
+
+        five_minutes_ago = int(time.time() * 1000) - (5 * 60 * 1000)
 
         # 1. Get service stats for all ports at once
         cursor.execute(
@@ -272,6 +274,17 @@ def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
         )
         tcp_stats = {row[0]: row[1:] for row in cursor.fetchall()}
 
+        # 8. Get request count delta for last 5 minutes
+        cursor.execute(
+            f"""SELECT port, COUNT(*) as recent_count
+               FROM http_request
+               WHERE port IN ({placeholders})
+                 AND start_time >= ?
+               GROUP BY port""",
+            ports + [five_minutes_ago],
+        )
+        request_deltas = dict(cursor.fetchall())
+
         # Combine all stats
         result = {}
         for port in ports:
@@ -292,8 +305,7 @@ def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
             result[port] = {
                 "total_requests": service_data[0],
                 "blocked_requests": service_data[1],
-                "total_responses": service_data[2],
-                "blocked_responses": service_data[3],
+                "requests_delta": request_deltas.get(port, 0),
                 "flags_written": service_data[4],
                 "flags_retrieved": service_data[5],
                 "flags_blocked": service_data[6],
@@ -342,8 +354,7 @@ async def get_services() -> ServiceListResponse:
         stats_model = ServiceStatsModel(
             total_requests=stats.get("total_requests", 0),
             blocked_requests=stats.get("blocked_requests", 0),
-            total_responses=stats.get("total_responses", 0),
-            blocked_responses=stats.get("blocked_responses", 0),
+            requests_delta=stats.get("requests_delta", 0),
             error_responses=stats.get("error_responses", 0),
             success_responses=stats.get("success_responses", 0),
             redirect_responses=stats.get("redirect_responses", 0),
@@ -384,11 +395,31 @@ async def get_service_by_port(port: int) -> ServiceListItem:
     stats_obj = ServiceStats(service.port, db)
     current_stats = stats_obj.get_current_stats()
 
+    five_minutes_ago = int(time.time() * 1000) - (5 * 60 * 1000)
+    with db.connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT COUNT(*) FROM http_request
+               WHERE port = ? AND start_time >= ?""",
+            (service.port, five_minutes_ago),
+        )
+        requests_delta = cursor.fetchone()[0] or 0
+
+    tcp_stats = None
+    if service.type.value == "tcp" and current_stats.get("tcp_stats"):
+        tcp_data = current_stats["tcp_stats"]
+        tcp_stats = TCPStats(
+            total_connections=tcp_data["total_connections"],
+            total_bytes_in=tcp_data["total_bytes_in"],
+            total_bytes_out=tcp_data["total_bytes_out"],
+            avg_duration_ms=tcp_data["avg_duration_ms"],
+            total_flags_found=tcp_data["total_flags_found"],
+        )
+
     stats_model = ServiceStatsModel(
         total_requests=current_stats["total_requests"],
         blocked_requests=current_stats["blocked_requests"],
-        total_responses=current_stats["total_responses"],
-        blocked_responses=current_stats["blocked_responses"],
+        requests_delta=requests_delta,
         error_responses=current_stats["error_responses"],
         success_responses=current_stats["success_responses"],
         redirect_responses=current_stats["redirect_responses"],
@@ -402,6 +433,7 @@ async def get_service_by_port(port: int) -> ServiceListItem:
         total_flags=current_stats["total_flags"],
         unique_headers=current_stats["unique_headers"],
         unique_header_values=current_stats["unique_header_values"],
+        tcp_stats=tcp_stats,
     )
 
     return ServiceListItem(

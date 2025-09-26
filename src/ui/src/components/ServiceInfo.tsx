@@ -26,6 +26,10 @@ function formatBytes(bytes: number): string {
 	return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}GB`;
 }
 
+function formatNumber(num: number): string {
+	return num.toLocaleString();
+}
+
 export function ServiceInfo({
 	service,
 	previousService,
@@ -53,17 +57,6 @@ export function ServiceInfo({
 				});
 			} else {
 				setDeltas({
-					totalRequests:
-						service.stats.total_requests - previousService.stats.total_requests,
-					totalResponses:
-						service.stats.total_responses -
-						previousService.stats.total_responses,
-					blockedRequests:
-						service.stats.blocked_requests -
-						previousService.stats.blocked_requests,
-					blockedResponses:
-						service.stats.blocked_responses -
-						previousService.stats.blocked_responses,
 					flagsWritten:
 						service.stats.flags_written - previousService.stats.flags_written,
 					flagsRetrieved:
@@ -88,8 +81,8 @@ export function ServiceInfo({
 	};
 
 	const successRate =
-		service.stats.total_responses > 0
-			? (service.stats.success_responses / service.stats.total_responses) * 100
+		service.stats.total_requests > 0
+			? (service.stats.success_responses / service.stats.total_requests) * 100
 			: 0;
 
 	const topStatuses = Object.entries(service.stats.status_counts || {})
@@ -147,7 +140,7 @@ export function ServiceInfo({
 							</div>
 							<div className="flex justify-between text-xs">
 								<span>
-									↓{service.stats.flags_written}
+									↓{formatNumber(service.stats.flags_written)}
 									<span className="text-gray-400 ml-0.5">
 										{deltas.flagsWritten
 											? formatDelta(deltas.flagsWritten)
@@ -155,7 +148,7 @@ export function ServiceInfo({
 									</span>
 								</span>
 								<span>
-									↑{service.stats.flags_retrieved}
+									↑{formatNumber(service.stats.flags_retrieved)}
 									<span className="text-gray-400 ml-0.5">
 										{deltas.flagsRetrieved
 											? formatDelta(deltas.flagsRetrieved)
@@ -167,7 +160,7 @@ export function ServiceInfo({
 										service.stats.flags_blocked > 0 ? "text-red-500" : ""
 									}
 								>
-									✖{service.stats.flags_blocked}
+									✖{formatNumber(service.stats.flags_blocked)}
 								</span>
 							</div>
 						</div>
@@ -184,7 +177,7 @@ export function ServiceInfo({
 						{isTcp && service.stats.tcp_stats ? (
 							<div className="flex justify-between text-xs">
 								<span>
-									{service.stats.tcp_stats.total_connections} conn
+									{formatNumber(service.stats.tcp_stats.total_connections)} conn
 									<span className="text-gray-400 ml-0.5">
 										{deltas.totalConnections
 											? formatDelta(deltas.totalConnections)
@@ -195,7 +188,7 @@ export function ServiceInfo({
 									{service.stats.tcp_stats.total_flags_found > 0 && (
 										<>
 											<FlagOutlined className="text-red-500" />
-											{service.stats.tcp_stats.total_flags_found}
+											{formatNumber(service.stats.tcp_stats.total_flags_found)}
 										</>
 									)}
 								</span>
@@ -204,29 +197,19 @@ export function ServiceInfo({
 							<>
 								<div className="flex justify-between text-xs">
 									<span>
-										→{service.stats.total_requests}
-										<span className="text-gray-400 ml-0.5">
-											{deltas.totalRequests
-												? formatDelta(deltas.totalRequests)
-												: ""}
-										</span>
+										{formatNumber(service.stats.total_requests)} req
+										{service.stats.requests_delta > 0 && (
+											<span className="text-gray-400 ml-0.5">
+												+{formatNumber(service.stats.requests_delta)}
+											</span>
+										)}
 									</span>
-									<span>
-										←{service.stats.total_responses}
-										<span className="text-gray-400 ml-0.5">
-											{deltas.totalResponses
-												? formatDelta(deltas.totalResponses)
-												: ""}
+									{service.stats.blocked_requests > 0 && (
+										<span className="text-red-500">
+											✖{formatNumber(service.stats.blocked_requests)}
 										</span>
-									</span>
+									)}
 								</div>
-								{(service.stats.blocked_requests > 0 ||
-									service.stats.blocked_responses > 0) && (
-									<div className="flex justify-between text-xs text-red-500 mt-0.5">
-										<span>✖→{service.stats.blocked_requests}</span>
-										<span>✖←{service.stats.blocked_responses}</span>
-									</div>
-								)}
 							</>
 						)}
 					</div>
@@ -247,7 +230,7 @@ export function ServiceInfo({
 													: "bg-gray-100 text-gray-700"
 									}`}
 								>
-									{status}:{count}
+									{status}:{formatNumber(count)}
 								</span>
 							))}
 						</div>

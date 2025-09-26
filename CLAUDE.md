@@ -251,6 +251,7 @@ You're a senior software engineer. When working follow engineering principles:
 2. **Type hints**: Use type hints for all functions and methods.
 3. **Absolute imports**: Use absolute imports instead of relative imports.
 4. **Simple naming**: Don't prefix private variables and methods with underscore.
+5. **Imports on the top**: Always add imports on the top. Only add imports within the functions if absolutely necessary.
 
 
 # How to work with the project:
