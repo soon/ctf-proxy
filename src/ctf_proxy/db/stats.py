@@ -18,17 +18,24 @@ class HttpRequestTimeStatsRow(TimeStatsRow):
 
 
 @dataclass
-class FlagTimeStatsRow(TimeStatsRow):
+class FlagTimeStatsRow:
+    id: int
+    port: int
+    time: int
     write_count: int
     read_count: int
 
     @dataclass
-    class Insert(TimeStatsInsertRow):
+    class Insert:
+        port: int
+        time: int
         write_count: int
         read_count: int
 
     @dataclass
-    class Increment(TimeStatsIncrementRow):
+    class Increment:
+        port: int
+        time: int
         write_count: int
         read_count: int
 
