@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field
 from ctf_proxy.config import Config
 from ctf_proxy.dashboard.models import (
     FlagItem,
+    FlagTimeStatsItem,
+    FlagTimeStatsResponse,
     HeaderItem,
     HeaderStatItem,
     HeaderStatsResponse,
@@ -1251,6 +1253,43 @@ def get_tcp_connection_stats(port: int, window_minutes: int = 60) -> TCPConnecti
         precision=precision,
         window_minutes=window_minutes,
     )
+
+
+@app.get("/api/flags/recent", response_model=FlagTimeStatsResponse)
+def get_recent_flag_stats() -> FlagTimeStatsResponse:
+    """Get flag statistics for the last 5 minutes."""
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+
+    five_minutes_ago = int(time.time() * 1000) - (5 * 60 * 1000)
+
+    with db.connect() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT port, time, write_count, read_count
+            FROM flag_time_stats
+            WHERE time >= ?
+            ORDER BY time DESC
+            """,
+            (five_minutes_ago,),
+        )
+
+        stats = []
+        for row in cursor.fetchall():
+            port, time_ms, write_count, read_count = row
+            stats.append(
+                FlagTimeStatsItem(
+                    port=port,
+                    time=convert_timestamp_to_datetime(time_ms),
+                    write_count=write_count,
+                    read_count=read_count,
+                    total_count=write_count + read_count,
+                )
+            )
+
+        return FlagTimeStatsResponse(stats=stats, window_minutes=5)
 
 
 # Config management models

@@ -18,9 +18,11 @@ from ctf_proxy.db.models import (
     SessionLinkRow,
 )
 from ctf_proxy.db.stats import (
+    FlagTimeStatsRow,
     HttpHeaderTimeStatsRow,
     HttpPathTimeStatsRow,
     HttpQueryParamTimeStatsRow,
+    HttpRequestTimeStatsRow,
 )
 from ctf_proxy.db.utils import convert_datetime_to_timestamp, now_timestamp
 from ctf_proxy.logs_processor.access_log import AccessLogReader
@@ -345,6 +347,28 @@ class HttpTapProcessor:
                         count=1,
                     ),
                 )
+
+            self.db.http_request_time_stats.increment(
+                tx,
+                HttpRequestTimeStatsRow.Increment(
+                    port=port,
+                    time=start_minute_ts,
+                    count=1,
+                    blocked_count=1 if is_blocked else 0,
+                ),
+            )
+
+            if flags_written or flags_retrieved:
+                self.db.flag_time_stats.increment(
+                    tx,
+                    FlagTimeStatsRow.Increment(
+                        port=port,
+                        time=start_minute_ts,
+                        write_count=len(flags_written),
+                        read_count=len(flags_retrieved),
+                    ),
+                )
+
             sessions = self.sessions.add_request(
                 port=port,
                 request_id=request_id,

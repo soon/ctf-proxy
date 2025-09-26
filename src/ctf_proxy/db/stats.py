@@ -5,6 +5,35 @@ from ctf_proxy.db.base import RowStatus, TimeStatsIncrementRow, TimeStatsInsertR
 
 
 @dataclass
+class HttpRequestTimeStatsRow(TimeStatsRow):
+    blocked_count: int
+
+    @dataclass
+    class Insert(TimeStatsInsertRow):
+        blocked_count: int
+
+    @dataclass
+    class Increment(TimeStatsIncrementRow):
+        blocked_count: int
+
+
+@dataclass
+class FlagTimeStatsRow(TimeStatsRow):
+    write_count: int
+    read_count: int
+
+    @dataclass
+    class Insert(TimeStatsInsertRow):
+        write_count: int
+        read_count: int
+
+    @dataclass
+    class Increment(TimeStatsIncrementRow):
+        write_count: int
+        read_count: int
+
+
+@dataclass
 class HttpPathTimeStatsRow(TimeStatsRow):
     method: str
     path: str
@@ -177,6 +206,90 @@ class HttpHeaderTimeStatsTable:
                     value=increments.value,
                     time=increments.time,
                     count=increments.count,
+                ),
+            )
+            return RowStatus.NEW
+
+        return RowStatus.UPDATED
+
+
+class HttpRequestTimeStatsTable:
+    def insert(self, tx: sqlite3.Cursor, row: HttpRequestTimeStatsRow.Insert) -> int:
+        tx.execute(
+            """
+            INSERT INTO http_request_time_stats (port, time, count, blocked_count)
+            VALUES (?, ?, ?, ?)
+            """,
+            (row.port, row.time, row.count, row.blocked_count),
+        )
+        return tx.lastrowid
+
+    def increment(
+        self, tx: sqlite3.Cursor, increments: HttpRequestTimeStatsRow.Increment
+    ) -> RowStatus:
+        sql = """
+          UPDATE http_request_time_stats SET
+              count = count + ?,
+              blocked_count = blocked_count + ?
+          WHERE port = ? AND time = ?;
+        """
+        params = (
+            increments.count,
+            increments.blocked_count,
+            increments.port,
+            increments.time,
+        )
+        tx.execute(sql, params)
+
+        if not tx.rowcount:
+            self.insert(
+                tx,
+                HttpRequestTimeStatsRow.Insert(
+                    port=increments.port,
+                    time=increments.time,
+                    count=increments.count,
+                    blocked_count=increments.blocked_count,
+                ),
+            )
+            return RowStatus.NEW
+
+        return RowStatus.UPDATED
+
+
+class FlagTimeStatsTable:
+    def insert(self, tx: sqlite3.Cursor, row: FlagTimeStatsRow.Insert) -> int:
+        tx.execute(
+            """
+            INSERT INTO flag_time_stats (port, time, write_count, read_count)
+            VALUES (?, ?, ?, ?)
+            """,
+            (row.port, row.time, row.write_count, row.read_count),
+        )
+        return tx.lastrowid
+
+    def increment(self, tx: sqlite3.Cursor, increments: FlagTimeStatsRow.Increment) -> RowStatus:
+        sql = """
+          UPDATE flag_time_stats SET
+              write_count = write_count + ?,
+              read_count = read_count + ?
+          WHERE port = ? AND time = ?;
+        """
+        params = (
+            increments.write_count,
+            increments.read_count,
+            increments.port,
+            increments.time,
+        )
+        tx.execute(sql, params)
+
+        if not tx.rowcount:
+            self.insert(
+                tx,
+                FlagTimeStatsRow.Insert(
+                    port=increments.port,
+                    time=increments.time,
+                    write_count=increments.write_count,
+                    read_count=increments.read_count,
                 ),
             )
             return RowStatus.NEW

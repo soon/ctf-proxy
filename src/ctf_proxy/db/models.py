@@ -10,9 +10,11 @@ from datetime import datetime
 
 from ctf_proxy.db.base import RowStatus
 from ctf_proxy.db.stats import (
+    FlagTimeStatsTable,
     HttpHeaderTimeStatsTable,
     HttpPathTimeStatsTable,
     HttpQueryParamTimeStatsTable,
+    HttpRequestTimeStatsTable,
 )
 
 logger = logging.getLogger(__name__)
@@ -790,6 +792,8 @@ class ProxyStatsDB:
         self.http_path_time_stats = HttpPathTimeStatsTable()
         self.http_query_param_time_stats = HttpQueryParamTimeStatsTable()
         self.http_header_time_stats = HttpHeaderTimeStatsTable()
+        self.http_request_time_stats = HttpRequestTimeStatsTable()
+        self.flag_time_stats = FlagTimeStatsTable()
         self.sessions = SessionTable(db_file)
         self.session_links = SessionLinkTable(db_file)
         self.tcp_connections = TcpConnectionTable(db_file)

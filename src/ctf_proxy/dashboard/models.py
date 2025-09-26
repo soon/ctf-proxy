@@ -234,3 +234,16 @@ class TCPConnectionDetail(BaseModel):
     events: list[TCPEventItem]
     total_flags: int
     is_blocked: bool
+
+
+class FlagTimeStatsItem(BaseModel):
+    port: int
+    time: datetime
+    write_count: int
+    read_count: int
+    total_count: int
+
+
+class FlagTimeStatsResponse(BaseModel):
+    stats: list[FlagTimeStatsItem]
+    window_minutes: int = 5

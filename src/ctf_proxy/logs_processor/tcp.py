@@ -10,6 +10,7 @@ from ctf_proxy.db.models import (
     ServiceStatsRow,
     TcpConnectionStatsRow,
 )
+from ctf_proxy.db.stats import FlagTimeStatsRow
 from ctf_proxy.db.utils import convert_datetime_to_timestamp
 from ctf_proxy.logs_processor.access_log import AccessLogReader
 from ctf_proxy.logs_processor.flags import find_body_flags
@@ -119,6 +120,8 @@ class TcpTapProcessor:
             else datetime.now()
         )
         start_time_ts = convert_datetime_to_timestamp(start_time)
+        start_minute = start_time.replace(second=0, microsecond=0)
+        start_minute_ts = convert_datetime_to_timestamp(start_minute)
 
         connection_id_from_log = log_entry.get("connection_id")
         bytes_in = log_entry.get("bytes_in", 0)
@@ -256,6 +259,17 @@ class TcpTapProcessor:
                     total_flags_retrieved=flags_retrieved,
                 ),
             )
+
+            if flags_written or flags_retrieved:
+                self.db.flag_time_stats.increment(
+                    tx,
+                    FlagTimeStatsRow.Increment(
+                        port=port,
+                        time=start_minute_ts,
+                        write_count=flags_written,
+                        read_count=flags_retrieved,
+                    ),
+                )
 
             # Update TCP connection stats
             service = self.config.get_service_by_port(port)
