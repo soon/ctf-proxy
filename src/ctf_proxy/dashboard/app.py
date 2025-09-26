@@ -194,39 +194,169 @@ async def export_sql_csv(request: dict):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
+    """Fetch stats for all services in optimized batch queries."""
+
+    with db_instance.connect() as conn:
+        cursor = conn.cursor()
+
+        # Build placeholders for IN clause
+        placeholders = ",".join("?" * len(ports))
+
+        # 1. Get service stats for all ports at once
+        cursor.execute(
+            f"""SELECT port, total_requests, total_blocked_requests, total_responses, total_blocked_responses,
+                      total_flags_written, total_flags_retrieved, total_flags_blocked
+               FROM service_stats WHERE port IN ({placeholders})""",
+            ports,
+        )
+        service_stats = {row[0]: row[1:] for row in cursor.fetchall()}
+
+        # 2. Get response code stats for all ports
+        cursor.execute(
+            f"""SELECT port, status_code, count
+               FROM http_response_code_stats
+               WHERE port IN ({placeholders})
+               ORDER BY port, count DESC""",
+            ports,
+        )
+        response_codes = {}
+        for port, status_code, count in cursor.fetchall():
+            if port not in response_codes:
+                response_codes[port] = {}
+            response_codes[port][status_code] = count
+
+        # 3. Skip unique paths count - too slow with large datasets
+        unique_paths = {}
+
+        # 4. Get alerts count for all ports
+        cursor.execute(
+            f"""SELECT port, COUNT(*)
+               FROM alert
+               WHERE port IN ({placeholders})
+               GROUP BY port""",
+            ports,
+        )
+        alerts_count = dict(cursor.fetchall())
+
+        # 5. Get recent alerts for all ports
+        cursor.execute(
+            f"""SELECT port, description, created
+               FROM (
+                   SELECT port, description, created,
+                          ROW_NUMBER() OVER (PARTITION BY port ORDER BY created DESC) as rn
+                   FROM alert
+                   WHERE port IN ({placeholders})
+               )
+               WHERE rn <= 5
+               ORDER BY port, created DESC""",
+            ports,
+        )
+        recent_alerts_raw = cursor.fetchall()
+        recent_alerts = {}
+        for port, description, created in recent_alerts_raw:
+            if port not in recent_alerts:
+                recent_alerts[port] = []
+            recent_alerts[port].append((description, created))
+
+        # 6. Skip header stats - too slow with large datasets
+        header_stats = {}
+
+        # 7. Get TCP stats for all ports at once
+        cursor.execute(
+            f"""SELECT port, total_connections, total_bytes_in, total_bytes_out,
+                      avg_duration_ms, total_flags_found
+               FROM tcp_stats
+               WHERE port IN ({placeholders})""",
+            ports,
+        )
+        tcp_stats = {row[0]: row[1:] for row in cursor.fetchall()}
+
+        # Combine all stats
+        result = {}
+        for port in ports:
+            service_data = service_stats.get(port, (0, 0, 0, 0, 0, 0, 0))
+            status_counts = response_codes.get(port, {})
+
+            error_responses = sum(count for status, count in status_counts.items() if status >= 400)
+            success_responses = sum(
+                count for status, count in status_counts.items() if 200 <= status < 300
+            )
+            redirect_responses = sum(
+                count for status, count in status_counts.items() if 300 <= status < 400
+            )
+
+            header_data = header_stats.get(port, (0, 0))
+            tcp_data = tcp_stats.get(port)
+
+            result[port] = {
+                "total_requests": service_data[0],
+                "blocked_requests": service_data[1],
+                "total_responses": service_data[2],
+                "blocked_responses": service_data[3],
+                "flags_written": service_data[4],
+                "flags_retrieved": service_data[5],
+                "flags_blocked": service_data[6],
+                "total_flags": service_data[4] + service_data[5],
+                "status_counts": status_counts,
+                "error_responses": error_responses,
+                "success_responses": success_responses,
+                "redirect_responses": redirect_responses,
+                "unique_paths": unique_paths.get(port, 0),
+                "alerts_count": alerts_count.get(port, 0),
+                "recent_alerts": recent_alerts.get(port, []),
+                "unique_headers": header_data[0],
+                "unique_header_values": header_data[1],
+                "tcp_stats": tcp_data,
+            }
+
+        return result
+
+
 @app.get("/api/services", response_model=ServiceListResponse)
 async def get_services() -> ServiceListResponse:
     if config is None or db is None:
         raise HTTPException(status_code=500, detail="Server not properly initialized")
 
-    services = []
+    # Get all ports from config
+    ports = [service.port for service in config.services]
 
+    # Fetch all stats in optimized batch queries
+    all_stats = get_all_services_stats_optimized(ports, db)
+
+    services = []
     for service in config.services:
-        stats_obj = ServiceStats(service.port, db)
-        current_stats = stats_obj.get_current_stats()
+        stats = all_stats.get(service.port, {})
 
         tcp_stats = None
-        if service.type.value == "tcp":
-            tcp_stats = get_tcp_stats_for_port(service.port)
+        if service.type.value == "tcp" and stats.get("tcp_stats"):
+            tcp_data = stats["tcp_stats"]
+            tcp_stats = TCPStats(
+                total_connections=tcp_data[0],
+                total_bytes_in=tcp_data[1],
+                total_bytes_out=tcp_data[2],
+                avg_duration_ms=tcp_data[3],
+                total_flags_found=tcp_data[4],
+            )
 
         stats_model = ServiceStatsModel(
-            total_requests=current_stats["total_requests"],
-            blocked_requests=current_stats["blocked_requests"],
-            total_responses=current_stats["total_responses"],
-            blocked_responses=current_stats["blocked_responses"],
-            error_responses=current_stats["error_responses"],
-            success_responses=current_stats["success_responses"],
-            redirect_responses=current_stats["redirect_responses"],
-            status_counts=current_stats["status_counts"],
-            unique_paths=current_stats["unique_paths"],
-            alerts_count=current_stats["alerts_count"],
-            recent_alerts=current_stats["recent_alerts"],
-            flags_written=current_stats["flags_written"],
-            flags_retrieved=current_stats["flags_retrieved"],
-            flags_blocked=current_stats["flags_blocked"],
-            total_flags=current_stats["total_flags"],
-            unique_headers=current_stats["unique_headers"],
-            unique_header_values=current_stats["unique_header_values"],
+            total_requests=stats.get("total_requests", 0),
+            blocked_requests=stats.get("blocked_requests", 0),
+            total_responses=stats.get("total_responses", 0),
+            blocked_responses=stats.get("blocked_responses", 0),
+            error_responses=stats.get("error_responses", 0),
+            success_responses=stats.get("success_responses", 0),
+            redirect_responses=stats.get("redirect_responses", 0),
+            status_counts=stats.get("status_counts", {}),
+            unique_paths=stats.get("unique_paths", 0),
+            alerts_count=stats.get("alerts_count", 0),
+            recent_alerts=stats.get("recent_alerts", []),
+            flags_written=stats.get("flags_written", 0),
+            flags_retrieved=stats.get("flags_retrieved", 0),
+            flags_blocked=stats.get("flags_blocked", 0),
+            total_flags=stats.get("total_flags", 0),
+            unique_headers=stats.get("unique_headers", 0),
+            unique_header_values=stats.get("unique_header_values", 0),
             tcp_stats=tcp_stats,
         )
 

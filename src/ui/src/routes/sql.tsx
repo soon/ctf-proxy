@@ -255,9 +255,9 @@ function SqlExecutor() {
 							/>
 						</Space>
 					</div>
-					{executionTime !== null && (
+					{queryTime !== null && totalTime !== null && (
 						<Text type="secondary" className="text-xs">
-							Query executed in {executionTime}ms
+							Query: {queryTime.toFixed(0)}ms | Total: {totalTime.toFixed(0)}ms
 						</Text>
 					)}
 				</Space>
