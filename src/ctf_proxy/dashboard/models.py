@@ -33,6 +33,9 @@ class ServiceStats(BaseModel):
     flags_retrieved: int
     flags_blocked: int
     total_flags: int
+    flags_written_delta: int
+    flags_retrieved_delta: int
+    blocked_requests_delta: int
     unique_headers: int
     unique_header_values: int
     tcp_stats: TCPStats | None = None

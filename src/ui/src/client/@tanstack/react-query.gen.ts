@@ -13,6 +13,7 @@ import {
 	exportSqlCsvApiSqlExportPost,
 	getConfigApiConfigGet,
 	getConfigRevisionApiConfigRevisionFilenameGet,
+	getRecentFlagStatsApiFlagsRecentGet,
 	getRequestDetailApiRequestsRequestIdGet,
 	getRequestRawApiRequestsRequestIdRawGet,
 	getServiceByPortApiServicesPortGet,
@@ -37,6 +38,7 @@ import type {
 	ExportSqlCsvApiSqlExportPostError,
 	GetConfigApiConfigGetData,
 	GetConfigRevisionApiConfigRevisionFilenameGetData,
+	GetRecentFlagStatsApiFlagsRecentGetData,
 	GetRequestDetailApiRequestsRequestIdGetData,
 	GetRequestRawApiRequestsRequestIdRawGetData,
 	GetServiceByPortApiServicesPortGetData,
@@ -638,6 +640,31 @@ export const getTcpConnectionStatsApiServicesPortTcpConnectionStatsGetOptions =
 				),
 		});
 	};
+
+export const getRecentFlagStatsApiFlagsRecentGetQueryKey = (
+	options?: Options<GetRecentFlagStatsApiFlagsRecentGetData>,
+) => createQueryKey("getRecentFlagStatsApiFlagsRecentGet", options);
+
+/**
+ * Get Recent Flag Stats
+ * Get flag statistics for the last 5 minutes.
+ */
+export const getRecentFlagStatsApiFlagsRecentGetOptions = (
+	options?: Options<GetRecentFlagStatsApiFlagsRecentGetData>,
+) => {
+	return queryOptions({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getRecentFlagStatsApiFlagsRecentGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getRecentFlagStatsApiFlagsRecentGetQueryKey(options),
+	});
+};
 
 export const getConfigApiConfigGetQueryKey = (
 	options?: Options<GetConfigApiConfigGetData>,

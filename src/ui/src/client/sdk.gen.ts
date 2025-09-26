@@ -14,6 +14,8 @@ import type {
 	GetConfigRevisionApiConfigRevisionFilenameGetData,
 	GetConfigRevisionApiConfigRevisionFilenameGetErrors,
 	GetConfigRevisionApiConfigRevisionFilenameGetResponses,
+	GetRecentFlagStatsApiFlagsRecentGetData,
+	GetRecentFlagStatsApiFlagsRecentGetResponses,
 	GetRequestDetailApiRequestsRequestIdGetData,
 	GetRequestDetailApiRequestsRequestIdGetErrors,
 	GetRequestDetailApiRequestsRequestIdGetResponses,
@@ -364,6 +366,25 @@ export const getTcpConnectionStatsApiServicesPortTcpConnectionStatsGet = <
 		ThrowOnError
 	>({
 		url: "/api/services/{port}/tcp-connection-stats",
+		...options,
+	});
+};
+
+/**
+ * Get Recent Flag Stats
+ * Get flag statistics for the last 5 minutes.
+ */
+export const getRecentFlagStatsApiFlagsRecentGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options?: Options<GetRecentFlagStatsApiFlagsRecentGetData, ThrowOnError>,
+) => {
+	return (options?.client ?? client).get<
+		GetRecentFlagStatsApiFlagsRecentGetResponses,
+		unknown,
+		ThrowOnError
+	>({
+		url: "/api/flags/recent",
 		...options,
 	});
 };

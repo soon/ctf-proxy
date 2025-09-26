@@ -142,16 +142,16 @@ export function ServiceInfo({
 								<span>
 									↓{formatNumber(service.stats.flags_written)}
 									<span className="text-gray-400 ml-0.5">
-										{deltas.flagsWritten
-											? formatDelta(deltas.flagsWritten)
+										{service.stats.flags_written_delta > 0
+											? `+${formatNumber(service.stats.flags_written_delta)}`
 											: ""}
 									</span>
 								</span>
 								<span>
 									↑{formatNumber(service.stats.flags_retrieved)}
 									<span className="text-gray-400 ml-0.5">
-										{deltas.flagsRetrieved
-											? formatDelta(deltas.flagsRetrieved)
+										{service.stats.flags_retrieved_delta > 0
+											? `+${formatNumber(service.stats.flags_retrieved_delta)}`
 											: ""}
 									</span>
 								</span>
@@ -207,6 +207,11 @@ export function ServiceInfo({
 									{service.stats.blocked_requests > 0 && (
 										<span className="text-red-500">
 											✖{formatNumber(service.stats.blocked_requests)}
+											{service.stats.blocked_requests_delta > 0 && (
+												<span className="text-red-400 ml-0.5">
+													+{formatNumber(service.stats.blocked_requests_delta)}
+												</span>
+											)}
 										</span>
 									)}
 								</div>

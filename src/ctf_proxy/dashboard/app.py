@@ -288,6 +288,34 @@ def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
         )
         request_deltas = dict(cursor.fetchall())
 
+        # 9. Get blocked request count delta for last 5 minutes
+        cursor.execute(
+            f"""SELECT port, COUNT(*) as recent_blocked_count
+               FROM http_request
+               WHERE port IN ({placeholders})
+                 AND start_time >= ?
+                 AND is_blocked = 1
+               GROUP BY port""",
+            ports + [five_minutes_ago],
+        )
+        blocked_request_deltas = dict(cursor.fetchall())
+
+        # 10. Get flag deltas for last 5 minutes
+        cursor.execute(
+            f"""SELECT port,
+                       SUM(write_count) as flags_written_delta,
+                       SUM(read_count) as flags_retrieved_delta
+               FROM flag_time_stats
+               WHERE port IN ({placeholders})
+                 AND time >= ?
+               GROUP BY port""",
+            ports + [five_minutes_ago],
+        )
+        flag_deltas = {}
+        for row in cursor.fetchall():
+            port, written, retrieved = row
+            flag_deltas[port] = (written or 0, retrieved or 0)
+
         # Combine all stats
         result = {}
         for port in ports:
@@ -304,15 +332,19 @@ def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
 
             header_data = header_stats.get(port, (0, 0))
             tcp_data = tcp_stats.get(port)
+            flag_delta_data = flag_deltas.get(port, (0, 0))
 
             result[port] = {
                 "total_requests": service_data[0],
                 "blocked_requests": service_data[1],
                 "requests_delta": request_deltas.get(port, 0),
+                "blocked_requests_delta": blocked_request_deltas.get(port, 0),
                 "flags_written": service_data[4],
                 "flags_retrieved": service_data[5],
                 "flags_blocked": service_data[6],
                 "total_flags": service_data[4] + service_data[5],
+                "flags_written_delta": flag_delta_data[0],
+                "flags_retrieved_delta": flag_delta_data[1],
                 "status_counts": status_counts,
                 "error_responses": error_responses,
                 "success_responses": success_responses,
@@ -358,6 +390,7 @@ async def get_services() -> ServiceListResponse:
             total_requests=stats.get("total_requests", 0),
             blocked_requests=stats.get("blocked_requests", 0),
             requests_delta=stats.get("requests_delta", 0),
+            blocked_requests_delta=stats.get("blocked_requests_delta", 0),
             error_responses=stats.get("error_responses", 0),
             success_responses=stats.get("success_responses", 0),
             redirect_responses=stats.get("redirect_responses", 0),
@@ -369,6 +402,8 @@ async def get_services() -> ServiceListResponse:
             flags_retrieved=stats.get("flags_retrieved", 0),
             flags_blocked=stats.get("flags_blocked", 0),
             total_flags=stats.get("total_flags", 0),
+            flags_written_delta=stats.get("flags_written_delta", 0),
+            flags_retrieved_delta=stats.get("flags_retrieved_delta", 0),
             unique_headers=stats.get("unique_headers", 0),
             unique_header_values=stats.get("unique_header_values", 0),
             tcp_stats=tcp_stats,
@@ -408,6 +443,23 @@ async def get_service_by_port(port: int) -> ServiceListItem:
         )
         requests_delta = cursor.fetchone()[0] or 0
 
+        cursor.execute(
+            """SELECT COUNT(*) FROM http_request
+               WHERE port = ? AND start_time >= ? AND is_blocked = 1""",
+            (service.port, five_minutes_ago),
+        )
+        blocked_requests_delta = cursor.fetchone()[0] or 0
+
+        cursor.execute(
+            """SELECT SUM(write_count), SUM(read_count)
+               FROM flag_time_stats
+               WHERE port = ? AND time >= ?""",
+            (service.port, five_minutes_ago),
+        )
+        flag_delta_result = cursor.fetchone()
+        flags_written_delta = flag_delta_result[0] or 0
+        flags_retrieved_delta = flag_delta_result[1] or 0
+
     tcp_stats = None
     if service.type.value == "tcp" and current_stats.get("tcp_stats"):
         tcp_data = current_stats["tcp_stats"]
@@ -423,6 +475,7 @@ async def get_service_by_port(port: int) -> ServiceListItem:
         total_requests=current_stats["total_requests"],
         blocked_requests=current_stats["blocked_requests"],
         requests_delta=requests_delta,
+        blocked_requests_delta=blocked_requests_delta,
         error_responses=current_stats["error_responses"],
         success_responses=current_stats["success_responses"],
         redirect_responses=current_stats["redirect_responses"],
@@ -434,6 +487,8 @@ async def get_service_by_port(port: int) -> ServiceListItem:
         flags_retrieved=current_stats["flags_retrieved"],
         flags_blocked=current_stats["flags_blocked"],
         total_flags=current_stats["total_flags"],
+        flags_written_delta=flags_written_delta,
+        flags_retrieved_delta=flags_retrieved_delta,
         unique_headers=current_stats["unique_headers"],
         unique_header_values=current_stats["unique_header_values"],
         tcp_stats=tcp_stats,
