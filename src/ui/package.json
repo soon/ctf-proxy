@@ -12,7 +12,8 @@
     "format": "biome format",
     "lint": "biome lint",
     "check": "biome check",
-    "gen:api": "npx @hey-api/openapi-ts -i http://localhost:8080/openapi.json -o src/client -p @tanstack/react-query"
+    "gen:api": "npx @hey-api/openapi-ts -i http://localhost:8080/openapi.json -o src/client -p @tanstack/react-query",
+    "deploy:prod": "npm run build && npx netlify deploy --prod --dir dist"
   },
   "dependencies": {
     "@ant-design/charts": "^2.6.4",

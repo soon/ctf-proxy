@@ -22,6 +22,7 @@ import {
 	DownloadOutlined,
 	ClearOutlined,
 	OpenAIOutlined,
+	CopyOutlined,
 } from "@ant-design/icons";
 
 const { TextArea } = Input;
@@ -40,7 +41,8 @@ function SqlExecutor() {
 	const [columns, setColumns] = useState<any[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [executionTime, setExecutionTime] = useState<number | null>(null);
+	const [queryTime, setQueryTime] = useState<number | null>(null);
+	const [totalTime, setTotalTime] = useState<number | null>(null);
 	const [timeout, setTimeout] = useState<number>(10);
 	const [aiModalVisible, setAiModalVisible] = useState(false);
 	const [aiQuery, setAiQuery] = useState("");
@@ -63,7 +65,9 @@ function SqlExecutor() {
 				body: { query, timeout },
 			});
 			const data = result as any;
-			setExecutionTime(Date.now() - startTime);
+			const totalTimeMs = Date.now() - startTime;
+			setTotalTime(totalTimeMs);
+			setQueryTime(data.query_time || null);
 
 			if (data.rows && data.rows.length > 0) {
 				const firstRow = data.rows[0];
@@ -89,8 +93,17 @@ function SqlExecutor() {
 				message.info("Query executed successfully but returned no rows");
 			}
 		} catch (err: any) {
-			const errorMessage =
-				err?.body?.detail || err?.message || "Unknown error occurred";
+			let errorMessage = "Unknown error occurred";
+			if (err?.body?.detail) {
+				errorMessage =
+					typeof err.body.detail === "object"
+						? JSON.stringify(err.body.detail)
+						: err.body.detail;
+			} else if (err?.message) {
+				errorMessage = err.message;
+			} else if (err) {
+				errorMessage = err.toString();
+			}
 			setError(errorMessage);
 			setResults([]);
 			setColumns([]);
@@ -123,7 +136,17 @@ function SqlExecutor() {
 			URL.revokeObjectURL(url);
 			message.success("Results exported to CSV");
 		} catch (err: any) {
-			const errorMessage = err?.body?.detail || err?.message || "Export failed";
+			let errorMessage = "Export failed";
+			if (err?.body?.detail) {
+				errorMessage =
+					typeof err.body.detail === "object"
+						? JSON.stringify(err.body.detail)
+						: err.body.detail;
+			} else if (err?.message) {
+				errorMessage = err.message;
+			} else if (err) {
+				errorMessage = err.toString();
+			}
 			message.error(errorMessage);
 		}
 	};
@@ -132,7 +155,8 @@ function SqlExecutor() {
 		setResults([]);
 		setColumns([]);
 		setError(null);
-		setExecutionTime(null);
+		setQueryTime(null);
+		setTotalTime(null);
 	};
 
 	const handleAiGenerate = () => {
@@ -141,11 +165,30 @@ function SqlExecutor() {
 			return;
 		}
 
-		const prompt = `Generate a SQL query for the following database schema:\n\n\`\`\`sql\n${schema}\n\`\`\`\n\nUser request: ${aiQuery}`;
+		const prompt = `Read the database schema from this link: https://raw.githubusercontent.com/soon/ctf-proxy/main/src/ctf_proxy/db/schema.sql\n\nThen generate a SQL query for the following request: ${aiQuery}`;
 		const encodedPrompt = encodeURIComponent(prompt);
-		window.open(`https://chatgpt.com/?prompt=${encodedPrompt}`, "_blank");
+		window.open(`https://chatgpt.com/?q=${encodedPrompt}`, "_blank");
 		setAiModalVisible(false);
 		setAiQuery("");
+	};
+
+	const handleCopyPrompt = () => {
+		if (!aiQuery.trim()) {
+			message.warning("Please describe what query you want to generate");
+			return;
+		}
+
+		const prompt = `Generate a SQL query for the following database schema:\n\n\`\`\`sql\n${schema}\n\`\`\`\n\nUser request: ${aiQuery}`;
+		navigator.clipboard.writeText(prompt).then(
+			() => {
+				message.success("Prompt copied to clipboard!");
+				setAiModalVisible(false);
+				setAiQuery("");
+			},
+			() => {
+				message.error("Failed to copy prompt");
+			},
+		);
 	};
 
 	return (
@@ -255,8 +298,22 @@ function SqlExecutor() {
 				title="Generate SQL Query with AI"
 				open={aiModalVisible}
 				onCancel={() => setAiModalVisible(false)}
-				onOk={handleAiGenerate}
-				okText="Generate with ChatGPT"
+				footer={[
+					<Button key="cancel" onClick={() => setAiModalVisible(false)}>
+						Cancel
+					</Button>,
+					<Button key="copy" icon={<CopyOutlined />} onClick={handleCopyPrompt}>
+						Copy Prompt
+					</Button>,
+					<Button
+						key="generate"
+						type="primary"
+						icon={<OpenAIOutlined />}
+						onClick={handleAiGenerate}
+					>
+						Generate with ChatGPT
+					</Button>,
+				]}
 			>
 				<Space direction="vertical" style={{ width: "100%" }}>
 					<Text>Describe the query you want to generate:</Text>

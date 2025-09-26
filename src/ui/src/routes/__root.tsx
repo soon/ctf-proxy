@@ -5,10 +5,6 @@ import {
 	useLocation,
 	useRouterState,
 } from "@tanstack/react-router";
-import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
-import { TanstackDevtools } from "@tanstack/react-devtools";
-
-import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
@@ -280,18 +276,6 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 					</Content>
 					<Footer style={{ textAlign: "center" }}></Footer>
 				</Layout>
-				<TanstackDevtools
-					config={{
-						position: "bottom-left",
-					}}
-					plugins={[
-						{
-							name: "Tanstack Router",
-							render: <TanStackRouterDevtoolsPanel />,
-						},
-						TanStackQueryDevtools,
-					]}
-				/>
 				<SettingsModal
 					open={settingsOpen}
 					onClose={() => setSettingsOpen(false)}

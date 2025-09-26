@@ -124,8 +124,8 @@ async def execute_sql(request: dict):
             timeout = 10.0
 
     try:
-        rows, columns = db.execute_sql(query, timeout=timeout)
-        return {"rows": rows, "count": len(rows)}
+        result = db.execute_sql(query, timeout=timeout)
+        return {"rows": result.rows, "count": len(result.rows), "query_time": result.query_time_ms}
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
     except TimeoutError as e:
@@ -167,15 +167,15 @@ async def export_sql_csv(request: dict):
             timeout = 10.0
 
     try:
-        rows, columns = db.execute_sql(query, default_limit=10000, timeout=timeout)
+        result = db.execute_sql(query, default_limit=10000, timeout=timeout)
 
-        if not rows:
+        if not result.rows:
             raise HTTPException(status_code=404, detail="No data to export")
 
         output = StringIO()
-        writer = csv.DictWriter(output, fieldnames=columns)
+        writer = csv.DictWriter(output, fieldnames=result.columns)
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(result.rows)
 
         output.seek(0)
 

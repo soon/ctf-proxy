@@ -4,6 +4,7 @@ import logging
 import os
 import sqlite3
 import threading
+import time
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -15,6 +16,13 @@ from ctf_proxy.db.stats import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SqlExecutionResult:
+    rows: list[dict]
+    columns: list[str]
+    query_time_ms: float
 
 
 @dataclass
@@ -824,7 +832,7 @@ class ProxyStatsDB:
 
     def execute_sql(
         self, query: str, default_limit: int = 1000, timeout: float = 10.0
-    ) -> tuple[list[dict], list[str]]:
+    ) -> SqlExecutionResult:
         """Execute a SQL query and return results as list of dicts with column names.
 
         Args:
@@ -833,7 +841,7 @@ class ProxyStatsDB:
             timeout: Query execution timeout in seconds (default: 10.0)
 
         Returns:
-            Tuple of (results list, column names list)
+            SqlExecutionResult with rows, columns, and query execution time
 
         Raises:
             ValueError: If query is not a SELECT statement
@@ -841,6 +849,9 @@ class ProxyStatsDB:
             TimeoutError: If query execution exceeds timeout
         """
         query = query.strip()
+        while query.endswith(";"):
+            query = query[:-1].rstrip()
+
         query_upper = query.upper()
 
         if not query_upper.startswith("SELECT"):
@@ -853,15 +864,18 @@ class ProxyStatsDB:
         columns = []
         exception = None
         conn = None
+        query_time = 0
 
         def execute_query():
-            nonlocal results, columns, exception, conn
+            nonlocal results, columns, exception, conn, query_time
             try:
                 conn = sqlite3.connect(self.db_file)
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
+                start_time = time.perf_counter()
                 cursor.execute(query)
                 rows = cursor.fetchall()
+                query_time = (time.perf_counter() - start_time) * 1000
 
                 if rows:
                     columns = list(rows[0].keys())
@@ -893,4 +907,4 @@ class ProxyStatsDB:
         if exception:
             raise exception
 
-        return results, columns
+        return SqlExecutionResult(rows=results, columns=columns, query_time_ms=query_time)
