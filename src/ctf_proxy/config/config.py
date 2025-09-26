@@ -115,6 +115,85 @@ class Config:
         except ValidationError as e:
             raise ConfigError("Configuration validation error") from e
 
+    @staticmethod
+    def validate_content(content: str) -> tuple[bool, list[str]]:
+        """Validate configuration content without loading it.
+
+        Returns:
+            Tuple of (is_valid, list_of_errors)
+        """
+        errors = []
+
+        # Check YAML syntax
+        try:
+            config_data = yaml.safe_load(content)
+        except yaml.YAMLError as e:
+            errors.append(f"Invalid YAML syntax: {str(e)}")
+            return False, errors
+        except Exception as e:
+            errors.append(f"Failed to parse YAML: {str(e)}")
+            return False, errors
+
+        if config_data is None:
+            config_data = {}
+
+        if not isinstance(config_data, dict):
+            errors.append("Configuration must be a YAML object")
+            return False, errors
+
+        # Validate with Pydantic model
+        try:
+            ConfigModel(**config_data)
+        except ValidationError as e:
+            for error in e.errors():
+                field_path = " -> ".join(str(x) for x in error["loc"])
+                errors.append(f"{field_path}: {error['msg']}")
+            return False, errors
+        except Exception as e:
+            errors.append(f"Validation error: {str(e)}")
+            return False, errors
+
+        return True, []
+
+    @classmethod
+    def from_string(cls, content: str, config_path: str | Path) -> "Config":
+        """Create Config instance from string content.
+
+        Args:
+            content: YAML configuration content
+            config_path: Path where the config would be saved
+
+        Returns:
+            Config instance
+
+        Raises:
+            ConfigError: If content is invalid
+        """
+        # Validate content first
+        valid, errors = cls.validate_content(content)
+        if not valid:
+            raise ConfigError(f"Invalid configuration: {'; '.join(errors)}")
+
+        # Parse and create config
+        config_data = yaml.safe_load(content)
+        config_instance = cls.__new__(cls)
+        config_instance.config_path = Path(config_path)
+        config_instance._watcher = None
+        config_instance._config = ConfigModel(**config_data)
+        return config_instance
+
+    @classmethod
+    def from_file(cls, config_path: str | Path) -> "Config":
+        """Create Config instance from file path.
+
+        Args:
+            config_path: Path to configuration file
+
+        Returns:
+            Config instance
+        """
+        return cls(config_path)
+
     def get_service_by_name(self, name: str) -> Service | None:
         for service in self.services:
             if service.name == name:
@@ -158,6 +237,90 @@ class Config:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop_watching()
+
+    def save(self, content: str, create_backup: bool = True) -> tuple[bool, str]:
+        """Save configuration to file with optional backup.
+
+        Args:
+            content: YAML configuration content to save
+            create_backup: Whether to create a backup of existing config
+
+        Returns:
+            Tuple of (success, message)
+        """
+        from datetime import datetime
+
+        # Validate content first
+        valid, errors = self.validate_content(content)
+        if not valid:
+            return False, f"Validation errors: {'; '.join(errors)}"
+
+        try:
+            # Create backup if requested and file exists
+            if create_backup and self.config_path.exists():
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_dir = self.config_path.parent / "config_backups"
+                backup_dir.mkdir(exist_ok=True)
+                backup_path = backup_dir / f"config_{timestamp}.yml"
+
+                with open(self.config_path) as f:
+                    backup_content = f.read()
+                with open(backup_path, "w") as f:
+                    f.write(backup_content)
+
+            # Save new config
+            with open(self.config_path, "w") as f:
+                f.write(content)
+
+            # Reload config
+            self.load_config()
+
+            return True, "Configuration saved successfully"
+
+        except Exception as e:
+            return False, f"Failed to save configuration: {str(e)}"
+
+    def get_revisions(self) -> list[dict]:
+        """Get list of configuration backup revisions.
+
+        Returns:
+            List of revision dictionaries with filename, timestamp, and size
+        """
+        backup_dir = self.config_path.parent / "config_backups"
+        if not backup_dir.exists():
+            return []
+
+        revisions = []
+        for backup_file in sorted(backup_dir.glob("config_*.yml"), reverse=True):
+            revisions.append(
+                {
+                    "filename": backup_file.name,
+                    "timestamp": backup_file.stem.replace("config_", ""),
+                    "size": backup_file.stat().st_size,
+                }
+            )
+        return revisions
+
+    def get_revision_content(self, filename: str) -> str | None:
+        """Get content of a specific revision.
+
+        Args:
+            filename: Name of the revision file
+
+        Returns:
+            Content of the revision or None if not found
+        """
+        backup_dir = self.config_path.parent / "config_backups"
+        revision_path = backup_dir / filename
+
+        if not revision_path.exists():
+            return None
+
+        try:
+            with open(revision_path) as f:
+                return f.read()
+        except Exception:
+            return None
 
     def __repr__(self) -> str:
         return f"Config(services={len(self.services)})"

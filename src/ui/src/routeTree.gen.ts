@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SqlRouteImport } from './routes/sql'
+import { Route as ConfigRouteImport } from './routes/config'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ServicePortIndexRouteImport } from './routes/service/$port/index'
 import { Route as ServicePortTcpStatsRouteImport } from './routes/service/$port/tcp-stats'
@@ -22,6 +23,11 @@ import { Route as ServicePortRequestIdRouteImport } from './routes/service/$port
 const SqlRoute = SqlRouteImport.update({
   id: '/sql',
   path: '/sql',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfigRoute = ConfigRouteImport.update({
+  id: '/config',
+  path: '/config',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -68,6 +74,7 @@ const ServicePortRequestIdRoute = ServicePortRequestIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/config': typeof ConfigRoute
   '/sql': typeof SqlRoute
   '/service/$port/headers': typeof ServicePortHeadersRoute
   '/service/$port/paths': typeof ServicePortPathsRoute
@@ -79,6 +86,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/config': typeof ConfigRoute
   '/sql': typeof SqlRoute
   '/service/$port/headers': typeof ServicePortHeadersRoute
   '/service/$port/paths': typeof ServicePortPathsRoute
@@ -91,6 +99,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/config': typeof ConfigRoute
   '/sql': typeof SqlRoute
   '/service/$port/headers': typeof ServicePortHeadersRoute
   '/service/$port/paths': typeof ServicePortPathsRoute
@@ -104,6 +113,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/config'
     | '/sql'
     | '/service/$port/headers'
     | '/service/$port/paths'
@@ -115,6 +125,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/config'
     | '/sql'
     | '/service/$port/headers'
     | '/service/$port/paths'
@@ -126,6 +137,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/config'
     | '/sql'
     | '/service/$port/headers'
     | '/service/$port/paths'
@@ -138,6 +150,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ConfigRoute: typeof ConfigRoute
   SqlRoute: typeof SqlRoute
   ServicePortHeadersRoute: typeof ServicePortHeadersRoute
   ServicePortPathsRoute: typeof ServicePortPathsRoute
@@ -155,6 +168,13 @@ declare module '@tanstack/react-router' {
       path: '/sql'
       fullPath: '/sql'
       preLoaderRoute: typeof SqlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/config': {
+      id: '/config'
+      path: '/config'
+      fullPath: '/config'
+      preLoaderRoute: typeof ConfigRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -218,6 +238,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ConfigRoute: ConfigRoute,
   SqlRoute: SqlRoute,
   ServicePortHeadersRoute: ServicePortHeadersRoute,
   ServicePortPathsRoute: ServicePortPathsRoute,

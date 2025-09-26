@@ -20,6 +20,8 @@ tcp_*.json
 
 .playwright-mcp/*.png
 config.yml
+config*.yaml
+config*.yml
 
 *.local.json
 

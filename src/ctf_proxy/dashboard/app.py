@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from ctf_proxy.config import Config
 from ctf_proxy.dashboard.models import (
@@ -1250,3 +1251,95 @@ def get_tcp_connection_stats(port: int, window_minutes: int = 60) -> TCPConnecti
         precision=precision,
         window_minutes=window_minutes,
     )
+
+
+# Config management models
+class ConfigContent(BaseModel):
+    content: str = Field(..., description="The YAML configuration content")
+
+
+class ConfigRevision(BaseModel):
+    filename: str
+    timestamp: datetime
+    size: int
+
+
+class ConfigValidationResult(BaseModel):
+    valid: bool
+    errors: list[str] = []
+    warnings: list[str] = []
+
+
+class ConfigResponse(BaseModel):
+    content: str
+    revisions: list[ConfigRevision]
+
+
+# Config management endpoints
+@app.get("/api/config")
+async def get_config() -> ConfigResponse:
+    """Get current config content and list of revisions."""
+    if config is None:
+        raise HTTPException(status_code=500, detail="Server not properly initialized")
+
+    config_path = Path(config.config_path)
+    if not config_path.exists():
+        raise HTTPException(status_code=404, detail="Config file not found")
+
+    # Read current config
+    with open(config_path) as f:
+        content = f.read()
+
+    # Get revisions using config module method
+    revision_list = config.get_revisions()
+    revisions = [
+        ConfigRevision(
+            filename=r["filename"],
+            timestamp=datetime.strptime(r["timestamp"], "%Y%m%d_%H%M%S"),
+            size=r["size"],
+        )
+        for r in revision_list[:50]  # Limit to 50 most recent
+    ]
+
+    return ConfigResponse(content=content, revisions=revisions)
+
+
+@app.get("/api/config/revision/{filename}")
+async def get_config_revision(filename: str) -> dict:
+    """Get content of a specific config revision."""
+    if config is None:
+        raise HTTPException(status_code=500, detail="Server not properly initialized")
+
+    content = config.get_revision_content(filename)
+    if content is None:
+        raise HTTPException(status_code=404, detail="Revision not found")
+
+    return {"content": content, "filename": Path(filename).name}
+
+
+@app.post("/api/config/validate")
+async def validate_config(config_data: ConfigContent) -> ConfigValidationResult:
+    """Validate config without saving."""
+    # Use the Config class validation method
+    valid, errors = Config.validate_content(config_data.content)
+
+    # For now, we don't have warnings from the Config validation
+    # but we can add them later if needed
+    warnings = []
+
+    return ConfigValidationResult(valid=valid, errors=errors, warnings=warnings)
+
+
+@app.post("/api/config")
+async def save_config(config_data: ConfigContent) -> dict:
+    """Save config after validation and create a backup."""
+    global config
+    if config is None:
+        raise HTTPException(status_code=500, detail="Server not properly initialized")
+
+    success, message = config.save(config_data.content, create_backup=True)
+
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    return {"success": True, "message": message}

@@ -33,6 +33,16 @@ CREATE TABLE IF NOT EXISTS http_response (
 CREATE INDEX IF NOT EXISTS http_response_status ON http_response(status);
 CREATE INDEX IF NOT EXISTS http_response_request_id ON http_response(request_id);
 
+CREATE TABLE IF NOT EXISTS http_request_time_stats (
+    id INTEGER PRIMARY KEY,
+    port INTEGER NOT NULL,
+    time INTEGER NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    blocked_count INTEGER NOT NULL DEFAULT 0,
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS http_request_time_stats_unique ON http_request_time_stats(port, time);
+
 CREATE TABLE IF NOT EXISTS http_header (
     id INTEGER PRIMARY KEY,
     request_id INTEGER,
@@ -86,6 +96,16 @@ CREATE INDEX IF NOT EXISTS flag_http_request_id ON flag(http_request_id);
 CREATE INDEX IF NOT EXISTS flag_http_response_id ON flag(http_response_id);
 CREATE INDEX IF NOT EXISTS flag_tcp_connection_id ON flag(tcp_connection_id);
 CREATE INDEX IF NOT EXISTS flag_tcp_event_id ON flag(tcp_event_id);
+
+CREATE TABLE IF NOT EXISTS flag_time_stats (
+    id INTEGER PRIMARY KEY,
+    port INTEGER NOT NULL,
+    time INTEGER NOT NULL,
+    write_count INTEGER NOT NULL DEFAULT 0,
+    read_count INTEGER NOT NULL DEFAULT 0
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS flag_time_stats_unique ON flag_time_stats(port, time);
 
 CREATE TABLE IF NOT EXISTS service_stats (
     id INTEGER PRIMARY KEY,

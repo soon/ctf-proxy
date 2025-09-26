@@ -265,7 +265,7 @@ You're a senior software engineer. When working follow engineering principles:
    - `make dev fmt` - format code
 5. **Use playwright**: You have access to browser, use it when checking your UI and backend changes.
 6. **Generate API**: If backend has changed regenerate api using `gen:api` command in `package.json`. 
-7. **Backend**: Run backend using `./uv.sh run ./ctf_proxy/dashboard/main.py --config ../config.yml --db ../proxy_stats.db` command from `src` directory
+7. **Backend**: Run backend using `./uv.sh run ./ctf_proxy/dashboard/main.py --config data/config.yml --db data/proxy_stats.db` command from `src` directory
 
 
 # How to work with vm:

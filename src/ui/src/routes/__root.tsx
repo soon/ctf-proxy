@@ -10,11 +10,14 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { getServicesApiServicesGetOptions } from "@/client/@tanstack/react-query.gen";
 
-import { Breadcrumb, Layout, Menu, theme, Spin } from "antd";
+import { Breadcrumb, Layout, Menu, theme, Spin, App } from "antd";
 import {
 	DashboardOutlined,
 	ApiOutlined,
 	SettingOutlined,
+	FileTextOutlined,
+	ToolOutlined,
+	DatabaseOutlined,
 } from "@ant-design/icons";
 import { useHealthCheck } from "@/hooks/useHealthCheck";
 import { HostConfig } from "@/components/HostConfig";
@@ -48,16 +51,19 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 		const getSelectedKey = () => {
 			const path = location.pathname;
 			if (path === "/") {
-				return "dashboard";
+				return ["dashboard"];
 			}
 			if (path === "/sql") {
-				return "sql";
+				return ["tools:sql"];
+			}
+			if (path === "/config") {
+				return ["tools:config"];
 			}
 			const serviceMatch = path.match(/^\/service\/(\d+)/);
 			if (serviceMatch) {
-				return `service-${serviceMatch[1]}`;
+				return [`service-${serviceMatch[1]}`];
 			}
-			return "dashboard";
+			return ["dashboard"];
 		};
 
 		const menuItems = [
@@ -74,10 +80,30 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 				onClick: () => navigate({ to: `/service/${service.port}` }),
 			})) || []),
 			{
-				key: "sql",
-				label: "SQL",
-				icon: <ApiOutlined />,
-				onClick: () => navigate({ to: "/sql" }),
+				key: "tools",
+				label: "Tools",
+				icon: <ToolOutlined />,
+				style: { marginLeft: "auto" },
+				children: [
+					{
+						key: "tools:sql",
+						label: "SQL Query",
+						icon: <DatabaseOutlined />,
+						onClick: () => navigate({ to: "/sql" }),
+					},
+					{
+						key: "tools:config",
+						label: "Config Editor",
+						icon: <FileTextOutlined />,
+						onClick: () => navigate({ to: "/config" }),
+					},
+					{
+						key: "tools:settings",
+						label: "Settings",
+						icon: <SettingOutlined />,
+						onClick: () => setSettingsOpen(true),
+					},
+				],
 			},
 		];
 
@@ -192,6 +218,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 				else if (match.pathname === "/sql" && breadcrumb) {
 					items.push({ title: breadcrumb });
 				}
+				// Handle Config route
+				else if (match.pathname === "/config") {
+					items.push({ title: "Config" });
+				}
 			});
 
 			return items;
@@ -217,25 +247,17 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 		}
 
 		return (
-			<>
+			<App>
 				<Layout style={{ minHeight: "100vh" }}>
 					<Header style={{ display: "flex", alignItems: "center" }}>
 						<div className="demo-logo" />
 						<Menu
 							theme="dark"
 							mode="horizontal"
-							selectedKeys={[getSelectedKey()]}
+							selectedKeys={getSelectedKey()}
 							items={menuItems}
 							style={{ flex: 1, minWidth: 0 }}
 						/>
-						<Button
-							type="text"
-							icon={<SettingOutlined />}
-							onClick={() => setSettingsOpen(true)}
-							style={{ color: "white" }}
-						>
-							Settings
-						</Button>
 					</Header>
 					<Content style={{ padding: "0 48px" }}>
 						<div
@@ -280,7 +302,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 					open={settingsOpen}
 					onClose={() => setSettingsOpen(false)}
 				/>
-			</>
+			</App>
 		);
 	},
 });

@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@ant-design/charts": "^2.6.4",
+    "@monaco-editor/react": "^4.7.0",
     "@playwright/mcp": "^0.0.38",
     "@playwright/test": "^1.55.0",
     "@tailwindcss/vite": "^4.0.6",
