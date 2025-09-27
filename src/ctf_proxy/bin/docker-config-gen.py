@@ -249,7 +249,8 @@ def main():
 
     if not config.get("services"):
         print("No services found in configuration.", file=sys.stderr)
-        sys.exit(1)
+        # Create empty services list - this is normal during setup or when no containers are running
+        config["services"] = []
 
     save_config(config, output_file if len(sys.argv) > 1 else "/dev/stdout")
 
