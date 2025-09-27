@@ -13,9 +13,11 @@ export function useHealthCheck(): HealthCheckResult {
 	const [isHealthy, setIsHealthy] = useState(false);
 	const [isChecking, setIsChecking] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-
-	const storedUrl = localStorage.getItem("ctf-proxy-api-host");
-	const apiUrl = storedUrl || "http://localhost:48955";
+	const [apiUrl, setApiUrl] = useState(() => {
+		return (
+			localStorage.getItem("ctf-proxy-api-host") || "http://localhost:48955"
+		);
+	});
 
 	useEffect(() => {
 		const checkHealth = async () => {
@@ -23,9 +25,20 @@ export function useHealthCheck(): HealthCheckResult {
 			setError(null);
 
 			try {
-				if (storedUrl && client.getConfig().baseUrl !== apiUrl) {
-					client.setConfig({ baseUrl: apiUrl });
+				const storedUrl = localStorage.getItem("ctf-proxy-api-host");
+				const storedToken = localStorage.getItem("apiToken");
+				const currentApiUrl = storedUrl || "http://localhost:48955";
+
+				setApiUrl(currentApiUrl);
+
+				const config: any = { baseUrl: currentApiUrl };
+				if (storedToken) {
+					config.headers = {
+						...client.getConfig().headers,
+						Authorization: `Bearer ${storedToken}`,
+					};
 				}
+				client.setConfig(config);
 
 				const { data } = await healthCheckApiHealthGet();
 				setIsHealthy(true);
@@ -40,13 +53,21 @@ export function useHealthCheck(): HealthCheckResult {
 		};
 
 		checkHealth();
-	}, [apiUrl, storedUrl]);
+	}, []);
 
 	return { isHealthy, isChecking, error, apiUrl };
 }
 
 export function updateApiUrl(url: string) {
 	localStorage.setItem("ctf-proxy-api-host", url);
-	client.setConfig({ baseUrl: url });
+	const storedToken = localStorage.getItem("apiToken");
+	const config: any = { baseUrl: url };
+	if (storedToken) {
+		config.headers = {
+			...client.getConfig().headers,
+			Authorization: `Bearer ${storedToken}`,
+		};
+	}
+	client.setConfig(config);
 	window.location.reload();
 }

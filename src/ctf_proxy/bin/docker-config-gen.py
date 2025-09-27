@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
+import hashlib
 import json
 import os
+import secrets
 import subprocess
 import sys
 from typing import Any
@@ -17,12 +19,13 @@ def run_docker_command(args: list[str]) -> str:
     except subprocess.CalledProcessError as e:
         print(f"Error running docker command: {e}", file=sys.stderr)
         print(f"stderr: {e.stderr}", file=sys.stderr)
-        sys.exit(1)
+        return ""
     except FileNotFoundError:
         print(
-            "Error: Docker not found. Make sure Docker is installed and in PATH.", file=sys.stderr
+            "Warning: Docker not found. Generating config without Docker container detection.",
+            file=sys.stderr,
         )
-        sys.exit(1)
+        return ""
 
 
 def get_running_containers() -> list[dict[str, Any]]:
@@ -130,6 +133,16 @@ def should_skip_container(container_name: str, port: int) -> bool:
     return port in [48955, 15000, 15001, 15002]
 
 
+def generate_random_token(length: int = 32) -> str:
+    """Generate a cryptographically secure random token."""
+    return secrets.token_hex(length)
+
+
+def hash_token(token: str) -> str:
+    """Create SHA256 hash of token."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 def generate_config(existing_config: dict[str, Any] = None) -> dict[str, Any]:
     """Generate configuration based on running Docker containers, merging with existing config."""
     containers = get_running_containers()
@@ -211,6 +224,14 @@ def generate_config(existing_config: dict[str, Any] = None) -> dict[str, Any]:
     # Add default flag_format if not present
     if "flag_format" not in result:
         result["flag_format"] = "FLAG_[A-Za-z0-9/+]{32}"
+
+    # Add default API token hash if not present
+    if "api_token_hash" not in result:
+        api_token = generate_random_token()
+        result["api_token_hash"] = hash_token(api_token)
+        print(f"Generated new API token: {api_token}", file=sys.stderr)
+        print(f"Token hash: {result['api_token_hash']}", file=sys.stderr)
+        print("IMPORTANT: Save this token securely as it will not be shown again!", file=sys.stderr)
 
     return result
 

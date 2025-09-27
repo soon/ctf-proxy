@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from enum import Enum
 from pathlib import Path
@@ -63,6 +64,9 @@ class ConfigError(Exception):
 
 class ConfigModel(BaseModel):
     flag_format: str = Field(default="ctf{}", description="Flag format string")
+    api_token_hash: str = Field(
+        default="", description="SHA256 hash of API token for authentication"
+    )
     services: list[Service] = Field(default_factory=list, description="List of services")
 
     @field_validator("services")
@@ -74,6 +78,16 @@ class ConfigModel(BaseModel):
                 raise ValueError(f"Port {service.port} is already used by another service")
             used_ports.add(service.port)
         return v
+
+
+def hash_token(token: str) -> str:
+    """Create SHA256 hash of token."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def verify_token(token: str, token_hash: str) -> bool:
+    """Verify token against stored hash."""
+    return hash_token(token) == token_hash
 
 
 class Config:

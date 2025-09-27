@@ -6,12 +6,14 @@ from datetime import datetime
 from io import StringIO
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from ctf_proxy.config import Config
+from ctf_proxy.config.config import verify_token
 from ctf_proxy.dashboard.models import (
     FlagItem,
     FlagTimeStatsItem,
@@ -77,6 +79,54 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="CTF Proxy Dashboard API", version="1.0.0", lifespan=lifespan)
 
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # All /api routes require authentication
+        if request.url.path.startswith("/api"):
+            auth_header = request.headers.get("Authorization")
+            if not auth_header:
+                return Response(
+                    content='{"detail":"Missing Authorization header"}',
+                    status_code=401,
+                    media_type="application/json",
+                )
+
+            if not auth_header.startswith("Bearer "):
+                return Response(
+                    content='{"detail":"Invalid authorization header format"}',
+                    status_code=401,
+                    media_type="application/json",
+                )
+
+            token = auth_header[7:]  # Remove "Bearer " prefix
+
+            if config is None:
+                return Response(
+                    content='{"detail":"Server not properly initialized"}',
+                    status_code=500,
+                    media_type="application/json",
+                )
+
+            expected_token_hash = getattr(config, "api_token_hash", None)
+            if not expected_token_hash:
+                return Response(
+                    content='{"detail":"API token not configured"}',
+                    status_code=500,
+                    media_type="application/json",
+                )
+
+            if not verify_token(token, expected_token_hash):
+                return Response(
+                    content='{"detail":"Invalid API token"}',
+                    status_code=401,
+                    media_type="application/json",
+                )
+
+        return await call_next(request)
+
+
+app.add_middleware(AuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

@@ -18,23 +18,35 @@ export function HostConfig({ visible, currentUrl, error }: HostConfigProps) {
 		message: string;
 	} | null>(null);
 
-	const testConnection = async (url: string) => {
+	const testConnection = async (url: string, token: string) => {
 		setTesting(true);
 		setTestResult(null);
 
 		try {
-			// Temporarily set the base URL for testing
-			const originalBaseUrl = client.getConfig().baseUrl;
-			client.setConfig({ baseUrl: url });
-
-			const { data } = await healthCheckApiHealthGet();
-			setTestResult({
-				success: true,
-				message: `Connected to ${data.backend} v${data.version}`,
+			// Temporarily set the base URL and token for testing
+			const originalConfig = client.getConfig();
+			client.setConfig({
+				baseUrl: url,
+				headers: {
+					...originalConfig.headers,
+					Authorization: `Bearer ${token}`,
+				},
 			});
 
-			// Restore original base URL
-			client.setConfig({ baseUrl: originalBaseUrl });
+			const { data, response } = await healthCheckApiHealthGet();
+
+			// Check if the response is successful
+			if (response.status >= 400) {
+				throw new Error(`HTTP ${response.status}: Authentication failed`);
+			}
+
+			setTestResult({
+				success: true,
+				message: `Connected to ${data?.backend || "CTF Proxy"} v${data?.version || "unknown"}`,
+			});
+
+			// Restore original config
+			client.setConfig(originalConfig);
 		} catch (err) {
 			setTestResult({
 				success: false,
@@ -50,6 +62,11 @@ export function HostConfig({ visible, currentUrl, error }: HostConfigProps) {
 		try {
 			const values = await form.validateFields();
 			const url = values.url.replace(/\/$/, ""); // Remove trailing slash
+			const token = values.token;
+
+			// Store token in localStorage
+			localStorage.setItem("apiToken", token);
+
 			updateApiUrl(url);
 		} catch (err) {
 			// Validation failed
@@ -79,7 +96,10 @@ export function HostConfig({ visible, currentUrl, error }: HostConfigProps) {
 				<Form
 					form={form}
 					layout="vertical"
-					initialValues={{ url: currentUrl }}
+					initialValues={{
+						url: currentUrl,
+						token: localStorage.getItem("apiToken") || "",
+					}}
 					onFinish={handleSubmit}
 				>
 					<Form.Item
@@ -92,6 +112,15 @@ export function HostConfig({ visible, currentUrl, error }: HostConfigProps) {
 						help="Enter the full URL of your backend server (e.g., http://localhost:48955)"
 					>
 						<Input placeholder="http://localhost:48955" size="large" />
+					</Form.Item>
+
+					<Form.Item
+						name="token"
+						label="API Token"
+						rules={[{ required: true, message: "Please enter API token" }]}
+						help="Enter the API token from your CTF Proxy configuration"
+					>
+						<Input.Password placeholder="Enter your API token" size="large" />
 					</Form.Item>
 
 					{testResult && (
@@ -108,7 +137,8 @@ export function HostConfig({ visible, currentUrl, error }: HostConfigProps) {
 						<Button
 							onClick={() => {
 								const url = form.getFieldValue("url");
-								if (url) testConnection(url);
+								const token = form.getFieldValue("token");
+								if (url && token) testConnection(url, token);
 							}}
 							loading={testing}
 						>
