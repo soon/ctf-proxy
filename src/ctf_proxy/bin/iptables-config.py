@@ -170,7 +170,9 @@ def load_ports() -> tuple[list[int], list[int]]:
         tcp_ports = sorted(set(tcp_ports))
 
     if not http_ports and not tcp_ports:
-        raise ValueError(f"No valid ports found (tried {PORTS_FILE})")
+        print(
+            f"No valid ports found (tried {PORTS_FILE}) - skipping iptables setup", file=sys.stderr
+        )
 
     return http_ports, tcp_ports
 
@@ -789,6 +791,11 @@ def setup():
     )
 
     http_ports, tcp_ports = load_ports()
+
+    if not http_ports and not tcp_ports:
+        print("[i] No ports to configure - skipping iptables rules setup")
+        return
+
     setup_family(IPT, "IPv4", http_ports, tcp_ports, excl_ifs)
     if ipv6_wanted():
         setup_family(IP6T, "IPv6", http_ports, tcp_ports, excl_ifs)
