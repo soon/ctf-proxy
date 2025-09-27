@@ -589,20 +589,18 @@ class SessionLinkRow:
 
 
 class SessionTable(BaseTable):
-    def get_or_create(self, tx: sqlite3.Cursor, port: int, key: str) -> int:
+    def upsert(self, tx: sqlite3.Cursor, port: int, key: str) -> int:
+        """Upsert session and increment count. Returns session ID."""
         tx.execute(
-            "SELECT id FROM session WHERE port = ? AND key = ?",
+            """
+            INSERT INTO session (port, key, count)
+            VALUES (?, ?, 1)
+            ON CONFLICT(port, key) DO UPDATE SET count = count + 1
+            RETURNING id
+            """,
             (port, key),
         )
-        result = tx.fetchone()
-        if result:
-            return result[0]
-
-        tx.execute(
-            "INSERT INTO session (port, key) VALUES (?, ?)",
-            (port, key),
-        )
-        return tx.lastrowid
+        return tx.fetchone()[0]
 
     def get_by_key(self, port: int, key: str) -> SessionRow | None:
         with self.get_connection() as conn:
@@ -621,7 +619,7 @@ class SessionTable(BaseTable):
 class SessionLinkTable(BaseTable):
     def insert(self, tx: sqlite3.Cursor, row: SessionLinkRow.Insert) -> None:
         session_table = SessionTable(self.db_file)
-        session_id = session_table.get_or_create(tx, row.port, row.session_key)
+        session_id = session_table.upsert(tx, row.port, row.session_key)
 
         tx.execute(
             """

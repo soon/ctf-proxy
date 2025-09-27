@@ -263,10 +263,11 @@ You're a senior software engineer. When working follow engineering principles:
    - `make dev test` - run tests
    - `make dev lint` - run linter
    - `make dev fmt` - format code
-5. **Use playwright**: You have access to browser, use it when checking your UI and backend changes.
+5. **Use playwright**: ALWAYS USE BROWSER TO TEST CHANGES YOU'VE MADE. 
 6. **Generate API**: ALWAYS USE GENERATED API, NEVER USE DIRECT FETCH WHEN CALLING BACKEND. REGENERATE API IF BACKEND HAS CHANGED USING `npm run gen:api`. ALWAYS USE THIS COMMAND, IF BACKEND IS RUNNING ON OTHER PORT KILL IT AND START ON THE PROPER PORT. 
 7. **Backend**: Run backend using `./uv.sh run ./ctf_proxy/dashboard/main.py --config data/config.yml --db data/proxy_stats.db` command from `src` directory
 8. **UI Deployment**: When asked, deploy using `npm run deploy:prod`.
+
 
 
 # How to work with vm:

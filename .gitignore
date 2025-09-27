@@ -3,6 +3,7 @@ __pycache__/
 *.pyo
 *.pyd
 *.db
+*.db.backup
 *.db-shm
 *.db-wal
 *.sqlite

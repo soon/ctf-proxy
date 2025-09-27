@@ -28,6 +28,8 @@ from ctf_proxy.dashboard.models import (
     RequestDetailResponse,
     RequestListItem,
     RequestListResponse,
+    RequestTimeStatsItem,
+    RequestTimeStatsResponse,
     ResponseDetail,
     ServiceListItem,
     ServiceListResponse,
@@ -59,9 +61,11 @@ async def lifespan(app: FastAPI):
     import os
 
     try:
-        # Use environment variables if set (for reload mode)
-        config_path = os.environ.get("CTF_CONFIG_PATH", "../config.yml")
-        db_path = os.environ.get("CTF_DB_PATH", "../proxy_stats.db")
+        # Use environment variables if set (for Gunicorn/Docker mode)
+        config_path = os.environ.get(
+            "CONFIG_PATH", os.environ.get("CTF_CONFIG_PATH", "../config.yml")
+        )
+        db_path = os.environ.get("DB_PATH", os.environ.get("CTF_DB_PATH", "../proxy_stats.db"))
         init_app(config_path, db_path)
     except FileNotFoundError as e:
         print(f"Warning: {e}")
@@ -200,6 +204,12 @@ async def export_sql_csv(request: dict):
 
 def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
     """Fetch stats for all services in optimized batch queries."""
+    import logging
+    from datetime import datetime
+
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
     with db_instance.connect() as conn:
         cursor = conn.cursor()
 
@@ -209,6 +219,7 @@ def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
         five_minutes_ago = int(time.time() * 1000) - (5 * 60 * 1000)
 
         # 1. Get service stats for all ports at once
+        start = time.time()
         cursor.execute(
             f"""SELECT port, total_requests, total_blocked_requests, total_responses, total_blocked_responses,
                       total_flags_written, total_flags_retrieved, total_flags_blocked
@@ -216,8 +227,10 @@ def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
             ports,
         )
         service_stats = {row[0]: row[1:] for row in cursor.fetchall()}
+        logger.info(f"Query 1 (service_stats): {time.time() - start:.3f}s")
 
         # 2. Get response code stats for all ports
+        start = time.time()
         cursor.execute(
             f"""SELECT port, status_code, count
                FROM http_response_code_stats
@@ -230,11 +243,13 @@ def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
             if port not in response_codes:
                 response_codes[port] = {}
             response_codes[port][status_code] = count
+        logger.info(f"Query 2 (response_codes): {time.time() - start:.3f}s")
 
         # 3. Skip unique paths count - too slow with large datasets
         unique_paths = {}
 
         # 4. Get alerts count for all ports
+        start = time.time()
         cursor.execute(
             f"""SELECT port, COUNT(*)
                FROM alert
@@ -243,64 +258,46 @@ def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
             ports,
         )
         alerts_count = dict(cursor.fetchall())
+        logger.info(f"Query 4 (alerts_count): {time.time() - start:.3f}s")
 
-        # 5. Get recent alerts for all ports
-        cursor.execute(
-            f"""SELECT port, description, created
-               FROM (
-                   SELECT port, description, created,
-                          ROW_NUMBER() OVER (PARTITION BY port ORDER BY created DESC) as rn
-                   FROM alert
-                   WHERE port IN ({placeholders})
-               )
-               WHERE rn <= 5
-               ORDER BY port, created DESC""",
-            ports,
-        )
-        recent_alerts_raw = cursor.fetchall()
+        # 5. Get recent alerts for all ports - skip for now, too slow
         recent_alerts = {}
-        for port, description, created in recent_alerts_raw:
-            if port not in recent_alerts:
-                recent_alerts[port] = []
-            recent_alerts[port].append((description, created))
 
         # 6. Skip header stats - too slow with large datasets
         header_stats = {}
 
-        # 7. Get TCP stats for all ports at once
-        cursor.execute(
-            f"""SELECT port, total_connections, total_bytes_in, total_bytes_out,
-                      avg_duration_ms, total_flags_found
-               FROM tcp_stats
-               WHERE port IN ({placeholders})""",
-            ports,
-        )
-        tcp_stats = {row[0]: row[1:] for row in cursor.fetchall()}
+        # 7. Skip TCP stats for now - tcp_stats table is not populated
+        tcp_stats = {}
 
-        # 8. Get request count delta for last 5 minutes
+        # 8. Get request count delta for last 5 minutes using stats table
+        start = time.time()
+        five_minutes_ago_datetime = datetime.fromtimestamp(five_minutes_ago / 1000)
         cursor.execute(
-            f"""SELECT port, COUNT(*) as recent_count
-               FROM http_request
+            f"""SELECT port, SUM(count) as recent_count
+               FROM http_request_time_stats
                WHERE port IN ({placeholders})
-                 AND start_time >= ?
+                 AND time >= ?
                GROUP BY port""",
-            ports + [five_minutes_ago],
+            ports + [five_minutes_ago_datetime],
         )
         request_deltas = dict(cursor.fetchall())
+        logger.info(f"Query 8 (request_deltas): {time.time() - start:.3f}s")
 
-        # 9. Get blocked request count delta for last 5 minutes
+        # 9. Get blocked request count delta for last 5 minutes using stats table
+        start = time.time()
         cursor.execute(
-            f"""SELECT port, COUNT(*) as recent_blocked_count
-               FROM http_request
+            f"""SELECT port, SUM(blocked_count) as recent_blocked_count
+               FROM http_request_time_stats
                WHERE port IN ({placeholders})
-                 AND start_time >= ?
-                 AND is_blocked = 1
+                 AND time >= ?
                GROUP BY port""",
-            ports + [five_minutes_ago],
+            ports + [five_minutes_ago_datetime],
         )
         blocked_request_deltas = dict(cursor.fetchall())
+        logger.info(f"Query 9 (blocked_request_deltas): {time.time() - start:.3f}s")
 
         # 10. Get flag deltas for last 5 minutes
+        start = time.time()
         cursor.execute(
             f"""SELECT port,
                        SUM(write_count) as flags_written_delta,
@@ -309,12 +306,13 @@ def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
                WHERE port IN ({placeholders})
                  AND time >= ?
                GROUP BY port""",
-            ports + [five_minutes_ago],
+            ports + [five_minutes_ago_datetime],
         )
         flag_deltas = {}
         for row in cursor.fetchall():
             port, written, retrieved = row
             flag_deltas[port] = (written or 0, retrieved or 0)
+        logger.info(f"Query 10 (flag_deltas): {time.time() - start:.3f}s")
 
         # Combine all stats
         result = {}
@@ -331,7 +329,16 @@ def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
             )
 
             header_data = header_stats.get(port, (0, 0))
-            tcp_data = tcp_stats.get(port)
+            tcp_raw_data = tcp_stats.get(port)
+            tcp_data = None
+            if tcp_raw_data:
+                tcp_data = {
+                    "total_connections": tcp_raw_data[0],
+                    "total_bytes_in": tcp_raw_data[1],
+                    "total_bytes_out": tcp_raw_data[2],
+                    "avg_duration_ms": int(tcp_raw_data[3]),
+                    "total_flags_found": tcp_raw_data[4],
+                }
             flag_delta_data = flag_deltas.get(port, (0, 0))
 
             result[port] = {
@@ -379,11 +386,11 @@ async def get_services() -> ServiceListResponse:
         if service.type.value == "tcp" and stats.get("tcp_stats"):
             tcp_data = stats["tcp_stats"]
             tcp_stats = TCPStats(
-                total_connections=tcp_data[0],
-                total_bytes_in=tcp_data[1],
-                total_bytes_out=tcp_data[2],
-                avg_duration_ms=tcp_data[3],
-                total_flags_found=tcp_data[4],
+                total_connections=tcp_data["total_connections"],
+                total_bytes_in=tcp_data["total_bytes_in"],
+                total_bytes_out=tcp_data["total_bytes_out"],
+                avg_duration_ms=tcp_data["avg_duration_ms"],
+                total_flags_found=tcp_data["total_flags_found"],
             )
 
         stats_model = ServiceStatsModel(
@@ -423,6 +430,11 @@ async def get_services() -> ServiceListResponse:
 
 @app.get("/api/services/{port}", response_model=ServiceListItem)
 async def get_service_by_port(port: int) -> ServiceListItem:
+    import logging
+    from datetime import datetime
+
+    logger = logging.getLogger(__name__)
+
     if config is None or db is None:
         raise HTTPException(status_code=500, detail="Server not properly initialized")
 
@@ -430,35 +442,47 @@ async def get_service_by_port(port: int) -> ServiceListItem:
     if not service:
         raise HTTPException(status_code=404, detail=f"Service not found on port {port}")
 
+    start = time.time()
     stats_obj = ServiceStats(service.port, db)
     current_stats = stats_obj.get_current_stats()
+    logger.info(f"get_current_stats took {time.time() - start:.3f}s")
 
     five_minutes_ago = int(time.time() * 1000) - (5 * 60 * 1000)
+    five_minutes_ago_datetime = datetime.fromtimestamp(five_minutes_ago / 1000)
+
     with db.connect() as conn:
         cursor = conn.cursor()
+
+        # Use stats table instead of raw http_request table
+        start = time.time()
         cursor.execute(
-            """SELECT COUNT(*) FROM http_request
-               WHERE port = ? AND start_time >= ?""",
-            (service.port, five_minutes_ago),
+            """SELECT SUM(count) FROM http_request_time_stats
+               WHERE port = ? AND time >= ?""",
+            (service.port, five_minutes_ago_datetime),
         )
         requests_delta = cursor.fetchone()[0] or 0
+        logger.info(f"requests_delta query took {time.time() - start:.3f}s")
 
+        start = time.time()
         cursor.execute(
-            """SELECT COUNT(*) FROM http_request
-               WHERE port = ? AND start_time >= ? AND is_blocked = 1""",
-            (service.port, five_minutes_ago),
+            """SELECT SUM(blocked_count) FROM http_request_time_stats
+               WHERE port = ? AND time >= ?""",
+            (service.port, five_minutes_ago_datetime),
         )
         blocked_requests_delta = cursor.fetchone()[0] or 0
+        logger.info(f"blocked_requests_delta query took {time.time() - start:.3f}s")
 
+        start = time.time()
         cursor.execute(
             """SELECT SUM(write_count), SUM(read_count)
                FROM flag_time_stats
                WHERE port = ? AND time >= ?""",
-            (service.port, five_minutes_ago),
+            (service.port, five_minutes_ago_datetime),
         )
         flag_delta_result = cursor.fetchone()
         flags_written_delta = flag_delta_result[0] or 0
         flags_retrieved_delta = flag_delta_result[1] or 0
+        logger.info(f"flag_delta query took {time.time() - start:.3f}s")
 
     tcp_stats = None
     if service.type.value == "tcp" and current_stats.get("tcp_stats"):
@@ -556,34 +580,97 @@ async def get_service_requests(
 
         # Get paginated results
         offset = (page - 1) * page_size
-        query = f"""
-            SELECT
-                req.id,
-                req.start_time,
-                req.method,
-                req.path,
-                resp.status,
-                req.is_blocked,
-                req.user_agent,
-                (SELECT COUNT(*) FROM flag WHERE flag.http_request_id = req.id) as req_flags_count,
-                (SELECT COUNT(*) FROM flag WHERE flag.http_response_id = resp.id) as resp_flags_count,
-                (SELECT COUNT(DISTINCT sl2.http_request_id)
-                 FROM session_link sl1
-                 JOIN session_link sl2 ON sl1.session_id = sl2.session_id
-                 WHERE sl1.http_request_id = req.id
-                   AND sl2.http_request_id < req.id) as incoming_links,
-                (SELECT COUNT(DISTINCT sl2.http_request_id)
-                 FROM session_link sl1
-                 JOIN session_link sl2 ON sl1.session_id = sl2.session_id
-                 WHERE sl1.http_request_id = req.id
-                   AND sl2.http_request_id > req.id) as outgoing_links
+
+        # First get the IDs of the requests we'll display
+        id_query = f"""
+            SELECT req.id
             {base_query}
             ORDER BY req.start_time DESC
             LIMIT ? OFFSET ?
         """
 
-        params.extend([page_size, offset])
-        cursor.execute(query, params)
+        id_params = params.copy()
+        id_params.extend([page_size, offset])
+        cursor.execute(id_query, id_params)
+        request_ids = [row[0] for row in cursor.fetchall()]
+
+        if not request_ids:
+            return RequestListResponse(
+                requests=[],
+                total=total_count,
+                service_name=service.name,
+                service_port=port,
+                page=page,
+                page_size=page_size,
+                total_pages=(total_count + page_size - 1) // page_size if total_count > 0 else 0,
+            )
+
+        # Now get all data for these requests with optimized joins
+        query = """
+            WITH request_data AS (
+                SELECT
+                    req.id,
+                    req.start_time,
+                    req.method,
+                    req.path,
+                    resp.status,
+                    resp.id as response_id,
+                    req.is_blocked,
+                    req.user_agent
+                FROM http_request req
+                LEFT JOIN http_response resp ON req.id = resp.request_id
+                WHERE req.id IN ({})
+            ),
+            flag_counts AS (
+                SELECT
+                    http_request_id,
+                    COUNT(*) as req_count
+                FROM flag
+                WHERE http_request_id IN ({})
+                GROUP BY http_request_id
+            ),
+            resp_flag_counts AS (
+                SELECT
+                    http_response_id,
+                    COUNT(*) as resp_count
+                FROM flag
+                WHERE http_response_id IN (
+                    SELECT response_id FROM request_data WHERE response_id IS NOT NULL
+                )
+                GROUP BY http_response_id
+            ),
+            session_counts AS (
+                SELECT
+                    sl.http_request_id,
+                    SUM(s.count) as total_session_requests
+                FROM session_link sl
+                JOIN session s ON sl.session_id = s.id
+                WHERE sl.http_request_id IN ({})
+                GROUP BY sl.http_request_id
+            )
+            SELECT
+                rd.id,
+                rd.start_time,
+                rd.method,
+                rd.path,
+                rd.status,
+                rd.is_blocked,
+                rd.user_agent,
+                COALESCE(fc.req_count, 0) as req_flags_count,
+                COALESCE(rfc.resp_count, 0) as resp_flags_count,
+                COALESCE(sc.total_session_requests, 0) as total_session_requests
+            FROM request_data rd
+            LEFT JOIN flag_counts fc ON rd.id = fc.http_request_id
+            LEFT JOIN resp_flag_counts rfc ON rd.response_id = rfc.http_response_id
+            LEFT JOIN session_counts sc ON rd.id = sc.http_request_id
+            ORDER BY rd.start_time DESC
+        """.format(
+            ",".join(["?"] * len(request_ids)),
+            ",".join(["?"] * len(request_ids)),
+            ",".join(["?"] * len(request_ids)),
+        )
+
+        cursor.execute(query, request_ids * 2 + request_ids)
         rows = cursor.fetchall()
 
         for row in rows:
@@ -597,8 +684,7 @@ async def get_service_requests(
                 user_agent,
                 req_flags,
                 resp_flags,
-                incoming_links,
-                outgoing_links,
+                total_session_requests,
             ) = row
 
             # Convert timestamp
@@ -615,8 +701,7 @@ async def get_service_requests(
                     user_agent=user_agent or "",
                     request_flags=req_flags or 0,
                     response_flags=resp_flags or 0,
-                    incoming_links=incoming_links or 0,
-                    outgoing_links=outgoing_links or 0,
+                    total_links=total_session_requests or 0,
                 )
             )
 
@@ -1089,18 +1174,33 @@ async def get_tcp_connections(
 
         cursor.execute(
             """
+            WITH tcp_ids AS (
+                SELECT id FROM tcp_connection
+                WHERE port = ?
+                ORDER BY start_time DESC
+                LIMIT ? OFFSET ?
+            )
             SELECT
                 tc.id, tc.connection_id, tc.start_time, tc.duration_ms,
                 tc.bytes_in, tc.bytes_out,
-                (SELECT COUNT(*) FROM flag f
-                 WHERE f.tcp_connection_id = tc.id AND f.location = 'read') as flags_in,
-                (SELECT COUNT(*) FROM flag f
-                 WHERE f.tcp_connection_id = tc.id AND f.location = 'write') as flags_out,
+                COALESCE(f_in.count, 0) as flags_in,
+                COALESCE(f_out.count, 0) as flags_out,
                 tc.is_blocked
             FROM tcp_connection tc
-            WHERE tc.port = ?
+            LEFT JOIN (
+                SELECT tcp_connection_id, COUNT(*) as count
+                FROM flag
+                WHERE location = 'read' AND tcp_connection_id IN (SELECT id FROM tcp_ids)
+                GROUP BY tcp_connection_id
+            ) f_in ON tc.id = f_in.tcp_connection_id
+            LEFT JOIN (
+                SELECT tcp_connection_id, COUNT(*) as count
+                FROM flag
+                WHERE location = 'write' AND tcp_connection_id IN (SELECT id FROM tcp_ids)
+                GROUP BY tcp_connection_id
+            ) f_out ON tc.id = f_out.tcp_connection_id
+            WHERE tc.id IN (SELECT id FROM tcp_ids)
             ORDER BY tc.start_time DESC
-            LIMIT ? OFFSET ?
         """,
             (port, page_size, offset),
         )
@@ -1345,6 +1445,163 @@ def get_recent_flag_stats() -> FlagTimeStatsResponse:
             )
 
         return FlagTimeStatsResponse(stats=stats, window_minutes=5)
+
+
+@app.get("/api/services/{port}/flag-time-stats", response_model=FlagTimeStatsResponse)
+def get_service_flag_time_stats(port: int, window_minutes: int = 60) -> FlagTimeStatsResponse:
+    """Get flag statistics for a specific service."""
+    if config is None or db is None:
+        raise HTTPException(status_code=500, detail="Server not properly initialized")
+
+    service = config.get_service_by_port(port)
+    if not service:
+        raise HTTPException(status_code=404, detail=f"Service not found on port {port}")
+
+    start_time = int(time.time() * 1000) - (window_minutes * 60 * 1000)
+
+    with db.connect() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT port, time, write_count, read_count
+            FROM flag_time_stats
+            WHERE port = ? AND time >= ?
+            ORDER BY time ASC
+            """,
+            (port, start_time),
+        )
+
+        stats = []
+        for row in cursor.fetchall():
+            port, time_ms, write_count, read_count = row
+            stats.append(
+                FlagTimeStatsItem(
+                    port=port,
+                    time=convert_timestamp_to_datetime(time_ms),
+                    write_count=write_count,
+                    read_count=read_count,
+                    total_count=write_count + read_count,
+                )
+            )
+
+        return FlagTimeStatsResponse(stats=stats, window_minutes=window_minutes)
+
+
+@app.get("/api/services/{port}/request-time-stats", response_model=RequestTimeStatsResponse)
+def get_service_request_time_stats(port: int, window_minutes: int = 60) -> RequestTimeStatsResponse:
+    """Get request statistics for a specific service."""
+    if config is None or db is None:
+        raise HTTPException(status_code=500, detail="Server not properly initialized")
+
+    service = config.get_service_by_port(port)
+    if not service:
+        raise HTTPException(status_code=404, detail=f"Service not found on port {port}")
+
+    if service.type.value == "tcp":
+        raise HTTPException(status_code=400, detail="Request stats not available for TCP services")
+
+    start_time = int(time.time() * 1000) - (window_minutes * 60 * 1000)
+
+    with db.connect() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT port, time, count, blocked_count
+            FROM http_request_time_stats
+            WHERE port = ? AND time >= ?
+            ORDER BY time ASC
+            """,
+            (port, start_time),
+        )
+
+        stats = []
+        for row in cursor.fetchall():
+            port, time_ms, count, blocked_count = row
+            stats.append(
+                RequestTimeStatsItem(
+                    port=port,
+                    time=convert_timestamp_to_datetime(time_ms),
+                    count=count,
+                    blocked_count=blocked_count,
+                )
+            )
+
+        return RequestTimeStatsResponse(stats=stats, window_minutes=window_minutes)
+
+
+@app.get("/api/request-time-stats", response_model=RequestTimeStatsResponse)
+def get_all_request_time_stats(window_minutes: int = 60) -> RequestTimeStatsResponse:
+    """Get request statistics for all services."""
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+
+    start_time = int(time.time() * 1000) - (window_minutes * 60 * 1000)
+
+    with db.connect() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT port, time, count, blocked_count
+            FROM http_request_time_stats
+            WHERE time >= ?
+            ORDER BY port, time ASC
+            """,
+            (start_time,),
+        )
+
+        stats = []
+        for row in cursor.fetchall():
+            port, time_ms, count, blocked_count = row
+            stats.append(
+                RequestTimeStatsItem(
+                    port=port,
+                    time=convert_timestamp_to_datetime(time_ms),
+                    count=count,
+                    blocked_count=blocked_count,
+                )
+            )
+
+        return RequestTimeStatsResponse(stats=stats, window_minutes=window_minutes)
+
+
+@app.get("/api/flag-time-stats", response_model=FlagTimeStatsResponse)
+def get_all_flag_time_stats(window_minutes: int = 60) -> FlagTimeStatsResponse:
+    """Get flag statistics for all services."""
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+
+    start_time = int(time.time() * 1000) - (window_minutes * 60 * 1000)
+
+    with db.connect() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT port, time, write_count, read_count
+            FROM flag_time_stats
+            WHERE time >= ?
+            ORDER BY port, time ASC
+            """,
+            (start_time,),
+        )
+
+        stats = []
+        for row in cursor.fetchall():
+            port, time_ms, write_count, read_count = row
+            stats.append(
+                FlagTimeStatsItem(
+                    port=port,
+                    time=convert_timestamp_to_datetime(time_ms),
+                    write_count=write_count,
+                    read_count=read_count,
+                    total_count=write_count + read_count,
+                )
+            )
+
+        return FlagTimeStatsResponse(stats=stats, window_minutes=window_minutes)
 
 
 # Config management models

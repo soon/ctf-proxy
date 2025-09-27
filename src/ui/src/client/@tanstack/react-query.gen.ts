@@ -11,16 +11,20 @@ import { client } from "../client.gen";
 import {
 	executeSqlApiSqlPost,
 	exportSqlCsvApiSqlExportPost,
+	getAllFlagTimeStatsApiFlagTimeStatsGet,
+	getAllRequestTimeStatsApiRequestTimeStatsGet,
 	getConfigApiConfigGet,
 	getConfigRevisionApiConfigRevisionFilenameGet,
 	getRecentFlagStatsApiFlagsRecentGet,
 	getRequestDetailApiRequestsRequestIdGet,
 	getRequestRawApiRequestsRequestIdRawGet,
 	getServiceByPortApiServicesPortGet,
+	getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGet,
 	getServiceHeaderStatsApiServicesPortHeadersGet,
 	getServicePathStatsApiServicesPortPathsGet,
 	getServiceQueryStatsApiServicesPortQueriesGet,
 	getServiceRequestsApiServicesPortRequestsGet,
+	getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGet,
 	getServicesApiServicesGet,
 	getSqlSchemaApiSqlSchemaGet,
 	getTcpConnectionDetailApiTcpConnectionsConnectionIdGet,
@@ -36,18 +40,22 @@ import type {
 	ExecuteSqlApiSqlPostError,
 	ExportSqlCsvApiSqlExportPostData,
 	ExportSqlCsvApiSqlExportPostError,
+	GetAllFlagTimeStatsApiFlagTimeStatsGetData,
+	GetAllRequestTimeStatsApiRequestTimeStatsGetData,
 	GetConfigApiConfigGetData,
 	GetConfigRevisionApiConfigRevisionFilenameGetData,
 	GetRecentFlagStatsApiFlagsRecentGetData,
 	GetRequestDetailApiRequestsRequestIdGetData,
 	GetRequestRawApiRequestsRequestIdRawGetData,
 	GetServiceByPortApiServicesPortGetData,
+	GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetData,
 	GetServiceHeaderStatsApiServicesPortHeadersGetData,
 	GetServicePathStatsApiServicesPortPathsGetData,
 	GetServiceQueryStatsApiServicesPortQueriesGetData,
 	GetServiceRequestsApiServicesPortRequestsGetData,
 	GetServiceRequestsApiServicesPortRequestsGetError,
 	GetServiceRequestsApiServicesPortRequestsGetResponse,
+	GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetData,
 	GetServicesApiServicesGetData,
 	GetSqlSchemaApiSqlSchemaGetData,
 	GetTcpConnectionDetailApiTcpConnectionsConnectionIdGetData,
@@ -663,6 +671,122 @@ export const getRecentFlagStatsApiFlagsRecentGetOptions = (
 			return data;
 		},
 		queryKey: getRecentFlagStatsApiFlagsRecentGetQueryKey(options),
+	});
+};
+
+export const getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetQueryKey = (
+	options: Options<GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetData>,
+) =>
+	createQueryKey(
+		"getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGet",
+		options,
+	);
+
+/**
+ * Get Service Flag Time Stats
+ * Get flag statistics for a specific service.
+ */
+export const getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetOptions = (
+	options: Options<GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetData>,
+) => {
+	return queryOptions({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } =
+				await getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGet({
+					...options,
+					...queryKey[0],
+					signal,
+					throwOnError: true,
+				});
+			return data;
+		},
+		queryKey:
+			getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetQueryKey(options),
+	});
+};
+
+export const getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetQueryKey =
+	(
+		options: Options<GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetData>,
+	) =>
+		createQueryKey(
+			"getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGet",
+			options,
+		);
+
+/**
+ * Get Service Request Time Stats
+ * Get request statistics for a specific service.
+ */
+export const getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetOptions =
+	(
+		options: Options<GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetData>,
+	) => {
+		return queryOptions({
+			queryFn: async ({ queryKey, signal }) => {
+				const { data } =
+					await getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGet({
+						...options,
+						...queryKey[0],
+						signal,
+						throwOnError: true,
+					});
+				return data;
+			},
+			queryKey:
+				getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetQueryKey(
+					options,
+				),
+		});
+	};
+
+export const getAllRequestTimeStatsApiRequestTimeStatsGetQueryKey = (
+	options?: Options<GetAllRequestTimeStatsApiRequestTimeStatsGetData>,
+) => createQueryKey("getAllRequestTimeStatsApiRequestTimeStatsGet", options);
+
+/**
+ * Get All Request Time Stats
+ * Get request statistics for all services.
+ */
+export const getAllRequestTimeStatsApiRequestTimeStatsGetOptions = (
+	options?: Options<GetAllRequestTimeStatsApiRequestTimeStatsGetData>,
+) => {
+	return queryOptions({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getAllRequestTimeStatsApiRequestTimeStatsGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getAllRequestTimeStatsApiRequestTimeStatsGetQueryKey(options),
+	});
+};
+
+export const getAllFlagTimeStatsApiFlagTimeStatsGetQueryKey = (
+	options?: Options<GetAllFlagTimeStatsApiFlagTimeStatsGetData>,
+) => createQueryKey("getAllFlagTimeStatsApiFlagTimeStatsGet", options);
+
+/**
+ * Get All Flag Time Stats
+ * Get flag statistics for all services.
+ */
+export const getAllFlagTimeStatsApiFlagTimeStatsGetOptions = (
+	options?: Options<GetAllFlagTimeStatsApiFlagTimeStatsGetData>,
+) => {
+	return queryOptions({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getAllFlagTimeStatsApiFlagTimeStatsGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getAllFlagTimeStatsApiFlagTimeStatsGetQueryKey(options),
 	});
 };
 

@@ -9,6 +9,12 @@ import type {
 	ExportSqlCsvApiSqlExportPostData,
 	ExportSqlCsvApiSqlExportPostErrors,
 	ExportSqlCsvApiSqlExportPostResponses,
+	GetAllFlagTimeStatsApiFlagTimeStatsGetData,
+	GetAllFlagTimeStatsApiFlagTimeStatsGetErrors,
+	GetAllFlagTimeStatsApiFlagTimeStatsGetResponses,
+	GetAllRequestTimeStatsApiRequestTimeStatsGetData,
+	GetAllRequestTimeStatsApiRequestTimeStatsGetErrors,
+	GetAllRequestTimeStatsApiRequestTimeStatsGetResponses,
 	GetConfigApiConfigGetData,
 	GetConfigApiConfigGetResponses,
 	GetConfigRevisionApiConfigRevisionFilenameGetData,
@@ -25,6 +31,9 @@ import type {
 	GetServiceByPortApiServicesPortGetData,
 	GetServiceByPortApiServicesPortGetErrors,
 	GetServiceByPortApiServicesPortGetResponses,
+	GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetData,
+	GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetErrors,
+	GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetResponses,
 	GetServiceHeaderStatsApiServicesPortHeadersGetData,
 	GetServiceHeaderStatsApiServicesPortHeadersGetErrors,
 	GetServiceHeaderStatsApiServicesPortHeadersGetResponses,
@@ -37,6 +46,9 @@ import type {
 	GetServiceRequestsApiServicesPortRequestsGetData,
 	GetServiceRequestsApiServicesPortRequestsGetErrors,
 	GetServiceRequestsApiServicesPortRequestsGetResponses,
+	GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetData,
+	GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetErrors,
+	GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetResponses,
 	GetServicesApiServicesGetData,
 	GetServicesApiServicesGetResponses,
 	GetSqlSchemaApiSqlSchemaGetData,
@@ -385,6 +397,91 @@ export const getRecentFlagStatsApiFlagsRecentGet = <
 		ThrowOnError
 	>({
 		url: "/api/flags/recent",
+		...options,
+	});
+};
+
+/**
+ * Get Service Flag Time Stats
+ * Get flag statistics for a specific service.
+ */
+export const getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<
+		GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetData,
+		ThrowOnError
+	>,
+) => {
+	return (options.client ?? client).get<
+		GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetResponses,
+		GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetErrors,
+		ThrowOnError
+	>({
+		url: "/api/services/{port}/flag-time-stats",
+		...options,
+	});
+};
+
+/**
+ * Get Service Request Time Stats
+ * Get request statistics for a specific service.
+ */
+export const getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<
+		GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetData,
+		ThrowOnError
+	>,
+) => {
+	return (options.client ?? client).get<
+		GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetResponses,
+		GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetErrors,
+		ThrowOnError
+	>({
+		url: "/api/services/{port}/request-time-stats",
+		...options,
+	});
+};
+
+/**
+ * Get All Request Time Stats
+ * Get request statistics for all services.
+ */
+export const getAllRequestTimeStatsApiRequestTimeStatsGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options?: Options<
+		GetAllRequestTimeStatsApiRequestTimeStatsGetData,
+		ThrowOnError
+	>,
+) => {
+	return (options?.client ?? client).get<
+		GetAllRequestTimeStatsApiRequestTimeStatsGetResponses,
+		GetAllRequestTimeStatsApiRequestTimeStatsGetErrors,
+		ThrowOnError
+	>({
+		url: "/api/request-time-stats",
+		...options,
+	});
+};
+
+/**
+ * Get All Flag Time Stats
+ * Get flag statistics for all services.
+ */
+export const getAllFlagTimeStatsApiFlagTimeStatsGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options?: Options<GetAllFlagTimeStatsApiFlagTimeStatsGetData, ThrowOnError>,
+) => {
+	return (options?.client ?? client).get<
+		GetAllFlagTimeStatsApiFlagTimeStatsGetResponses,
+		GetAllFlagTimeStatsApiFlagTimeStatsGetErrors,
+		ThrowOnError
+	>({
+		url: "/api/flag-time-stats",
 		...options,
 	});
 };

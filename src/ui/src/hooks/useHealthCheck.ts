@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { client } from "@/client/client.gen";
+import { healthCheckApiHealthGet } from "@/client/sdk.gen";
 
 interface HealthCheckResult {
 	isHealthy: boolean;
@@ -22,16 +23,12 @@ export function useHealthCheck(): HealthCheckResult {
 			setError(null);
 
 			try {
-				const response = await fetch(`${apiUrl}/api/health`);
-				if (response.ok) {
-					setIsHealthy(true);
-					if (storedUrl && client.getConfig().baseUrl !== apiUrl) {
-						client.setConfig({ baseUrl: apiUrl });
-					}
-				} else {
-					setIsHealthy(false);
-					setError(`Server responded with status ${response.status}`);
+				if (storedUrl && client.getConfig().baseUrl !== apiUrl) {
+					client.setConfig({ baseUrl: apiUrl });
 				}
+
+				const { data } = await healthCheckApiHealthGet();
+				setIsHealthy(true);
 			} catch (err) {
 				setIsHealthy(false);
 				setError(

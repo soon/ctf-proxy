@@ -30,6 +30,11 @@ function formatNumber(num: number): string {
 	return num.toLocaleString();
 }
 
+function formatDelta(delta: number): string {
+	if (delta > 0) return `+${delta.toLocaleString()}`;
+	return delta.toLocaleString();
+}
+
 export function ServiceInfo({
 	service,
 	previousService,
@@ -74,16 +79,6 @@ export function ServiceInfo({
 		if (service.stats.blocked_requests > 0) return "warning";
 		return "success";
 	};
-
-	const formatDelta = (value: number) => {
-		if (value === 0) return "";
-		return value > 0 ? `+${value}` : `${value}`;
-	};
-
-	const successRate =
-		service.stats.total_requests > 0
-			? (service.stats.success_responses / service.stats.total_requests) * 100
-			: 0;
 
 	const topStatuses = Object.entries(service.stats.status_counts || {})
 		.sort(([, a], [, b]) => b - a)
@@ -154,13 +149,6 @@ export function ServiceInfo({
 											? `+${formatNumber(service.stats.flags_retrieved_delta)}`
 											: ""}
 									</span>
-								</span>
-								<span
-									className={
-										service.stats.flags_blocked > 0 ? "text-red-500" : ""
-									}
-								>
-									✖{formatNumber(service.stats.flags_blocked)}
 								</span>
 							</div>
 						</div>
@@ -241,21 +229,6 @@ export function ServiceInfo({
 						</div>
 					)}
 
-					{/* Success Rate */}
-					<Progress
-						percent={Math.round(successRate)}
-						size="small"
-						strokeColor={
-							successRate > 90
-								? "#52c41a"
-								: successRate > 70
-									? "#faad14"
-									: "#ff4d4f"
-						}
-						showInfo={false}
-						strokeWidth={3}
-					/>
-
 					{/* Alerts */}
 					{service.stats.alerts_count > 0 && (
 						<div className="bg-red-50 p-1 rounded">
@@ -283,13 +256,6 @@ export function ServiceInfo({
 								)}
 						</div>
 					)}
-
-					{/* Stats */}
-					<div className="flex justify-between text-xs text-gray-500">
-						<span>P:{service.stats.unique_paths}</span>
-						<span>H:{service.stats.unique_headers}</span>
-						<span>{Math.round(successRate)}%</span>
-					</div>
 				</div>
 			</Card>
 		</Badge.Ribbon>

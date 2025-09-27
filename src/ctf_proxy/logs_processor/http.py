@@ -275,29 +275,29 @@ class HttpTapProcessor:
                     count=1,
                 ),
             )
-            path_stats_result = self.db.http_path_stats.increment(
-                tx,
-                HttpPathStatsRow.Increment(
-                    port=port,
-                    path=path,
-                    count=1,
-                ),
-            )
-            if path_stats_result == RowStatus.NEW:
-                self.db.alerts.insert(
-                    tx,
-                    AlertRow.Insert(
-                        port=port,
-                        created=now_timestamp(),
-                        description=f"New path: '{full_path}'",
-                        http_request_id=request_id,
-                        http_response_id=response_id,
-                    ),
-                )
             if not service_config or not any(
                 re.fullmatch(ignored.path, path) and method == ignored.method
                 for ignored in service_config.ignore_path_stats
             ):
+                path_stats_result = self.db.http_path_stats.increment(
+                    tx,
+                    HttpPathStatsRow.Increment(
+                        port=port,
+                        path=path,
+                        count=1,
+                    ),
+                )
+                if path_stats_result == RowStatus.NEW:
+                    self.db.alerts.insert(
+                        tx,
+                        AlertRow.Insert(
+                            port=port,
+                            created=now_timestamp(),
+                            description=f"New path: '{full_path}'",
+                            http_request_id=request_id,
+                            http_response_id=response_id,
+                        ),
+                    )
                 self.db.http_path_time_stats.increment(
                     tx,
                     HttpPathTimeStatsRow.Increment(

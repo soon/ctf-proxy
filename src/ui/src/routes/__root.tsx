@@ -18,6 +18,8 @@ import {
 	FileTextOutlined,
 	ToolOutlined,
 	DatabaseOutlined,
+	BarChartOutlined,
+	FlagOutlined,
 } from "@ant-design/icons";
 import { useHealthCheck } from "@/hooks/useHealthCheck";
 import { HostConfig } from "@/components/HostConfig";
@@ -59,6 +61,12 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 			if (path === "/config") {
 				return ["tools:config"];
 			}
+			if (path === "/stats/requests") {
+				return ["stats:requests"];
+			}
+			if (path === "/stats/flags") {
+				return ["stats:flags"];
+			}
 			const serviceMatch = path.match(/^\/service\/(\d+)/);
 			if (serviceMatch) {
 				return [`service-${serviceMatch[1]}`];
@@ -79,6 +87,25 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 				icon: <ApiOutlined />,
 				onClick: () => navigate({ to: `/service/${service.port}` }),
 			})) || []),
+			{
+				key: "stats",
+				label: "Stats",
+				icon: <BarChartOutlined />,
+				children: [
+					{
+						key: "stats:requests",
+						label: "Request Stats",
+						icon: <BarChartOutlined />,
+						onClick: () => navigate({ to: "/stats/requests" }),
+					},
+					{
+						key: "stats:flags",
+						label: "Flag Stats",
+						icon: <FlagOutlined />,
+						onClick: () => navigate({ to: "/stats/flags" }),
+					},
+				],
+			},
 			{
 				key: "tools",
 				label: "Tools",
@@ -221,6 +248,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 				// Handle Config route
 				else if (match.pathname === "/config") {
 					items.push({ title: "Config" });
+				}
+				// Handle Stats routes
+				else if (match.pathname.startsWith("/stats/") && breadcrumb) {
+					items.push({ title: breadcrumb });
 				}
 			});
 

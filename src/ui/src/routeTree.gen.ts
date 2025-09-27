@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SqlRouteImport } from './routes/sql'
 import { Route as ConfigRouteImport } from './routes/config'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as StatsRequestsRouteImport } from './routes/stats/requests'
+import { Route as StatsFlagsRouteImport } from './routes/stats/flags'
 import { Route as ServicePortIndexRouteImport } from './routes/service/$port/index'
 import { Route as ServicePortTcpStatsRouteImport } from './routes/service/$port/tcp-stats'
 import { Route as ServicePortQueriesRouteImport } from './routes/service/$port/queries'
@@ -33,6 +35,16 @@ const ConfigRoute = ConfigRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatsRequestsRoute = StatsRequestsRouteImport.update({
+  id: '/stats/requests',
+  path: '/stats/requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatsFlagsRoute = StatsFlagsRouteImport.update({
+  id: '/stats/flags',
+  path: '/stats/flags',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ServicePortIndexRoute = ServicePortIndexRouteImport.update({
@@ -76,6 +88,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/config': typeof ConfigRoute
   '/sql': typeof SqlRoute
+  '/stats/flags': typeof StatsFlagsRoute
+  '/stats/requests': typeof StatsRequestsRoute
   '/service/$port/headers': typeof ServicePortHeadersRoute
   '/service/$port/paths': typeof ServicePortPathsRoute
   '/service/$port/queries': typeof ServicePortQueriesRoute
@@ -88,6 +102,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/config': typeof ConfigRoute
   '/sql': typeof SqlRoute
+  '/stats/flags': typeof StatsFlagsRoute
+  '/stats/requests': typeof StatsRequestsRoute
   '/service/$port/headers': typeof ServicePortHeadersRoute
   '/service/$port/paths': typeof ServicePortPathsRoute
   '/service/$port/queries': typeof ServicePortQueriesRoute
@@ -101,6 +117,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/config': typeof ConfigRoute
   '/sql': typeof SqlRoute
+  '/stats/flags': typeof StatsFlagsRoute
+  '/stats/requests': typeof StatsRequestsRoute
   '/service/$port/headers': typeof ServicePortHeadersRoute
   '/service/$port/paths': typeof ServicePortPathsRoute
   '/service/$port/queries': typeof ServicePortQueriesRoute
@@ -115,6 +133,8 @@ export interface FileRouteTypes {
     | '/'
     | '/config'
     | '/sql'
+    | '/stats/flags'
+    | '/stats/requests'
     | '/service/$port/headers'
     | '/service/$port/paths'
     | '/service/$port/queries'
@@ -127,6 +147,8 @@ export interface FileRouteTypes {
     | '/'
     | '/config'
     | '/sql'
+    | '/stats/flags'
+    | '/stats/requests'
     | '/service/$port/headers'
     | '/service/$port/paths'
     | '/service/$port/queries'
@@ -139,6 +161,8 @@ export interface FileRouteTypes {
     | '/'
     | '/config'
     | '/sql'
+    | '/stats/flags'
+    | '/stats/requests'
     | '/service/$port/headers'
     | '/service/$port/paths'
     | '/service/$port/queries'
@@ -152,6 +176,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ConfigRoute: typeof ConfigRoute
   SqlRoute: typeof SqlRoute
+  StatsFlagsRoute: typeof StatsFlagsRoute
+  StatsRequestsRoute: typeof StatsRequestsRoute
   ServicePortHeadersRoute: typeof ServicePortHeadersRoute
   ServicePortPathsRoute: typeof ServicePortPathsRoute
   ServicePortQueriesRoute: typeof ServicePortQueriesRoute
@@ -182,6 +208,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stats/requests': {
+      id: '/stats/requests'
+      path: '/stats/requests'
+      fullPath: '/stats/requests'
+      preLoaderRoute: typeof StatsRequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stats/flags': {
+      id: '/stats/flags'
+      path: '/stats/flags'
+      fullPath: '/stats/flags'
+      preLoaderRoute: typeof StatsFlagsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/service/$port/': {
@@ -240,6 +280,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ConfigRoute: ConfigRoute,
   SqlRoute: SqlRoute,
+  StatsFlagsRoute: StatsFlagsRoute,
+  StatsRequestsRoute: StatsRequestsRoute,
   ServicePortHeadersRoute: ServicePortHeadersRoute,
   ServicePortPathsRoute: ServicePortPathsRoute,
   ServicePortQueriesRoute: ServicePortQueriesRoute,

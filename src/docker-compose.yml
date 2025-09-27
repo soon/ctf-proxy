@@ -35,7 +35,9 @@ services:
       - ./logs-archive:/app/logs-archive
     environment:
       - PYTHONUNBUFFERED=1
-    command: ["python", "-m", "ctf_proxy.dashboard.main", "--config", "/app/data/config.yml", "--db", "/app/data/proxy_stats.db", "--host", "0.0.0.0", "--port", "48955"]
+      - CONFIG_PATH=/app/data/config.yml
+      - DB_PATH=/app/data/proxy_stats.db
+    command: ["gunicorn", "ctf_proxy.dashboard.app:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:48955", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
     ports:
       - "127.0.0.1:48955:48955"
     restart: unless-stopped

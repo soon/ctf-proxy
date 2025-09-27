@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  websocket-echo:
+    build: .
+    container_name: websocket-echo-service
+    ports:
+      - "8765:8765"
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - websocket-net
+
+networks:
+  websocket-net:
+    driver: bridge

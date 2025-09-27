@@ -304,3 +304,29 @@ class TcpTapProcessor:
             """,
                 (port, read_min, read_max, write_min, write_max, time_bucket),
             )
+
+            # Update aggregated TCP stats
+            tx.execute(
+                """
+                INSERT INTO tcp_stats (port, total_connections, total_bytes_in, total_bytes_out, avg_duration_ms, total_flags_found)
+                VALUES (?, 1, ?, ?, ?, ?)
+                ON CONFLICT(port)
+                DO UPDATE SET
+                    total_connections = total_connections + 1,
+                    total_bytes_in = total_bytes_in + ?,
+                    total_bytes_out = total_bytes_out + ?,
+                    avg_duration_ms = CAST((avg_duration_ms * (total_connections - 1) + ?) AS INTEGER) / total_connections,
+                    total_flags_found = total_flags_found + ?
+            """,
+                (
+                    port,
+                    bytes_in,
+                    bytes_out,
+                    duration_ms,
+                    flags_written + flags_retrieved,
+                    bytes_in,
+                    bytes_out,
+                    duration_ms,
+                    flags_written + flags_retrieved,
+                ),
+            )

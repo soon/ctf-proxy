@@ -52,8 +52,9 @@ class ServiceStats:
                 count for status, count in status_counts.items() if 300 <= status < 400
             )
 
+            # Use pre-calculated stats from http_path_stats instead of counting distinct paths
             cursor.execute(
-                """SELECT COUNT(DISTINCT path) FROM http_request WHERE port = ?""",
+                """SELECT COUNT(DISTINCT path) FROM http_path_stats WHERE port = ?""",
                 (self.service_port,),
             )
             unique_paths = cursor.fetchone()[0]
@@ -70,18 +71,36 @@ class ServiceStats:
             )
             recent_alerts = cursor.fetchall()
 
+            # Use pre-calculated stats from http_header_time_stats
             cursor.execute(
                 """SELECT COUNT(DISTINCT name), COUNT(DISTINCT value)
-                   FROM http_header
-                   JOIN http_request ON http_header.request_id = http_request.id
-                   WHERE http_request.port = ?""",
+                   FROM http_header_time_stats
+                   WHERE port = ?""",
                 (self.service_port,),
             )
             header_stats = cursor.fetchone()
-            unique_headers = header_stats[0] if header_stats else 0
-            unique_header_values = header_stats[1] if header_stats else 0
+            unique_headers = header_stats[0] if header_stats and header_stats[0] else 0
+            unique_header_values = header_stats[1] if header_stats and header_stats[1] else 0
 
             total_flags = flags_written + flags_retrieved
+
+            # Get TCP stats if this is a TCP service
+            tcp_stats = None
+            cursor.execute(
+                """SELECT total_connections, total_bytes_in, total_bytes_out, avg_duration_ms, total_flags_found
+                   FROM tcp_stats
+                   WHERE port = ?""",
+                (self.service_port,),
+            )
+            tcp_row = cursor.fetchone()
+            if tcp_row:  # If there are TCP stats
+                tcp_stats = {
+                    "total_connections": tcp_row[0],
+                    "total_bytes_in": tcp_row[1],
+                    "total_bytes_out": tcp_row[2],
+                    "avg_duration_ms": tcp_row[3],
+                    "total_flags_found": tcp_row[4],
+                }
 
             return {
                 "total_requests": total_requests,
@@ -101,6 +120,7 @@ class ServiceStats:
                 "total_flags": total_flags,
                 "unique_headers": unique_headers,
                 "unique_header_values": unique_header_values,
+                "tcp_stats": tcp_stats,
             }
 
     def get_deltas(self) -> tuple[dict, dict]:

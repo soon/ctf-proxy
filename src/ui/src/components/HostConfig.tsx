@@ -1,6 +1,8 @@
 import { Modal, Input, Form, Alert, Button, Space } from "antd";
 import { useState } from "react";
 import { updateApiUrl } from "@/hooks/useHealthCheck";
+import { client } from "@/client/client.gen";
+import { healthCheckApiHealthGet } from "@/client/sdk.gen";
 
 interface HostConfigProps {
 	visible: boolean;
@@ -21,19 +23,18 @@ export function HostConfig({ visible, currentUrl, error }: HostConfigProps) {
 		setTestResult(null);
 
 		try {
-			const response = await fetch(`${url}/api/health`);
-			if (response.ok) {
-				const data = await response.json();
-				setTestResult({
-					success: true,
-					message: `Connected to ${data.backend} v${data.version}`,
-				});
-			} else {
-				setTestResult({
-					success: false,
-					message: `Server responded with status ${response.status}`,
-				});
-			}
+			// Temporarily set the base URL for testing
+			const originalBaseUrl = client.getConfig().baseUrl;
+			client.setConfig({ baseUrl: url });
+
+			const { data } = await healthCheckApiHealthGet();
+			setTestResult({
+				success: true,
+				message: `Connected to ${data.backend} v${data.version}`,
+			});
+
+			// Restore original base URL
+			client.setConfig({ baseUrl: originalBaseUrl });
 		} catch (err) {
 			setTestResult({
 				success: false,

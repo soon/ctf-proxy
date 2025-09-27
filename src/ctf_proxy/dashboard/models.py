@@ -63,8 +63,7 @@ class RequestListItem(BaseModel):
     user_agent: str
     request_flags: int
     response_flags: int
-    incoming_links: int
-    outgoing_links: int
+    total_links: int
 
 
 class RequestListResponse(BaseModel):
@@ -249,4 +248,16 @@ class FlagTimeStatsItem(BaseModel):
 
 class FlagTimeStatsResponse(BaseModel):
     stats: list[FlagTimeStatsItem]
+    window_minutes: int = 5
+
+
+class RequestTimeStatsItem(BaseModel):
+    port: int
+    time: datetime
+    count: int
+    blocked_count: int
+
+
+class RequestTimeStatsResponse(BaseModel):
+    stats: list[RequestTimeStatsItem]
     window_minutes: int = 5

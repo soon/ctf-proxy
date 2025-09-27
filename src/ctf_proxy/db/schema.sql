@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS http_request (
 CREATE INDEX IF NOT EXISTS http_request_port ON http_request(port);
 CREATE INDEX IF NOT EXISTS http_request_path ON http_request(path);
 CREATE INDEX IF NOT EXISTS http_request_user_agent ON http_request(user_agent);
+CREATE INDEX IF NOT EXISTS http_request_port_start_time ON http_request(port, start_time DESC);
 
 CREATE TABLE IF NOT EXISTS http_response (
     id INTEGER PRIMARY KEY,
@@ -176,7 +177,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS http_header_time_stats_unique ON http_header_t
 CREATE TABLE IF NOT EXISTS session (
     id INTEGER PRIMARY KEY,
     port INTEGER NOT NULL,
-    key TEXT NOT NULL
+    key TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0
 ) STRICT;
 CREATE UNIQUE INDEX IF NOT EXISTS session_unique ON session(port, key);
 
@@ -208,6 +210,7 @@ CREATE TABLE IF NOT EXISTS tcp_connection (
 CREATE INDEX IF NOT EXISTS tcp_connection_port ON tcp_connection(port);
 CREATE INDEX IF NOT EXISTS tcp_connection_start_time ON tcp_connection(start_time);
 CREATE INDEX IF NOT EXISTS tcp_connection_connection_id ON tcp_connection(connection_id);
+CREATE INDEX IF NOT EXISTS tcp_connection_port_start_time ON tcp_connection(port, start_time DESC);
 
 CREATE TABLE IF NOT EXISTS tcp_event (
     id INTEGER PRIMARY KEY,

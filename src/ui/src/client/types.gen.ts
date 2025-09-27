@@ -426,13 +426,9 @@ export type RequestListItem = {
 	 */
 	response_flags: number;
 	/**
-	 * Incoming Links
+	 * Total Links
 	 */
-	incoming_links: number;
-	/**
-	 * Outgoing Links
-	 */
-	outgoing_links: number;
+	total_links: number;
 };
 
 /**
@@ -467,6 +463,42 @@ export type RequestListResponse = {
 	 * Total Pages
 	 */
 	total_pages?: number;
+};
+
+/**
+ * RequestTimeStatsItem
+ */
+export type RequestTimeStatsItem = {
+	/**
+	 * Port
+	 */
+	port: number;
+	/**
+	 * Time
+	 */
+	time: string;
+	/**
+	 * Count
+	 */
+	count: number;
+	/**
+	 * Blocked Count
+	 */
+	blocked_count: number;
+};
+
+/**
+ * RequestTimeStatsResponse
+ */
+export type RequestTimeStatsResponse = {
+	/**
+	 * Stats
+	 */
+	stats: Array<RequestTimeStatsItem>;
+	/**
+	 * Window Minutes
+	 */
+	window_minutes?: number;
 };
 
 /**
@@ -1408,6 +1440,146 @@ export type GetRecentFlagStatsApiFlagsRecentGetResponses = {
 
 export type GetRecentFlagStatsApiFlagsRecentGetResponse =
 	GetRecentFlagStatsApiFlagsRecentGetResponses[keyof GetRecentFlagStatsApiFlagsRecentGetResponses];
+
+export type GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetData = {
+	body?: never;
+	path: {
+		/**
+		 * Port
+		 */
+		port: number;
+	};
+	query?: {
+		/**
+		 * Window Minutes
+		 */
+		window_minutes?: number;
+	};
+	url: "/api/services/{port}/flag-time-stats";
+};
+
+export type GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetErrors = {
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
+};
+
+export type GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetError =
+	GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetErrors[keyof GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetErrors];
+
+export type GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetResponses = {
+	/**
+	 * Successful Response
+	 */
+	200: FlagTimeStatsResponse;
+};
+
+export type GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetResponse =
+	GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetResponses[keyof GetServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetResponses];
+
+export type GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetData = {
+	body?: never;
+	path: {
+		/**
+		 * Port
+		 */
+		port: number;
+	};
+	query?: {
+		/**
+		 * Window Minutes
+		 */
+		window_minutes?: number;
+	};
+	url: "/api/services/{port}/request-time-stats";
+};
+
+export type GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetErrors =
+	{
+		/**
+		 * Validation Error
+		 */
+		422: HttpValidationError;
+	};
+
+export type GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetError =
+	GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetErrors[keyof GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetErrors];
+
+export type GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetResponses =
+	{
+		/**
+		 * Successful Response
+		 */
+		200: RequestTimeStatsResponse;
+	};
+
+export type GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetResponse =
+	GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetResponses[keyof GetServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetResponses];
+
+export type GetAllRequestTimeStatsApiRequestTimeStatsGetData = {
+	body?: never;
+	path?: never;
+	query?: {
+		/**
+		 * Window Minutes
+		 */
+		window_minutes?: number;
+	};
+	url: "/api/request-time-stats";
+};
+
+export type GetAllRequestTimeStatsApiRequestTimeStatsGetErrors = {
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
+};
+
+export type GetAllRequestTimeStatsApiRequestTimeStatsGetError =
+	GetAllRequestTimeStatsApiRequestTimeStatsGetErrors[keyof GetAllRequestTimeStatsApiRequestTimeStatsGetErrors];
+
+export type GetAllRequestTimeStatsApiRequestTimeStatsGetResponses = {
+	/**
+	 * Successful Response
+	 */
+	200: RequestTimeStatsResponse;
+};
+
+export type GetAllRequestTimeStatsApiRequestTimeStatsGetResponse =
+	GetAllRequestTimeStatsApiRequestTimeStatsGetResponses[keyof GetAllRequestTimeStatsApiRequestTimeStatsGetResponses];
+
+export type GetAllFlagTimeStatsApiFlagTimeStatsGetData = {
+	body?: never;
+	path?: never;
+	query?: {
+		/**
+		 * Window Minutes
+		 */
+		window_minutes?: number;
+	};
+	url: "/api/flag-time-stats";
+};
+
+export type GetAllFlagTimeStatsApiFlagTimeStatsGetErrors = {
+	/**
+	 * Validation Error
+	 */
+	422: HttpValidationError;
+};
+
+export type GetAllFlagTimeStatsApiFlagTimeStatsGetError =
+	GetAllFlagTimeStatsApiFlagTimeStatsGetErrors[keyof GetAllFlagTimeStatsApiFlagTimeStatsGetErrors];
+
+export type GetAllFlagTimeStatsApiFlagTimeStatsGetResponses = {
+	/**
+	 * Successful Response
+	 */
+	200: FlagTimeStatsResponse;
+};
+
+export type GetAllFlagTimeStatsApiFlagTimeStatsGetResponse =
+	GetAllFlagTimeStatsApiFlagTimeStatsGetResponses[keyof GetAllFlagTimeStatsApiFlagTimeStatsGetResponses];
 
 export type GetConfigApiConfigGetData = {
 	body?: never;

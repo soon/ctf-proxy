@@ -4,7 +4,13 @@ import {
 	getServiceByPortApiServicesPortGetOptions,
 	getServiceRequestsApiServicesPortRequestsGetOptions,
 	getTcpConnectionsApiServicesPortTcpConnectionsGetOptions,
+	getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetOptions,
+	getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetOptions,
 } from "@/client/@tanstack/react-query.gen";
+import {
+	getServiceRequestsApiServicesPortRequestsGet,
+	getRequestRawApiRequestsRequestIdRawGet,
+} from "@/client/sdk.gen";
 import {
 	Card,
 	Table,
@@ -38,6 +44,7 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { SparklineChart } from "@/components/SparklineChart";
 
 const { Search } = Input;
 const { Text } = Typography;
@@ -79,6 +86,7 @@ function ServiceDetail() {
 	const [loadingRawData, setLoadingRawData] = useState(false);
 	const [newRequestsAvailable, setNewRequestsAvailable] = useState(0);
 	const lastRequestCountRef = useRef<number>(0);
+	const isRefreshingRef = useRef<boolean>(false);
 
 	const {
 		data: service,
@@ -92,11 +100,33 @@ function ServiceDetail() {
 	});
 
 	const isTcpService = service?.type === "tcp";
+	const [hoverTimestamp, setHoverTimestamp] = useState<number | null>(null);
+	const [windowMinutes, setWindowMinutes] = useState(60);
+
+	// Fetch time stats for charts
+	const { data: flagTimeStats, refetch: refetchFlagStats } = useQuery({
+		...getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetOptions({
+			path: { port: portNumber },
+			query: { window_minutes: windowMinutes },
+		}),
+		enabled: !!service && !isTcpService,
+		refetchInterval: 30000,
+	});
+
+	const { data: requestTimeStats, refetch: refetchRequestStats } = useQuery({
+		...getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetOptions({
+			path: { port: portNumber },
+			query: { window_minutes: windowMinutes },
+		}),
+		enabled: !!service && !isTcpService,
+		refetchInterval: 30000,
+	});
 
 	const {
 		data: requestsData,
 		isLoading: requestsLoading,
 		refetch: refetchRequests,
+		isFetching: requestsFetching,
 	} = useQuery({
 		...getServiceRequestsApiServicesPortRequestsGetOptions({
 			path: { port: portNumber },
@@ -156,23 +186,21 @@ function ServiceDetail() {
 	useEffect(() => {
 		if (!isTcpService && service) {
 			const checkInterval = setInterval(async () => {
+				// Skip check if currently fetching or refreshing
+				if (requestsFetching || isRefreshingRef.current) {
+					return;
+				}
+
 				try {
-					const apiUrl =
-						localStorage.getItem("ctf-proxy-api-host") ||
-						"http://localhost:48955";
-					const response = await fetch(
-						`${apiUrl}/api/services/${portNumber}/requests?page=1&page_size=1`,
-					);
-					if (response.ok) {
-						const data = await response.json();
-						if (
-							lastRequestCountRef.current > 0 &&
-							data.total > lastRequestCountRef.current
-						) {
-							setNewRequestsAvailable(data.total - lastRequestCountRef.current);
-						} else if (lastRequestCountRef.current === 0) {
-							lastRequestCountRef.current = data.total;
-						}
+					const { data } = await getServiceRequestsApiServicesPortRequestsGet({
+						path: { port: portNumber },
+						query: { page: 1, page_size: 1 },
+					});
+					if (
+						lastRequestCountRef.current > 0 &&
+						data.total > lastRequestCountRef.current
+					) {
+						setNewRequestsAvailable(data.total - lastRequestCountRef.current);
 					}
 				} catch (error) {
 					console.error("Failed to check for new requests:", error);
@@ -181,12 +209,16 @@ function ServiceDetail() {
 
 			return () => clearInterval(checkInterval);
 		}
-	}, [isTcpService, service, portNumber]);
+	}, [isTcpService, service, portNumber, requestsFetching]);
 
-	// Update last request count when data changes
+	// Initialize and update last request count when data changes
 	useEffect(() => {
-		if (requestsData?.total) {
-			lastRequestCountRef.current = requestsData.total;
+		if (requestsData?.total !== undefined) {
+			// Only update if this is the first load or after a manual refresh
+			if (lastRequestCountRef.current === 0 || isRefreshingRef.current) {
+				lastRequestCountRef.current = requestsData.total;
+				isRefreshingRef.current = false;
+			}
 		}
 	}, [requestsData]);
 
@@ -305,112 +337,43 @@ function ServiceDetail() {
 			},
 		},
 		{
-			title: "Links",
+			title: "Session",
 			key: "links",
 			width: 80,
 			render: (_, record: any) => {
-				const inCount = record.incoming_links || 0;
-				const outCount = record.outgoing_links || 0;
+				const totalLinks = record.total_links || 0;
 
-				if (inCount === 0 && outCount === 0) return null;
+				if (totalLinks === 0) return null;
 
+				if (totalLinks === 1) {
+					// Single request in session
+					return <div className="text-gray-400 text-xs">Standalone</div>;
+				}
+
+				// Multiple requests in session
 				return (
-					<svg
-						width="60"
-						height="20"
-						viewBox="0 0 60 20"
-						className="inline-block"
-					>
-						{inCount > 0 && outCount === 0 && (
-							// Last request: arrow pointing at circle (red - terminal)
-							<>
-								<line
-									x1="15"
-									y1="10"
-									x2="40"
-									y2="10"
-									stroke="#ef4444"
-									strokeWidth="2"
-								/>
-								<polygon points="40,6 40,14 45,10" fill="#ef4444" />
-								<circle cx="48" cy="10" r="3" fill="#ef4444" />
-								{inCount > 1 && (
-									<text
-										x="5"
-										y="14"
-										fontSize="10"
-										fill="#ef4444"
-										fontWeight="bold"
-									>
-										{inCount}
-									</text>
-								)}
-							</>
-						)}
-						{inCount === 0 && outCount > 0 && (
-							// First request: circle with arrow coming out (green - starting)
-							<>
-								<circle cx="12" cy="10" r="3" fill="#10b981" />
-								<line
-									x1="15"
-									y1="10"
-									x2="40"
-									y2="10"
-									stroke="#10b981"
-									strokeWidth="2"
-								/>
-								<polygon points="40,6 40,14 45,10" fill="#10b981" />
-								{outCount > 1 && (
-									<text
-										x="50"
-										y="14"
-										fontSize="10"
-										fill="#10b981"
-										fontWeight="bold"
-									>
-										{outCount}
-									</text>
-								)}
-							</>
-						)}
-						{inCount > 0 && outCount > 0 && (
-							// Middle request: two circles connected (blue - intermediate)
-							<>
-								<circle cx="15" cy="10" r="3" fill="#3b82f6" />
-								<line
-									x1="18"
-									y1="10"
-									x2="42"
-									y2="10"
-									stroke="#3b82f6"
-									strokeWidth="2"
-								/>
-								<circle cx="45" cy="10" r="3" fill="#3b82f6" />
-								{inCount > 1 && (
-									<text
-										x="5"
-										y="5"
-										fontSize="10"
-										fill="#3b82f6"
-										fontWeight="bold"
-									>
-										{inCount}
-									</text>
-								)}
-								{outCount > 1 && (
-									<text
-										x="50"
-										y="5"
-										fontSize="10"
-										fill="#3b82f6"
-										fontWeight="bold"
-									>
-										{outCount}
-									</text>
-								)}
-							</>
-						)}
-					</svg>
+					<div className="flex items-center gap-1">
+						<svg
+							width="40"
+							height="20"
+							viewBox="0 0 40 20"
+							className="inline-block"
+						>
+							<circle cx="10" cy="10" r="3" fill="#3b82f6" />
+							<line
+								x1="13"
+								y1="10"
+								x2="27"
+								y2="10"
+								stroke="#3b82f6"
+								strokeWidth="2"
+							/>
+							<circle cx="30" cy="10" r="3" fill="#3b82f6" />
+						</svg>
+						<span className="text-xs text-blue-500 font-medium">
+							{totalLinks}
+						</span>
+					</div>
 				);
 			},
 		},
@@ -440,18 +403,10 @@ function ServiceDetail() {
 						setRawRequestModalVisible(true);
 
 						try {
-							const apiUrl =
-								localStorage.getItem("ctf-proxy-api-host") ||
-								"http://localhost:48955";
-							const response = await fetch(
-								`${apiUrl}/api/requests/${record.id}/raw`,
-							);
-							if (response.ok) {
-								const data = await response.json();
-								setRawRequestData(data);
-							} else {
-								setRawRequestData({ error: "Failed to load raw data" });
-							}
+							const { data } = await getRequestRawApiRequestsRequestIdRawGet({
+								path: { request_id: record.id },
+							});
+							setRawRequestData(data);
 						} catch (error) {
 							setRawRequestData({ error: String(error) });
 						} finally {
@@ -630,6 +585,7 @@ function ServiceDetail() {
 					if (isTcpService) {
 						refetchTcpConnections();
 					} else {
+						isRefreshingRef.current = true;
 						refetchRequests();
 						setNewRequestsAvailable(0);
 					}
@@ -647,29 +603,49 @@ function ServiceDetail() {
 			{pageActionsContainer && createPortal(controls, pageActionsContainer)}
 			{/* Stats Overview - More compact */}
 			<Row gutter={[8, 8]}>
-				<Col xs={12} sm={6}>
+				<Col xs={24} sm={12}>
 					<Card
 						size="small"
-						bodyStyle={{ padding: "8px", cursor: "pointer" }}
+						bodyStyle={{ padding: "8px" }}
 						className="hover:shadow-md transition-shadow"
 					>
-						<Statistic
-							title={
-								<span className="text-xs">
-									{isTcpService ? "Connections" : "Requests"}
-								</span>
-							}
-							value={
-								isTcpService
-									? service.stats.tcp_stats?.total_connections || 0
-									: service.stats.total_requests
-							}
-							prefix={<ApiOutlined className="text-xs" />}
-							valueStyle={{ fontSize: 14 }}
-						/>
+						{isTcpService ? (
+							<Statistic
+								title={<span className="text-xs">Connections</span>}
+								value={service.stats.tcp_stats?.total_connections || 0}
+								prefix={<ApiOutlined className="text-xs" />}
+								valueStyle={{ fontSize: 14 }}
+							/>
+						) : (
+							<div>
+								<div className="flex justify-between items-center mb-1">
+									<span className="text-xs text-gray-500">
+										<ApiOutlined className="mr-1" />
+										Requests ({service.stats.total_requests.toLocaleString()}{" "}
+										total)
+									</span>
+								</div>
+								{requestTimeStats && (
+									<SparklineChart
+										time_series={requestTimeStats.stats.map((s) => ({
+											timestamp: new Date(s.time).getTime(),
+											count: s.count,
+										}))}
+										windowMinutes={requestTimeStats.window_minutes}
+										globalHoverTimestamp={hoverTimestamp}
+										onHoverChange={setHoverTimestamp}
+									/>
+								)}
+								{service.stats.blocked_requests > 0 && (
+									<div className="text-xs text-red-500 mt-1">
+										{service.stats.blocked_requests.toLocaleString()} blocked
+									</div>
+								)}
+							</div>
+						)}
 					</Card>
 				</Col>
-				<Col xs={12} sm={6}>
+				<Col xs={24} sm={12}>
 					<Card size="small" bodyStyle={{ padding: "8px" }}>
 						{isTcpService ? (
 							<Statistic
@@ -678,19 +654,57 @@ function ServiceDetail() {
 								valueStyle={{ fontSize: 14 }}
 							/>
 						) : (
-							<>
-								<Statistic
-									title={<span className="text-xs">Flags</span>}
-									value={`${service.stats.flags_written}/${service.stats.flags_retrieved}`}
-									prefix={<FlagOutlined className="text-xs" />}
-									valueStyle={{ fontSize: 14 }}
-								/>
+							<div>
+								<div className="flex justify-between items-center mb-1">
+									<span className="text-xs text-gray-500">
+										<FlagOutlined className="mr-1" />
+										Flags Written (
+										{service.stats.flags_written.toLocaleString()} total)
+									</span>
+								</div>
+								{flagTimeStats && (
+									<SparklineChart
+										time_series={flagTimeStats.stats.map((s) => ({
+											timestamp: new Date(s.time).getTime(),
+											count: s.write_count,
+										}))}
+										windowMinutes={flagTimeStats.window_minutes}
+										globalHoverTimestamp={hoverTimestamp}
+										onHoverChange={setHoverTimestamp}
+									/>
+								)}
+							</div>
+						)}
+					</Card>
+				</Col>
+				<Col xs={24} sm={12}>
+					<Card size="small" bodyStyle={{ padding: "8px" }}>
+						{!isTcpService && (
+							<div>
+								<div className="flex justify-between items-center mb-1">
+									<span className="text-xs text-gray-500">
+										<FlagOutlined className="mr-1" />
+										Flags Retrieved (
+										{service.stats.flags_retrieved.toLocaleString()} total)
+									</span>
+								</div>
+								{flagTimeStats && (
+									<SparklineChart
+										time_series={flagTimeStats.stats.map((s) => ({
+											timestamp: new Date(s.time).getTime(),
+											count: s.read_count,
+										}))}
+										windowMinutes={flagTimeStats.window_minutes}
+										globalHoverTimestamp={hoverTimestamp}
+										onHoverChange={setHoverTimestamp}
+									/>
+								)}
 								{service.stats.flags_blocked > 0 && (
-									<div className="text-xs text-red-500">
-										{service.stats.flags_blocked} blocked
+									<div className="text-xs text-red-500 mt-1">
+										{service.stats.flags_blocked.toLocaleString()} blocked
 									</div>
 								)}
-							</>
+							</div>
 						)}
 					</Card>
 				</Col>
@@ -733,13 +747,16 @@ function ServiceDetail() {
 			{!isTcpService && newRequestsAvailable > 0 && (
 				<div className="bg-blue-50 border border-blue-200 rounded px-4 py-2 mb-2 flex justify-between items-center">
 					<span className="text-sm">
-						<span className="font-medium">{newRequestsAvailable}</span> new
-						request{newRequestsAvailable > 1 ? "s" : ""} available
+						<span className="font-medium">
+							{newRequestsAvailable.toLocaleString()}
+						</span>{" "}
+						new request{newRequestsAvailable > 1 ? "s" : ""} available
 					</span>
 					<Button
 						type="primary"
 						size="small"
 						onClick={() => {
+							isRefreshingRef.current = true;
 							refetchRequests();
 							setNewRequestsAvailable(0);
 						}}
@@ -756,13 +773,17 @@ function ServiceDetail() {
 					<div className="flex justify-center py-4">
 						<Spin />
 					</div>
-				) : tcpConnectionsData?.connections?.length === 0 ? (
+				) : !tcpConnectionsData ? (
+					<Empty description="No TCP connections data available" />
+				) : tcpConnectionsData.connections.length === 0 ? (
 					<Empty description="No TCP connections found" />
 				) : (
 					<Table
 						columns={tcpColumns}
-						dataSource={tcpConnectionsData?.connections}
-						rowKey="id"
+						dataSource={tcpConnectionsData.connections}
+						rowKey={(record, index) =>
+							`${record.id || index}-${record.timestamp || index}`
+						}
 						size="small"
 						pagination={{
 							current: currentPage,
@@ -773,7 +794,8 @@ function ServiceDetail() {
 							onChange: handlePageChange,
 							showTotal: (total, range) => (
 								<span className="text-xs">
-									{range[0]}-{range[1]} of {total} connections
+									{range[0].toLocaleString()}-{range[1].toLocaleString()} of{" "}
+									{total.toLocaleString()} connections
 								</span>
 							),
 						}}
@@ -809,7 +831,8 @@ function ServiceDetail() {
 						onChange: handlePageChange,
 						showTotal: (total, range) => (
 							<span className="text-xs">
-								{range[0]}-{range[1]} of {total} requests
+								{range[0].toLocaleString()}-{range[1].toLocaleString()} of{" "}
+								{total.toLocaleString()} requests
 							</span>
 						),
 					}}

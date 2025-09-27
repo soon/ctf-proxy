@@ -180,10 +180,10 @@ h - Show help`);
 								key={service.port}
 								xs={24}
 								sm={12}
-								md={8}
-								lg={6}
-								xl={4}
-								xxl={3}
+								md={12}
+								lg={8}
+								xl={6}
+								xxl={4}
 							>
 								<ServiceInfo
 									service={service}

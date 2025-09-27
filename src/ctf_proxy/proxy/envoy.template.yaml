@@ -52,7 +52,7 @@ static_resources:
                   runtime: envoy.wasm.runtime.v8
                   code:
                     local:
-                      filename: /etc/envoy/wasm/interceptor_http.wasm
+                      filename: /etc/envoy/wasm/{HTTP_INTERCEPTOR_FILENAME}
                   allow_precompiled: true
 
           - name: envoy.filters.http.tap
@@ -124,7 +124,7 @@ static_resources:
               runtime: envoy.wasm.runtime.v8
               code:
                 local:
-                  filename: /etc/envoy/wasm/interceptor_tcp.wasm
+                  filename: /etc/envoy/wasm/{TCP_INTERCEPTOR_FILENAME}
               allow_precompiled: true
       - name: envoy.filters.network.tcp_proxy
         typed_config:
