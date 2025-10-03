@@ -11,8 +11,13 @@ echo 'Creating container dirs...'
 sudo mkdir -p logs/tap logs/tcp-tap logs-archive data
 
 echo 'Updating config.yml...'
-python3 ./ctf_proxy/bin/docker-config-gen.py ~/config.yml
+python3 ./ctf_proxy/bin/config-gen.py ~/config.yml
 sudo cp ~/config.yml data/config.yml
+
+echo 'Generating Traefik and docker-compose configs...'
+sudo mkdir -p traefik
+sudo python3 ./ctf_proxy/bin/traefik-config-gen.py ./data/config.yml ./traefik
+sudo python3 ./ctf_proxy/bin/docker-compose-gen.py ./data/config.yml ./docker-compose.template.yml ./docker-compose.yml
 
 sudo chown -R 1337:1337 logs logs-archive data
 

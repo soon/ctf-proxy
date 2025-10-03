@@ -1,8 +1,10 @@
 import dayjs from "dayjs";
 
+const MINUTE_MS = 60_000;
+
 interface SparklineChartProps {
 	time_series: Array<{ timestamp: number; count: number }>;
-	windowMinutes: number;
+	windowMinutes?: number;
 	globalHoverTimestamp: number | null;
 	onHoverChange: (timestamp: number | null) => void;
 	isCustomRange?: boolean;
@@ -21,6 +23,16 @@ export function SparklineChart({
 	const height = 40;
 	const padding = 4;
 
+	// Snap timestamps to the minute so buckets align
+	const normalizedSeries = (time_series ?? [])
+		.map((point) => ({
+			...point,
+			timestamp: Math.floor(point.timestamp / MINUTE_MS) * MINUTE_MS,
+		}))
+		.sort((a, b) => a.timestamp - b.timestamp);
+
+	const effectiveWindow = Math.max(windowMinutes ?? 60, 1);
+
 	// Determine time range based on context
 	let minTime: number;
 	let maxTime: number;
@@ -30,29 +42,40 @@ export function SparklineChart({
 		// Custom range: use exact start/end times
 		minTime = dayjs(search.startTime).valueOf();
 		maxTime = dayjs(search.endTime).valueOf();
-		totalMinutes = Math.ceil((maxTime - minTime) / 60000);
+		totalMinutes = Math.max(1, Math.ceil((maxTime - minTime) / MINUTE_MS));
 	} else {
-		// Rolling window: calculate from current time
-		const now = Date.now();
-		maxTime = Math.floor(now / 60000) * 60000; // Round down to minute
-		minTime = maxTime - windowMinutes * 60000;
-		totalMinutes = windowMinutes;
+		// Rolling window: anchor the chart to the freshest datapoint we have
+		const defaultNow = Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS;
+		const latestTimestamp =
+			normalizedSeries.length > 0
+				? normalizedSeries[normalizedSeries.length - 1].timestamp
+				: defaultNow;
+
+		maxTime = latestTimestamp;
+		const windowMinCandidate = maxTime - (effectiveWindow - 1) * MINUTE_MS;
+
+		if (normalizedSeries.length > 0) {
+			const earliestTimestamp = normalizedSeries[0].timestamp;
+			minTime = Math.min(windowMinCandidate, earliestTimestamp);
+			totalMinutes = Math.floor((maxTime - minTime) / MINUTE_MS) + 1;
+		} else {
+			minTime = windowMinCandidate;
+			totalMinutes = effectiveWindow;
+		}
 	}
 
 	// Create a Map for quick lookup of actual data
 	const dataMap = new Map<number, number>();
-	if (time_series && time_series.length > 0) {
-		time_series.forEach((point) => {
-			// Round timestamp to nearest minute
-			const minuteTimestamp = Math.floor(point.timestamp / 60000) * 60000;
-			dataMap.set(minuteTimestamp, point.count);
+	if (normalizedSeries.length > 0) {
+		normalizedSeries.forEach((point) => {
+			dataMap.set(point.timestamp, point.count);
 		});
 	}
 
 	// Build complete dataset with 0s for missing minutes
 	const completeData: number[] = [];
 	for (let i = 0; i < totalMinutes; i++) {
-		const timestamp = minTime + i * 60000;
+		const timestamp = minTime + i * MINUTE_MS;
 		completeData.push(dataMap.get(timestamp) || 0);
 	}
 
@@ -82,8 +105,9 @@ export function SparklineChart({
 	let hoverInfo: { time: string; value: number } | null = null;
 	if (globalHoverTimestamp !== null) {
 		// Find the closest minute timestamp
-		const minuteTimestamp = Math.floor(globalHoverTimestamp / 60000) * 60000;
-		const index = Math.floor((minuteTimestamp - minTime) / 60000);
+		const minuteTimestamp =
+			Math.floor(globalHoverTimestamp / MINUTE_MS) * MINUTE_MS;
+		const index = Math.floor((minuteTimestamp - minTime) / MINUTE_MS);
 		if (index >= 0 && index < completeData.length) {
 			hoverInfo = {
 				time: dayjs(minuteTimestamp).format("MMM D, HH:mm"),
@@ -146,7 +170,7 @@ export function SparklineChart({
 						const value = completeData[i];
 						const x = padding + i * xStep;
 						const y = height - padding - value * yScale;
-						const timestamp = minTime + i * 60000;
+						const timestamp = minTime + i * MINUTE_MS;
 
 						hoverPoints.push(
 							<g key={i}>
@@ -170,7 +194,7 @@ export function SparklineChart({
 									fill="#1890ff"
 									opacity={
 										globalHoverTimestamp !== null &&
-										Math.abs(timestamp - globalHoverTimestamp) < 60000
+										Math.abs(timestamp - globalHoverTimestamp) < MINUTE_MS
 											? "1"
 											: "0"
 									}

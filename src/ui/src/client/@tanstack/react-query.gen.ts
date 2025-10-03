@@ -13,6 +13,7 @@ import {
 	exportSqlCsvApiSqlExportPost,
 	getAllFlagTimeStatsApiFlagTimeStatsGet,
 	getAllRequestTimeStatsApiRequestTimeStatsGet,
+	getCodeServerInfoApiCodeServerInfoGet,
 	getConfigApiConfigGet,
 	getConfigRevisionApiConfigRevisionFilenameGet,
 	getRecentFlagStatsApiFlagsRecentGet,
@@ -42,6 +43,7 @@ import type {
 	ExportSqlCsvApiSqlExportPostError,
 	GetAllFlagTimeStatsApiFlagTimeStatsGetData,
 	GetAllRequestTimeStatsApiRequestTimeStatsGetData,
+	GetCodeServerInfoApiCodeServerInfoGetData,
 	GetConfigApiConfigGetData,
 	GetConfigRevisionApiConfigRevisionFilenameGetData,
 	GetRecentFlagStatsApiFlagsRecentGetData,
@@ -894,4 +896,29 @@ export const validateConfigApiConfigValidatePostMutation = (
 		},
 	};
 	return mutationOptions;
+};
+
+export const getCodeServerInfoApiCodeServerInfoGetQueryKey = (
+	options?: Options<GetCodeServerInfoApiCodeServerInfoGetData>,
+) => createQueryKey("getCodeServerInfoApiCodeServerInfoGet", options);
+
+/**
+ * Get Code Server Info
+ * Get code server configuration.
+ */
+export const getCodeServerInfoApiCodeServerInfoGetOptions = (
+	options?: Options<GetCodeServerInfoApiCodeServerInfoGetData>,
+) => {
+	return queryOptions({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getCodeServerInfoApiCodeServerInfoGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getCodeServerInfoApiCodeServerInfoGetQueryKey(options),
+	});
 };

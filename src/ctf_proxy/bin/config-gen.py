@@ -6,6 +6,7 @@ import os
 import secrets
 import subprocess
 import sys
+from dataclasses import dataclass
 from typing import Any
 
 import yaml
@@ -28,9 +29,31 @@ def run_docker_command(args: list[str]) -> str:
         return ""
 
 
-def get_running_containers() -> list[dict[str, Any]]:
+@dataclass
+class Container:
+    name: str
+    ports: list[str]
+    docker_compose: list[str]
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "Container":
+        return Container(
+            name=data.get("name", ""),
+            ports=[x.strip() for x in (data.get("ports") or "").split(",")],
+            docker_compose=[x.strip() for x in (data.get("docker_compose") or "").split(",")],
+        )
+
+
+def get_running_containers() -> list[Container]:
     """Get list of running containers with their port mappings."""
-    containers_json = run_docker_command(["ps", "--format", "json", "--filter", "status=running"])
+    # containers_json = run_docker_command(["ps", "--format", "json", "--filter", "status=running"])
+    containers_json = run_docker_command(
+        [
+            "ps",
+            "--format",
+            """{"name": {{ json (.Names) }}, "ports": {{ json (.Ports) }}, "docker_compose": {{ json (.Label "com.docker.compose.project.config_files")}} }""",
+        ]
+    )
 
     if not containers_json.strip():
         return []
@@ -38,41 +61,48 @@ def get_running_containers() -> list[dict[str, Any]]:
     containers = []
     for line in containers_json.strip().split("\n"):
         if line.strip():
-            containers.append(json.loads(line))
+            containers.append(Container.from_dict(json.loads(line)))
 
     return containers
 
 
-def parse_port_mappings(ports_str: str) -> list[dict[str, Any]]:
+def parse_port_mappings(ports: list[str]) -> list[dict[str, Any]]:
     """Parse Docker port mappings string into structured data."""
-    if not ports_str:
+    if not ports:
         return []
 
     mappings = []
 
-    for port_mapping in ports_str.split(", "):
-        port_mapping = port_mapping.strip()
-
-        if "->" in port_mapping:
-            external_part, internal_part = port_mapping.split("->", 1)
-
-            internal_port = internal_part.split("/")[0]
-            protocol = internal_part.split("/")[1] if "/" in internal_part else "tcp"
-
-            external_port = external_part.split(":")[-1] if ":" in external_part else external_part
-
-            try:
-                mappings.append(
-                    {
-                        "external_port": int(external_port),
-                        "internal_port": int(internal_port),
-                        "protocol": protocol,
-                    }
-                )
-            except ValueError:
-                continue
+    for port_mapping in ports:
+        mapping = parse_port_mapping(port_mapping)
+        if mapping:
+            mappings.append(mapping)
 
     return mappings
+
+
+def parse_port_mapping(port_mapping: str) -> dict[str, Any] | None:
+    """Parse a single Docker port mapping string into structured data."""
+    port_mapping = port_mapping.strip()
+
+    if "->" in port_mapping:
+        external_part, internal_part = port_mapping.split("->", 1)
+
+        internal_port = internal_part.split("/")[0]
+        protocol = internal_part.split("/")[1] if "/" in internal_part else "tcp"
+
+        external_port = external_part.split(":")[-1] if ":" in external_part else external_part
+
+        try:
+            return {
+                "external_port": int(external_port),
+                "internal_port": int(internal_port),
+                "protocol": protocol,
+            }
+        except ValueError:
+            print(f"Warning: Invalid port number in mapping: {port_mapping}", file=sys.stderr)
+            return None
+    return None
 
 
 def determine_service_type(port: int, protocol: str, container_name: str) -> str:
@@ -168,8 +198,8 @@ def generate_config(existing_config: dict[str, Any] = None) -> dict[str, Any]:
     skipped_count = 0
 
     for container in containers:
-        container_name = container.get("Names", "")
-        ports_str = container.get("Ports", "")
+        container_name = container.name
+        ports_str = container.ports
 
         if not ports_str:
             continue
@@ -206,6 +236,14 @@ def generate_config(existing_config: dict[str, Any] = None) -> dict[str, Any]:
             services.append(
                 {"name": final_service_name, "port": external_port, "type": service_type}
             )
+            if container.docker_compose:
+                compose = container.docker_compose[0].strip()
+                if compose:
+                    services[-1]["compose_path"] = compose
+                    folder = os.path.dirname(compose)
+                    if folder:
+                        services[-1]["mount_folder"] = folder
+
             new_services_count += 1
 
     if new_services_count > 0:
@@ -230,7 +268,6 @@ def generate_config(existing_config: dict[str, Any] = None) -> dict[str, Any]:
         api_token = generate_random_token()
         result["api_token_hash"] = hash_token(api_token)
         print(f"Generated new API token: {api_token}", file=sys.stderr)
-        print(f"Token hash: {result['api_token_hash']}", file=sys.stderr)
         print("IMPORTANT: Save this token securely as it will not be shown again!", file=sys.stderr)
 
     return result
@@ -247,7 +284,7 @@ def save_config(config: dict[str, Any], filename: str) -> str:
 def main():
     """Main function."""
     if len(sys.argv) > 1 and sys.argv[1] in ["-h", "--help"]:
-        print("Usage: python docker-config-gen.py [output_file]")
+        print("Usage: python config-gen.py [output_file]")
         print()
         print("Generate/Update CTF proxy configuration based on running Docker containers.")
         print("Only containers with exposed ports are included.")

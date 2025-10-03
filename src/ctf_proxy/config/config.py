@@ -29,6 +29,14 @@ class Service(BaseModel):
     name: str = Field(..., min_length=1, description="Service name")
     port: int = Field(..., ge=1, le=65535, description="Service port number")
     type: ServiceType = Field(..., description="Service type")
+    compose_path: str | None = Field(
+        default=None, min_length=1, description="Path to Docker Compose file (optional)"
+    )
+    mount_folder: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Service source code folder to be mounted (optional)",
+    )
     ignore_path_stats: list[IgnoredPathStat] = Field(
         default_factory=list,
         description="List of ignored path stats",

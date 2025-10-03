@@ -82,6 +82,10 @@ app = FastAPI(title="CTF Proxy Dashboard API", version="1.0.0", lifespan=lifespa
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # Skip auth middleware for the auth verify endpoint (it handles its own auth)
+        if request.url.path == "/api/auth/verify":
+            return await call_next(request)
+
         # All /api routes require authentication
         if request.url.path.startswith("/api"):
             auth_header = request.headers.get("Authorization")
@@ -134,6 +138,59 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/api/auth/verify")
+async def verify_auth(request: Request) -> Response:
+    import logging
+    from urllib.parse import parse_qs, urlparse
+
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+    expected_token_hash = getattr(config, "api_token_hash", None)
+    if not expected_token_hash:
+        return Response(status_code=500)
+
+    # Log for debugging
+    logger.info(f"Auth verify - URL: {request.url}")
+    logger.info(f"Auth verify - Query params: {dict(request.query_params)}")
+    forwarded_uri = request.headers.get("x-forwarded-uri", "")
+    logger.info(f"Auth verify - X-Forwarded-Uri: {forwarded_uri}")
+
+    # Try Authorization header first
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        if verify_token(token, expected_token_hash):
+            return Response(status_code=200)
+
+    # Try query parameter (for iframe access)
+    token = request.query_params.get("tkn", "")
+    if token and verify_token(token, expected_token_hash):
+        return Response(status_code=200)
+
+    # Check X-Forwarded-Uri header from Traefik
+    if forwarded_uri and "tkn=" in forwarded_uri:
+        # Extract token from forwarded URI
+        parsed = urlparse(forwarded_uri)
+        params = parse_qs(parsed.query)
+        token = params.get("tkn", [""])[0]
+        if token and verify_token(token, expected_token_hash):
+            return Response(status_code=200)
+
+    # Check cookie (for code-server iframe access)
+    cookies = request.headers.get("cookie", "")
+    if "code_server_token=" in cookies:
+        # Extract token from cookie
+        for cookie in cookies.split(";"):
+            cookie = cookie.strip()
+            if cookie.startswith("code_server_token="):
+                token = cookie.split("=", 1)[1]
+                if verify_token(token, expected_token_hash):
+                    return Response(status_code=200)
+
+    return Response(status_code=401)
 
 
 def init_app(config_path: str = "config.yml", db_path: str = "proxy_stats.db") -> None:
@@ -1744,3 +1801,33 @@ async def save_config(config_data: ConfigContent) -> dict:
         raise HTTPException(status_code=400, detail=message)
 
     return {"success": True, "message": message}
+
+
+class CodeServerInfo(BaseModel):
+    enabled: bool
+    services: list[dict]
+    token_required: bool
+
+
+@app.get("/api/code-server/info")
+async def get_code_server_info() -> CodeServerInfo:
+    """Get code server configuration."""
+    if config is None:
+        raise HTTPException(status_code=500, detail="Server not properly initialized")
+
+    services_with_mount = [
+        {
+            "name": s.name,
+            "port": s.port,
+            "mount_folder": s.mount_folder,
+            "workspace_path": f"/workspace/{s.name.replace('-', '_')}",
+        }
+        for s in config.services
+        if s.mount_folder
+    ]
+
+    return CodeServerInfo(
+        enabled=len(services_with_mount) > 0,
+        services=services_with_mount,
+        token_required=True,
+    )

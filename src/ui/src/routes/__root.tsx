@@ -20,6 +20,7 @@ import {
 	DatabaseOutlined,
 	BarChartOutlined,
 	FlagOutlined,
+	CodeOutlined,
 } from "@ant-design/icons";
 import { useHealthCheck } from "@/hooks/useHealthCheck";
 import { HostConfig } from "@/components/HostConfig";
@@ -60,6 +61,9 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 			}
 			if (path === "/config") {
 				return ["tools:config"];
+			}
+			if (path === "/code-editor") {
+				return ["tools:code-editor"];
 			}
 			if (path === "/stats/requests") {
 				return ["stats:requests"];
@@ -123,6 +127,12 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 						label: "Config Editor",
 						icon: <FileTextOutlined />,
 						onClick: () => navigate({ to: "/config" }),
+					},
+					{
+						key: "tools:code-editor",
+						label: "Code Editor",
+						icon: <CodeOutlined />,
+						onClick: () => navigate({ to: "/code-editor" }),
 					},
 					{
 						key: "tools:settings",
@@ -249,6 +259,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 				else if (match.pathname === "/config") {
 					items.push({ title: "Config" });
 				}
+				// Handle Code Editor route
+				else if (match.pathname === "/code-editor") {
+					items.push({ title: "Code Editor" });
+				}
 				// Handle Stats routes
 				else if (match.pathname.startsWith("/stats/") && breadcrumb) {
 					items.push({ title: breadcrumb });
@@ -320,7 +334,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 							style={{
 								background: colorBgContainer,
 								minHeight: "100%",
-								padding: 24,
+								padding: location.pathname === "/code-editor" ? 0 : 24,
 								borderRadius: borderRadiusLG,
 							}}
 						>

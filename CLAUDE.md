@@ -272,8 +272,10 @@ You're a senior software engineer. When working follow engineering principles:
 
 # How to work with vm:
 
+YOU'RE WORKING IN A MAC OS VM WHICH DOESN'T HAVE DOCKER. IN ORDER TO DEPLOY YOUR CHANGES YOU CAN USE UBUNTU VM. TO ACCESS IT USE THE FOLLOWING:
+
 1. **Use ssh-exec.sh**: If you need to run a command in the vm, use `./scripts/ssh-exec.sh "<command>"`.
 2. **Shared folder**: The project is mounted to `/mnt/shared` in the vm and symlinked to `~/shared`. 
-3. **Copy**: When working with shared folder copy files to `~/working-copy` to avoid permission issues.
+3. **Project restart**: You can restart project by executing the following command on a remote vm: `cp src/data/config.yml ./ && sudo rm -r src/ && sudo rsync -a ./shared/src ./ --exclude .venv --exclude .venv_vm --exclude /src/ui --exclude /src/interceptor/wasm  --exclude /src/data -v && cd src/ && sudo mkdir -p data && sudo cp ~/config.yml ./data && make`
 4. **Available commands**: The vm has `docker`, `docker compose`, `make`.
 

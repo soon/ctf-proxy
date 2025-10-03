@@ -15,6 +15,8 @@ import type {
 	GetAllRequestTimeStatsApiRequestTimeStatsGetData,
 	GetAllRequestTimeStatsApiRequestTimeStatsGetErrors,
 	GetAllRequestTimeStatsApiRequestTimeStatsGetResponses,
+	GetCodeServerInfoApiCodeServerInfoGetData,
+	GetCodeServerInfoApiCodeServerInfoGetResponses,
 	GetConfigApiConfigGetData,
 	GetConfigApiConfigGetResponses,
 	GetConfigRevisionApiConfigRevisionFilenameGetData,
@@ -566,5 +568,24 @@ export const validateConfigApiConfigValidatePost = <
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+};
+
+/**
+ * Get Code Server Info
+ * Get code server configuration.
+ */
+export const getCodeServerInfoApiCodeServerInfoGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options?: Options<GetCodeServerInfoApiCodeServerInfoGetData, ThrowOnError>,
+) => {
+	return (options?.client ?? client).get<
+		GetCodeServerInfoApiCodeServerInfoGetResponses,
+		unknown,
+		ThrowOnError
+	>({
+		url: "/api/code-server/info",
+		...options,
 	});
 };

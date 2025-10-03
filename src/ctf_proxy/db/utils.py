@@ -10,4 +10,4 @@ def now_timestamp() -> int:
 
 
 def convert_timestamp_to_datetime(ts: int) -> datetime.datetime:
-    return datetime.datetime.fromtimestamp(ts / 1000)
+    return datetime.datetime.fromtimestamp(ts / 1000, tz=datetime.UTC)

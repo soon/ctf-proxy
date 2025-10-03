@@ -1,5 +1,10 @@
-install: 
+install:
 	./ctf_proxy/bin/setup.sh
+
+config:
+	mkdir -p traefik
+	./uv.sh run ./ctf_proxy/bin/traefik-config-gen.py ./data/config.yml ./traefik
+	./uv.sh run ./ctf_proxy/bin/docker-compose-gen.py ./data/config.yml ./docker-compose.template.yml ./docker-compose.yml
 
 ui:
 	docker compose run --rm ui
@@ -7,9 +12,6 @@ ui:
 
 ui-logs:
 	docker compose logs -f ui
-
-generate-config:
-	python3 ./ctf_proxy/bin/docker-config-gen.py > config.yml
 
 stop:
 	docker-compose down

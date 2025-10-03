@@ -1,0 +1,32 @@
+http:
+  routers:
+    code-server:
+      rule: PathPrefix(`/code-server`)
+      service: code-server
+      middlewares:
+      - code-server-auth
+      - code-server-strip
+      priority: 90
+    dashboard-backend:
+      rule: PathPrefix(`/`)
+      service: dashboard-backend
+      priority: 1
+  services:
+    dashboard-backend:
+      loadBalancer:
+        servers:
+        - url: http://dashboard-backend:48956
+    code-server:
+      loadBalancer:
+        servers:
+        - url: http://code-server:3000
+  middlewares:
+    code-server-auth:
+      plugin:
+        tokenauth:
+          tokenHash: 8e35c2cd3bf6641bdb0e2050b76932cbb2e6034a0ddacc1d9bea82a6ba57f7cf
+    code-server-strip:
+      stripPrefix:
+        prefixes:
+        - /code-server
+        forceSlash: false

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SqlRouteImport } from './routes/sql'
 import { Route as ConfigRouteImport } from './routes/config'
+import { Route as CodeEditorRouteImport } from './routes/code-editor'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as StatsRequestsRouteImport } from './routes/stats/requests'
 import { Route as StatsFlagsRouteImport } from './routes/stats/flags'
@@ -30,6 +31,11 @@ const SqlRoute = SqlRouteImport.update({
 const ConfigRoute = ConfigRouteImport.update({
   id: '/config',
   path: '/config',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CodeEditorRoute = CodeEditorRouteImport.update({
+  id: '/code-editor',
+  path: '/code-editor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -86,6 +92,7 @@ const ServicePortRequestIdRoute = ServicePortRequestIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/code-editor': typeof CodeEditorRoute
   '/config': typeof ConfigRoute
   '/sql': typeof SqlRoute
   '/stats/flags': typeof StatsFlagsRoute
@@ -100,6 +107,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/code-editor': typeof CodeEditorRoute
   '/config': typeof ConfigRoute
   '/sql': typeof SqlRoute
   '/stats/flags': typeof StatsFlagsRoute
@@ -115,6 +123,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/code-editor': typeof CodeEditorRoute
   '/config': typeof ConfigRoute
   '/sql': typeof SqlRoute
   '/stats/flags': typeof StatsFlagsRoute
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/code-editor'
     | '/config'
     | '/sql'
     | '/stats/flags'
@@ -145,6 +155,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/code-editor'
     | '/config'
     | '/sql'
     | '/stats/flags'
@@ -159,6 +170,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/code-editor'
     | '/config'
     | '/sql'
     | '/stats/flags'
@@ -174,6 +186,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CodeEditorRoute: typeof CodeEditorRoute
   ConfigRoute: typeof ConfigRoute
   SqlRoute: typeof SqlRoute
   StatsFlagsRoute: typeof StatsFlagsRoute
@@ -201,6 +214,13 @@ declare module '@tanstack/react-router' {
       path: '/config'
       fullPath: '/config'
       preLoaderRoute: typeof ConfigRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/code-editor': {
+      id: '/code-editor'
+      path: '/code-editor'
+      fullPath: '/code-editor'
+      preLoaderRoute: typeof CodeEditorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -278,6 +298,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CodeEditorRoute: CodeEditorRoute,
   ConfigRoute: ConfigRoute,
   SqlRoute: SqlRoute,
   StatsFlagsRoute: StatsFlagsRoute,

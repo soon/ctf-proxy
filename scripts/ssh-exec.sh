@@ -8,7 +8,7 @@ set -euo pipefail
 
 # SSH connection details
 SSH_USER="q"
-SSH_HOST="utm-ubuntu-vm"
+SSH_HOST="ubuntu-24-04-vm.local"
 
 # Colors for output
 RED='\033[0;31m'
