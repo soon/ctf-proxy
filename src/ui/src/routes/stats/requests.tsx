@@ -4,6 +4,7 @@ import {
 	getServicesApiServicesGetOptions,
 	getAllRequestTimeStatsApiRequestTimeStatsGetOptions,
 } from "@/client/@tanstack/react-query.gen";
+import type { RequestTimeStatsItem } from "@/client/types.gen";
 import { SparklineChart } from "@/components/SparklineChart";
 import { TimeWindowSelector } from "@/components/TimeWindowSelector";
 import { Table, Card, Button, Empty, Spin, Typography, Space } from "antd";
@@ -43,40 +44,50 @@ function RequestsStats() {
 	});
 
 	// Group stats by port
-	const statsByPort = new Map<number, any[]>();
+	const statsByPort = new Map<number, RequestTimeStatsItem[]>();
 	if (requestStats?.stats) {
-		requestStats.stats.forEach((stat: any) => {
+		for (const stat of requestStats.stats) {
 			if (!statsByPort.has(stat.port)) {
 				statsByPort.set(stat.port, []);
 			}
 			statsByPort.get(stat.port)?.push(stat);
-		});
+		}
 	}
 
 	// Prepare table data
-	const tableData = servicesData?.services
-		.filter((service) => service.type === "http")
-		.map((service) => {
-			const stats = statsByPort.get(service.port) || [];
-			const totalRequests = stats.reduce((sum, s) => sum + s.count, 0);
-			const blockedRequests = stats.reduce(
-				(sum, s) => sum + s.blocked_count,
-				0,
-			);
+	interface TableRow {
+		key: number;
+		port: number;
+		name: string;
+		totalRequests: number;
+		blockedRequests: number;
+		timeSeries: Array<{ timestamp: number; count: number }>;
+	}
 
-			return {
-				key: service.port,
-				port: service.port,
-				name: service.name,
-				totalRequests,
-				blockedRequests,
-				timeSeries: stats.map((s) => ({
-					timestamp: new Date(s.time).getTime(),
-					count: s.count,
-				})),
-			};
-		})
-		.sort((a, b) => a.port - b.port);
+	const tableData: TableRow[] =
+		servicesData?.services
+			.filter((service) => service.type === "http")
+			.map((service) => {
+				const stats = statsByPort.get(service.port) || [];
+				const totalRequests = stats.reduce((sum, s) => sum + s.count, 0);
+				const blockedRequests = stats.reduce(
+					(sum, s) => sum + s.blocked_count,
+					0,
+				);
+
+				return {
+					key: service.port,
+					port: service.port,
+					name: service.name,
+					totalRequests,
+					blockedRequests,
+					timeSeries: stats.map((s) => ({
+						timestamp: new Date(s.time).getTime(),
+						count: s.count,
+					})),
+				};
+			})
+			.sort((a, b) => a.port - b.port) || [];
 
 	const columns = [
 		{
@@ -101,7 +112,7 @@ function RequestsStats() {
 			dataIndex: "totalRequests",
 			key: "totalRequests",
 			width: 120,
-			sorter: (a: any, b: any) => a.totalRequests - b.totalRequests,
+			sorter: (a: TableRow, b: TableRow) => a.totalRequests - b.totalRequests,
 			render: (value: number) => value.toLocaleString(),
 		},
 		{
@@ -109,7 +120,7 @@ function RequestsStats() {
 			dataIndex: "blockedRequests",
 			key: "blockedRequests",
 			width: 100,
-			render: (value: number, record: any) => (
+			render: (value: number, record: TableRow) => (
 				<Text type={value > 0 ? "danger" : undefined}>
 					{value} (
 					{record.totalRequests > 0
@@ -123,7 +134,7 @@ function RequestsStats() {
 			title: "Activity",
 			key: "activity",
 			width: 300,
-			render: (_: any, record: any) => (
+			render: (_: unknown, record: TableRow) => (
 				<SparklineChart
 					time_series={record.timeSeries}
 					windowMinutes={windowMinutes}

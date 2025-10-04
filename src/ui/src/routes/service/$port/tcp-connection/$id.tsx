@@ -22,6 +22,7 @@ import {
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { useState } from "react";
+import type { TcpEvent } from "@/client/types.gen";
 
 const { Text, Paragraph } = Typography;
 
@@ -70,12 +71,11 @@ function decodeBase64(base64: string, mode: DisplayMode): string {
 						return `\\x${b.toString(16).padStart(2, "0")}`;
 					})
 					.join("");
-
-			case "utf8":
-			default:
+			default: {
 				// Use TextDecoder for proper UTF-8 decoding
 				const decoder = new TextDecoder("utf-8", { fatal: false });
 				return decoder.decode(bytes);
+			}
 		}
 	} catch (error) {
 		console.error("Failed to decode base64:", error);
@@ -88,7 +88,7 @@ function TcpConnectionDetail() {
 	const navigate = useNavigate();
 	const [displayMode, setDisplayMode] = useState<DisplayMode>("utf8");
 
-	const connectionId = parseInt(id);
+	const connectionId = Number.parseInt(id);
 
 	const {
 		data: connection,
@@ -125,7 +125,7 @@ function TcpConnectionDetail() {
 		);
 	}
 
-	const eventColumns: ColumnsType<any> = [
+	const eventColumns: ColumnsType<TcpEvent> = [
 		{
 			title: "Time",
 			dataIndex: "timestamp",
@@ -164,7 +164,7 @@ function TcpConnectionDetail() {
 			dataIndex: "data_bytes",
 			key: "data_bytes",
 			ellipsis: true,
-			render: (dataBytes: string | null, record: any) => {
+			render: (dataBytes: string | null, record: TcpEvent) => {
 				if (!dataBytes) {
 					if (record.event_type === "closed") {
 						return <Text type="secondary">Connection closed</Text>;
@@ -198,9 +198,9 @@ function TcpConnectionDetail() {
 			render: (flags: string[]) =>
 				flags && flags.length > 0 ? (
 					<Space direction="vertical" size={2}>
-						{flags.map((flag, idx) => (
+						{flags.map((flag) => (
 							<Tag
-								key={idx}
+								key={flag}
 								icon={<FlagOutlined />}
 								color="red"
 								className="text-xs"
@@ -215,7 +215,7 @@ function TcpConnectionDetail() {
 			title: "Status",
 			key: "status",
 			width: 120,
-			render: (_, record: any) => (
+			render: (_, record: TcpEvent) => (
 				<Space size={2}>
 					{record.truncated && (
 						<Tag color="warning" className="text-xs">

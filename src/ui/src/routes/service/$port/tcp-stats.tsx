@@ -37,7 +37,7 @@ function formatBytes(bytes: number): string {
 
 function TcpConnectionStats() {
 	const { port } = Route.useParams();
-	const portNumber = parseInt(port);
+	const portNumber = Number.parseInt(port);
 	const [windowMinutes, setWindowMinutes] = useState(60);
 	const [globalHoverTimestamp, setGlobalHoverTimestamp] = useState<
 		number | null

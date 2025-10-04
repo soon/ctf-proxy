@@ -43,13 +43,13 @@ ssh_exec() {
     
     log "INFO" "Executing on ${SSH_USER}@${SSH_HOST}: ${command}"
     
-    # Execute the command via SSH
+    # Execute the command via SSH with proper environment
     ssh -o ConnectTimeout=10 \
         -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile=/dev/null \
         -o LogLevel=ERROR \
         "${SSH_USER}@${SSH_HOST}" \
-        "${command}"
+        "source ~/.profile 2>/dev/null || true; source ~/.bashrc 2>/dev/null || true; ${command}"
 }
 
 # Function to check SSH connectivity

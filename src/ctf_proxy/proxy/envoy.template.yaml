@@ -23,6 +23,8 @@ static_resources:
           use_remote_address: false
           skip_xff_append: true
           server_header_transformation: PASS_THROUGH
+          upgrade_configs:
+          - upgrade_type: websocket
 
           access_log:
           - name: envoy.access_loggers.file

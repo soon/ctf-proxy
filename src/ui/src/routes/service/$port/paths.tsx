@@ -39,7 +39,7 @@ function SparklineChart({
 }: {
 	time_series: Array<{ timestamp: number; count: number }>;
 	isCustomRange: boolean;
-	search: any;
+	search: { startTime?: string; endTime?: string };
 	windowMinutes: number;
 	globalHoverTimestamp: number | null;
 	onHoverChange: (timestamp: number | null) => void;
@@ -69,11 +69,11 @@ function SparklineChart({
 	// Create a Map for quick lookup of actual data
 	const dataMap = new Map<number, number>();
 	if (time_series && time_series.length > 0) {
-		time_series.forEach((point) => {
+		for (const point of time_series) {
 			// Round timestamp to nearest minute
 			const minuteTimestamp = Math.floor(point.timestamp / 60000) * 60000;
 			dataMap.set(minuteTimestamp, point.count);
-		});
+		}
 	}
 
 	// Build complete dataset with 0s for missing minutes
@@ -145,7 +145,9 @@ function SparklineChart({
 				height={height}
 				style={{ display: "block" }}
 				onMouseLeave={() => onHoverChange(null)}
+				aria-label="Path activity sparkline chart"
 			>
+				<title>Path activity sparkline chart</title>
 				{/* Grid line at zero */}
 				<line
 					x1={padding}
@@ -244,7 +246,7 @@ function PathStats() {
 	const { port } = Route.useParams();
 	const search = Route.useSearch();
 	const navigate = useNavigate();
-	const portNumber = parseInt(port);
+	const portNumber = Number.parseInt(port);
 
 	const windowMinutes = search.window;
 	const autoRefresh = search.autoRefresh;
@@ -325,7 +327,10 @@ function PathStats() {
 		}
 	};
 
-	const queryParams: any = {
+	const queryParams: {
+		path: { port: number };
+		query?: { start_time: string; end_time: string; window_minutes?: number };
+	} = {
 		path: { port: portNumber },
 	};
 
@@ -378,7 +383,14 @@ function PathStats() {
 	// Extract values for use in the component
 	const totalMinutes = window_minutes || windowMinutes;
 
-	const columns: ColumnsType<any> = [
+	interface PathRow {
+		method: string;
+		path: string;
+		total_count: number;
+		time_series: Array<{ timestamp: number; count: number }>;
+	}
+
+	const columns: ColumnsType<PathRow> = [
 		{
 			title: "Method",
 			dataIndex: "method",
@@ -418,7 +430,7 @@ function PathStats() {
 			dataIndex: "total_count",
 			key: "total_count",
 			width: 120,
-			sorter: (a: any, b: any) => b.total_count - a.total_count,
+			sorter: (a: PathRow, b: PathRow) => b.total_count - a.total_count,
 			render: (count: number) => <Text strong>{count.toLocaleString()}</Text>,
 		},
 		{
@@ -426,8 +438,8 @@ function PathStats() {
 				isCustomRange && search.startTime && search.endTime
 					? `${dayjs(search.startTime).format("MMM D")} - ${dayjs(search.endTime).format("MMM D")}`
 					: totalMinutes <= 60
-						? "last " + totalMinutes + " min"
-						: "last " + Math.round(totalMinutes / 60) + " hours"
+						? `last ${totalMinutes} min`
+						: `last ${Math.round(totalMinutes / 60)} hours`
 			})`,
 			dataIndex: "time_series",
 			key: "sparkline",
@@ -551,7 +563,7 @@ function PathStats() {
 						setCustomRange(values as [dayjs.Dayjs, dayjs.Dayjs])
 					}
 					style={{ width: "100%" }}
-					disabledDate={(current) => current && current.isAfter(dayjs())}
+					disabledDate={(current) => current?.isAfter(dayjs())}
 				/>
 				{customRange && (
 					<div style={{ marginTop: 10 }}>

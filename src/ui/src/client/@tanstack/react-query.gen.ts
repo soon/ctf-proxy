@@ -31,10 +31,13 @@ import {
 	getTcpConnectionDetailApiTcpConnectionsConnectionIdGet,
 	getTcpConnectionsApiServicesPortTcpConnectionsGet,
 	getTcpConnectionStatsApiServicesPortTcpConnectionStatsGet,
+	getWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGet,
+	getWebsocketConnectionsApiServicesPortWebsocketConnectionsGet,
 	healthCheckApiHealthGet,
 	type Options,
 	saveConfigApiConfigPost,
 	validateConfigApiConfigValidatePost,
+	verifyAuthApiAuthVerifyGet,
 } from "../sdk.gen";
 import type {
 	ExecuteSqlApiSqlPostData,
@@ -65,6 +68,10 @@ import type {
 	GetTcpConnectionsApiServicesPortTcpConnectionsGetError,
 	GetTcpConnectionsApiServicesPortTcpConnectionsGetResponse,
 	GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetData,
+	GetWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGetData,
+	GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetData,
+	GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetError,
+	GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetResponse,
 	HealthCheckApiHealthGetData,
 	SaveConfigApiConfigPostData,
 	SaveConfigApiConfigPostError,
@@ -72,6 +79,7 @@ import type {
 	ValidateConfigApiConfigValidatePostData,
 	ValidateConfigApiConfigValidatePostError,
 	ValidateConfigApiConfigValidatePostResponse,
+	VerifyAuthApiAuthVerifyGetData,
 } from "../types.gen";
 
 export type QueryKey<TOptions extends Options> = [
@@ -112,6 +120,30 @@ const createQueryKey = <TOptions extends Options>(
 		params.query = options.query;
 	}
 	return [params];
+};
+
+export const verifyAuthApiAuthVerifyGetQueryKey = (
+	options?: Options<VerifyAuthApiAuthVerifyGetData>,
+) => createQueryKey("verifyAuthApiAuthVerifyGet", options);
+
+/**
+ * Verify Auth
+ */
+export const verifyAuthApiAuthVerifyGetOptions = (
+	options?: Options<VerifyAuthApiAuthVerifyGetData>,
+) => {
+	return queryOptions({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await verifyAuthApiAuthVerifyGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: verifyAuthApiAuthVerifyGetQueryKey(options),
+	});
 };
 
 export const healthCheckApiHealthGetQueryKey = (
@@ -651,12 +683,154 @@ export const getTcpConnectionStatsApiServicesPortTcpConnectionStatsGetOptions =
 		});
 	};
 
+export const getWebsocketConnectionsApiServicesPortWebsocketConnectionsGetQueryKey =
+	(
+		options: Options<GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetData>,
+	) =>
+		createQueryKey(
+			"getWebsocketConnectionsApiServicesPortWebsocketConnectionsGet",
+			options,
+		);
+
+/**
+ * Get Websocket Connections
+ */
+export const getWebsocketConnectionsApiServicesPortWebsocketConnectionsGetOptions =
+	(
+		options: Options<GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetData>,
+	) => {
+		return queryOptions({
+			queryFn: async ({ queryKey, signal }) => {
+				const { data } =
+					await getWebsocketConnectionsApiServicesPortWebsocketConnectionsGet({
+						...options,
+						...queryKey[0],
+						signal,
+						throwOnError: true,
+					});
+				return data;
+			},
+			queryKey:
+				getWebsocketConnectionsApiServicesPortWebsocketConnectionsGetQueryKey(
+					options,
+				),
+		});
+	};
+
+export const getWebsocketConnectionsApiServicesPortWebsocketConnectionsGetInfiniteQueryKey =
+	(
+		options: Options<GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetData>,
+	): QueryKey<
+		Options<GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetData>
+	> =>
+		createQueryKey(
+			"getWebsocketConnectionsApiServicesPortWebsocketConnectionsGet",
+			options,
+			true,
+		);
+
+/**
+ * Get Websocket Connections
+ */
+export const getWebsocketConnectionsApiServicesPortWebsocketConnectionsGetInfiniteOptions =
+	(
+		options: Options<GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetData>,
+	) => {
+		return infiniteQueryOptions<
+			GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetResponse,
+			GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetError,
+			InfiniteData<GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetResponse>,
+			QueryKey<
+				Options<GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetData>
+			>,
+			| number
+			| Pick<
+					QueryKey<
+						Options<GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetData>
+					>[0],
+					"body" | "headers" | "path" | "query"
+			  >
+		>(
+			// @ts-ignore
+			{
+				queryFn: async ({ pageParam, queryKey, signal }) => {
+					// @ts-ignore
+					const page: Pick<
+						QueryKey<
+							Options<GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetData>
+						>[0],
+						"body" | "headers" | "path" | "query"
+					> =
+						typeof pageParam === "object"
+							? pageParam
+							: {
+									query: {
+										page: pageParam,
+									},
+								};
+					const params = createInfiniteParams(queryKey, page);
+					const { data } =
+						await getWebsocketConnectionsApiServicesPortWebsocketConnectionsGet(
+							{
+								...options,
+								...params,
+								signal,
+								throwOnError: true,
+							},
+						);
+					return data;
+				},
+				queryKey:
+					getWebsocketConnectionsApiServicesPortWebsocketConnectionsGetInfiniteQueryKey(
+						options,
+					),
+			},
+		);
+	};
+
+export const getWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGetQueryKey =
+	(
+		options: Options<GetWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGetData>,
+	) =>
+		createQueryKey(
+			"getWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGet",
+			options,
+		);
+
+/**
+ * Get Websocket Connection Detail
+ */
+export const getWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGetOptions =
+	(
+		options: Options<GetWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGetData>,
+	) => {
+		return queryOptions({
+			queryFn: async ({ queryKey, signal }) => {
+				const { data } =
+					await getWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGet(
+						{
+							...options,
+							...queryKey[0],
+							signal,
+							throwOnError: true,
+						},
+					);
+				return data;
+			},
+			queryKey:
+				getWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGetQueryKey(
+					options,
+				),
+		});
+	};
+
 export const getRecentFlagStatsApiFlagsRecentGetQueryKey = (
 	options?: Options<GetRecentFlagStatsApiFlagsRecentGetData>,
 ) => createQueryKey("getRecentFlagStatsApiFlagsRecentGet", options);
 
 /**
  * Get Recent Flag Stats
+ *
  * Get flag statistics for the last 5 minutes.
  */
 export const getRecentFlagStatsApiFlagsRecentGetOptions = (
@@ -686,6 +860,7 @@ export const getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetQueryKey = (
 
 /**
  * Get Service Flag Time Stats
+ *
  * Get flag statistics for a specific service.
  */
 export const getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetOptions = (
@@ -718,6 +893,7 @@ export const getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetQueryKe
 
 /**
  * Get Service Request Time Stats
+ *
  * Get request statistics for a specific service.
  */
 export const getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetOptions =
@@ -748,6 +924,7 @@ export const getAllRequestTimeStatsApiRequestTimeStatsGetQueryKey = (
 
 /**
  * Get All Request Time Stats
+ *
  * Get request statistics for all services.
  */
 export const getAllRequestTimeStatsApiRequestTimeStatsGetOptions = (
@@ -773,6 +950,7 @@ export const getAllFlagTimeStatsApiFlagTimeStatsGetQueryKey = (
 
 /**
  * Get All Flag Time Stats
+ *
  * Get flag statistics for all services.
  */
 export const getAllFlagTimeStatsApiFlagTimeStatsGetOptions = (
@@ -798,6 +976,7 @@ export const getConfigApiConfigGetQueryKey = (
 
 /**
  * Get Config
+ *
  * Get current config content and list of revisions.
  */
 export const getConfigApiConfigGetOptions = (
@@ -819,6 +998,7 @@ export const getConfigApiConfigGetOptions = (
 
 /**
  * Save Config
+ *
  * Save config after validation and create a backup.
  */
 export const saveConfigApiConfigPostMutation = (
@@ -851,6 +1031,7 @@ export const getConfigRevisionApiConfigRevisionFilenameGetQueryKey = (
 
 /**
  * Get Config Revision
+ *
  * Get content of a specific config revision.
  */
 export const getConfigRevisionApiConfigRevisionFilenameGetOptions = (
@@ -872,6 +1053,7 @@ export const getConfigRevisionApiConfigRevisionFilenameGetOptions = (
 
 /**
  * Validate Config
+ *
  * Validate config without saving.
  */
 export const validateConfigApiConfigValidatePostMutation = (
@@ -904,6 +1086,7 @@ export const getCodeServerInfoApiCodeServerInfoGetQueryKey = (
 
 /**
  * Get Code Server Info
+ *
  * Get code server configuration.
  */
 export const getCodeServerInfoApiCodeServerInfoGetOptions = (

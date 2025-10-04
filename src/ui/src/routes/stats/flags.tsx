@@ -4,6 +4,7 @@ import {
 	getServicesApiServicesGetOptions,
 	getAllFlagTimeStatsApiFlagTimeStatsGetOptions,
 } from "@/client/@tanstack/react-query.gen";
+import type { FlagTimeStatsItem } from "@/client/types.gen";
 import { SparklineChart } from "@/components/SparklineChart";
 import { TimeWindowSelector } from "@/components/TimeWindowSelector";
 import { Table, Card, Button, Empty, Spin, Typography, Space, Tag } from "antd";
@@ -43,40 +44,53 @@ function FlagsStats() {
 	});
 
 	// Group stats by port
-	const statsByPort = new Map<number, any[]>();
+	const statsByPort = new Map<number, FlagTimeStatsItem[]>();
 	if (flagStats?.stats) {
-		flagStats.stats.forEach((stat: any) => {
+		for (const stat of flagStats.stats) {
 			if (!statsByPort.has(stat.port)) {
 				statsByPort.set(stat.port, []);
 			}
 			statsByPort.get(stat.port)?.push(stat);
-		});
+		}
 	}
 
 	// Prepare table data
-	const tableData = servicesData?.services
-		.map((service) => {
-			const stats = statsByPort.get(service.port) || [];
-			const totalWritten = stats.reduce((sum, s) => sum + s.write_count, 0);
-			const totalRead = stats.reduce((sum, s) => sum + s.read_count, 0);
-			const totalFlags = totalWritten + totalRead;
+	interface TableRow {
+		key: number;
+		port: number;
+		name: string;
+		type: string;
+		totalWritten: number;
+		totalRead: number;
+		total: number;
+		writeTimeSeries: Array<{ timestamp: number; count: number }>;
+		readTimeSeries: Array<{ timestamp: number; count: number }>;
+	}
 
-			return {
-				key: service.port,
-				port: service.port,
-				name: service.name,
-				type: service.type,
-				totalWritten,
-				totalRead,
-				totalFlags,
-				timeSeries: stats.map((s) => ({
-					timestamp: new Date(s.time).getTime(),
-					count: s.total_count,
-				})),
-			};
-		})
-		.filter((item) => item.totalFlags > 0 || item.type === "http")
-		.sort((a, b) => a.port - b.port);
+	const tableData: TableRow[] =
+		servicesData?.services
+			.map((service) => {
+				const stats = statsByPort.get(service.port) || [];
+				const totalWritten = stats.reduce((sum, s) => sum + s.write_count, 0);
+				const totalRead = stats.reduce((sum, s) => sum + s.read_count, 0);
+				const totalFlags = totalWritten + totalRead;
+
+				return {
+					key: service.port,
+					port: service.port,
+					name: service.name,
+					type: service.type,
+					totalWritten,
+					totalRead,
+					totalFlags,
+					timeSeries: stats.map((s) => ({
+						timestamp: new Date(s.time).getTime(),
+						count: s.total_count,
+					})),
+				};
+			})
+			.filter((item) => item.total > 0 || item.type === "http")
+			.sort((a, b) => a.port - b.port) || [];
 
 	const columns = [
 		{
@@ -90,7 +104,7 @@ function FlagsStats() {
 			dataIndex: "name",
 			key: "name",
 			width: 200,
-			render: (name: string, record: any) => (
+			render: (name: string, record: TableRow) => (
 				<Space>
 					<Text strong className="font-mono">
 						{name}
@@ -120,7 +134,7 @@ function FlagsStats() {
 			dataIndex: "totalFlags",
 			key: "totalFlags",
 			width: 120,
-			sorter: (a: any, b: any) => a.totalFlags - b.totalFlags,
+			sorter: (a: TableRow, b: TableRow) => a.total - b.total,
 			render: (value: number) => (
 				<Space>
 					<FlagOutlined />
@@ -132,7 +146,7 @@ function FlagsStats() {
 			title: "Activity",
 			key: "activity",
 			width: 300,
-			render: (_: any, record: any) =>
+			render: (_: unknown, record: TableRow) =>
 				record.timeSeries.length > 0 ? (
 					<SparklineChart
 						time_series={record.timeSeries}

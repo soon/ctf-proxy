@@ -8,7 +8,7 @@ interface SparklineChartProps {
 	globalHoverTimestamp: number | null;
 	onHoverChange: (timestamp: number | null) => void;
 	isCustomRange?: boolean;
-	search?: any;
+	search?: { startTime?: string; endTime?: string };
 }
 
 export function SparklineChart({
@@ -67,9 +67,9 @@ export function SparklineChart({
 	// Create a Map for quick lookup of actual data
 	const dataMap = new Map<number, number>();
 	if (normalizedSeries.length > 0) {
-		normalizedSeries.forEach((point) => {
+		for (const point of normalizedSeries) {
 			dataMap.set(point.timestamp, point.count);
-		});
+		}
 	}
 
 	// Build complete dataset with 0s for missing minutes
@@ -143,7 +143,9 @@ export function SparklineChart({
 				height={height}
 				style={{ display: "block" }}
 				onMouseLeave={() => onHoverChange(null)}
+				aria-label="Activity sparkline chart"
 			>
+				<title>Activity sparkline chart</title>
 				{/* Grid line at zero */}
 				<line
 					x1={padding}

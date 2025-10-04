@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 
+from ctf_proxy.db.adapters import configure_sqlite
 from ctf_proxy.db.base import RowStatus
 from ctf_proxy.db.stats import (
     FlagTimeStatsTable,
@@ -18,6 +19,9 @@ from ctf_proxy.db.stats import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+configure_sqlite()
 
 
 @dataclass
@@ -36,6 +40,8 @@ class HttpRequestRow:
     method: str
     user_agent: str | None
     body: str | None
+    is_blocked: bool
+    is_websocket: bool
     tap_id: str | None
     batch_id: str | None
 
@@ -86,11 +92,15 @@ class AlertRow:
 @dataclass
 class FlagRow:
     id: int
-    value: str
     http_request_id: int | None
     http_response_id: int | None
+    tcp_connection_id: int | None
+    tcp_event_id: int | None
+    websocket_connection_id: int | None
+    websocket_frame_id: int | None
     location: str | None
     offset: int | None
+    value: str
 
     @dataclass
     class Insert:
@@ -99,6 +109,8 @@ class FlagRow:
         http_response_id: int | None = None
         tcp_connection_id: int | None = None
         tcp_event_id: int | None = None
+        websocket_connection_id: int | None = None
+        websocket_frame_id: int | None = None
         location: str | None = None
         offset: int | None = None
 
@@ -114,6 +126,8 @@ class ServiceStatsRow:
     total_flags_written: int
     total_flags_retrieved: int
     total_flags_blocked: int
+    total_websocket_connections: int
+    total_websocket_frames: int
 
     @dataclass
     class Insert:
@@ -132,6 +146,8 @@ class ServiceStatsRow:
         total_tcp_connections: int = 0
         total_tcp_bytes_in: int = 0
         total_tcp_bytes_out: int = 0
+        total_websocket_connections: int = 0
+        total_websocket_frames: int = 0
 
 
 @dataclass
@@ -260,15 +276,40 @@ class TcpEventRow:
         truncated: bool = False
 
 
-class BaseTable:
-    def __init__(self, db_file: str):
-        self.db_file = db_file
+@dataclass
+class WebSocketConnectionRow:
+    id: int
+    http_request_id: int
 
-    def get_connection(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.db_file)
+    @dataclass
+    class Insert:
+        http_request_id: int
 
 
-class HttpRequestTable(BaseTable):
+@dataclass
+class WebSocketFrameRow:
+    id: int
+    connection_id: int
+    timestamp: int
+    direction: str
+    opcode: str
+    payload: bytes | None
+    payload_text: str | None
+    payload_size: int
+    masked: bool
+
+    @dataclass
+    class Insert:
+        connection_id: int
+        order: int
+        opcode: str
+        payload: bytes
+        payload_text: str
+        payload_size: int
+        is_client: bool
+
+
+class HttpRequestTable:
     def insert(
         self,
         tx: sqlite3.Cursor,
@@ -279,36 +320,32 @@ class HttpRequestTable(BaseTable):
         user_agent: str | None = None,
         body: str | None = None,
         is_blocked: bool | None = False,
+        is_websocket: bool = False,
         tap_id: str | None = None,
         batch_id: str | None = None,
     ) -> int:
         tx.execute(
             """
-            INSERT INTO http_request (port, start_time, path, method, user_agent, body, is_blocked, tap_id, batch_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO http_request (port, start_time, path, method, user_agent, body, is_blocked, is_websocket, tap_id, batch_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (port, start_time, path, method, user_agent, body, is_blocked, tap_id, batch_id),
+            (
+                port,
+                start_time,
+                path,
+                method,
+                user_agent,
+                body,
+                is_blocked,
+                is_websocket,
+                tap_id,
+                batch_id,
+            ),
         )
         return tx.lastrowid
 
-    def get_by_id(self, request_id: int) -> HttpRequestRow | None:
-        with self.get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM http_request WHERE id = ?", (request_id,))
-            row = cursor.fetchone()
-            if row:
-                return HttpRequestRow(**dict(row))
-            return None
 
-    def get_count(self) -> int:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM http_request")
-            return cursor.fetchone()[0]
-
-
-class HttpResponseTable(BaseTable):
+class HttpResponseTable:
     def insert(
         self, tx: sqlite3.Cursor, request_id: int, status: int, body: str | None = None
     ) -> int:
@@ -321,18 +358,8 @@ class HttpResponseTable(BaseTable):
         )
         return tx.lastrowid
 
-    def get_by_request_id(self, request_id: int) -> HttpResponseRow | None:
-        with self.get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM http_response WHERE request_id = ?", (request_id,))
-            row = cursor.fetchone()
-            if row:
-                return HttpResponseRow(**dict(row))
-            return None
 
-
-class HttpHeaderTable(BaseTable):
+class HttpHeaderTable:
     def insert_many(self, tx: sqlite3.Cursor, headers: list[HttpHeaderRow.Insert]) -> None:
         tx.executemany(
             """
@@ -342,24 +369,8 @@ class HttpHeaderTable(BaseTable):
             [(h.request_id, h.response_id, h.name, h.value) for h in headers],
         )
 
-    def get_by_request_id(self, request_id: int) -> list[HttpHeaderRow]:
-        with self.get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM http_header WHERE request_id = ?", (request_id,))
-            rows = cursor.fetchall()
-            return [HttpHeaderRow(**dict(row)) for row in rows]
 
-    def get_by_response_id(self, response_id: int) -> list[HttpHeaderRow]:
-        with self.get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM http_header WHERE response_id = ?", (response_id,))
-            rows = cursor.fetchall()
-            return [HttpHeaderRow(**dict(row)) for row in rows]
-
-
-class AlertTable(BaseTable):
+class AlertTable:
     def insert(
         self,
         tx: sqlite3.Cursor,
@@ -381,12 +392,33 @@ class AlertTable(BaseTable):
         )
 
 
-class FlagTable(BaseTable):
+class FlagTable:
+    def insert(self, tx: sqlite3.Cursor, **kwargs) -> int:
+        row = FlagRow.Insert(**kwargs)
+        tx.execute(
+            """
+            INSERT INTO flag (http_request_id, http_response_id, tcp_connection_id, tcp_event_id, websocket_connection_id, websocket_frame_id, location, offset, value)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row.http_request_id,
+                row.http_response_id,
+                row.tcp_connection_id,
+                row.tcp_event_id,
+                row.websocket_connection_id,
+                row.websocket_frame_id,
+                row.location,
+                row.offset,
+                row.value,
+            ),
+        )
+        return tx.lastrowid
+
     def insert_many(self, tx: sqlite3.Cursor, flags: list[FlagRow.Insert]) -> None:
         tx.executemany(
             """
-            INSERT INTO flag (http_request_id, http_response_id, tcp_connection_id, tcp_event_id, location, offset, value)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO flag (http_request_id, http_response_id, tcp_connection_id, tcp_event_id, websocket_connection_id, websocket_frame_id, location, offset, value)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -394,6 +426,8 @@ class FlagTable(BaseTable):
                     f.http_response_id,
                     f.tcp_connection_id,
                     f.tcp_event_id,
+                    f.websocket_connection_id,
+                    f.websocket_frame_id,
                     f.location,
                     f.offset,
                     f.value,
@@ -402,37 +436,8 @@ class FlagTable(BaseTable):
             ],
         )
 
-    def get_by_request_id(self, request_id: int) -> list[FlagRow]:
-        with self.get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT * FROM flag WHERE http_request_id = ? ORDER BY created DESC", (request_id,)
-            )
-            rows = cursor.fetchall()
-            return [FlagRow(**dict(row)) for row in rows]
 
-    def get_by_response_id(self, response_id: int) -> list[FlagRow]:
-        with self.get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT * FROM flag WHERE http_response_id = ? ORDER BY created DESC",
-                (response_id,),
-            )
-            rows = cursor.fetchall()
-            return [FlagRow(**dict(row)) for row in rows]
-
-    def get_all(self, limit: int = 100) -> list[FlagRow]:
-        with self.get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM flag ORDER BY created DESC LIMIT ?", (limit,))
-            rows = cursor.fetchall()
-            return [FlagRow(**dict(row)) for row in rows]
-
-
-class ServiceStatsTable(BaseTable):
+class ServiceStatsTable:
     def insert(self, tx: sqlite3.Cursor, row: ServiceStatsRow.Insert) -> int:
         tx.execute(
             """
@@ -452,7 +457,9 @@ UPDATE service_stats SET
     total_blocked_responses = total_blocked_responses + ?,
     total_flags_written = total_flags_written + ?,
     total_flags_retrieved = total_flags_retrieved + ?,
-    total_flags_blocked = total_flags_blocked + ?
+    total_flags_blocked = total_flags_blocked + ?,
+    total_websocket_connections = total_websocket_connections + ?,
+    total_websocket_frames = total_websocket_frames + ?
 WHERE port = ?;
 """
         params = (
@@ -463,6 +470,8 @@ WHERE port = ?;
             increments.total_flags_written,
             increments.total_flags_retrieved,
             increments.total_flags_blocked,
+            increments.total_websocket_connections,
+            increments.total_websocket_frames,
             increments.port,
         )
         tx.execute(sql, params)
@@ -485,6 +494,8 @@ WHERE port = ?;
             "total_flags_written",
             "total_flags_retrieved",
             "total_flags_blocked",
+            "total_websocket_connections",
+            "total_websocket_frames",
         ]
         sql = f"SELECT {', '.join(fields)} FROM service_stats WHERE port IN ({placeholders})"
         tx.execute(sql, ports)
@@ -492,7 +503,7 @@ WHERE port = ?;
         return [ServiceStatsRow(**dict(zip(fields, row, strict=False))) for row in rows]
 
 
-class HttpResponseCodeStatsTable(BaseTable):
+class HttpResponseCodeStatsTable:
     def insert(self, tx: sqlite3.Cursor, row: HttpResponseCodeStatsRow.Insert) -> int:
         tx.execute(
             """
@@ -539,7 +550,7 @@ WHERE port = ? AND status_code = ?;
         return [HttpResponseCodeStatsRow(**dict(zip(fields, row, strict=False))) for row in rows]
 
 
-class HttpPathStatsTable(BaseTable):
+class HttpPathStatsTable:
     def insert(self, tx: sqlite3.Cursor, row: HttpPathStatsRow.Insert) -> int:
         tx.execute(
             """
@@ -588,7 +599,7 @@ class SessionLinkRow:
         http_request_id: int
 
 
-class SessionTable(BaseTable):
+class SessionTable:
     def upsert(self, tx: sqlite3.Cursor, port: int, key: str) -> int:
         """Upsert session and increment count. Returns session ID."""
         tx.execute(
@@ -602,23 +613,10 @@ class SessionTable(BaseTable):
         )
         return tx.fetchone()[0]
 
-    def get_by_key(self, port: int, key: str) -> SessionRow | None:
-        with self.get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT * FROM session WHERE port = ? AND key = ?",
-                (port, key),
-            )
-            row = cursor.fetchone()
-            if row:
-                return SessionRow(**dict(row))
-            return None
 
-
-class SessionLinkTable(BaseTable):
+class SessionLinkTable:
     def insert(self, tx: sqlite3.Cursor, row: SessionLinkRow.Insert) -> None:
-        session_table = SessionTable(self.db_file)
+        session_table = SessionTable()
         session_id = session_table.upsert(tx, row.port, row.session_key)
 
         tx.execute(
@@ -629,48 +627,8 @@ class SessionLinkTable(BaseTable):
             (session_id, row.http_request_id),
         )
 
-    def get_requests_by_session(self, port: int, session_key: str) -> list[int]:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT sl.http_request_id
-                FROM session_link sl
-                JOIN session s ON s.id = sl.session_id
-                WHERE s.port = ? AND s.key = ?
-                ORDER BY sl.http_request_id
-                """,
-                (port, session_key),
-            )
-            return [row[0] for row in cursor.fetchall()]
 
-    def get_session_for_request(self, request_id: int) -> tuple[int, str] | None:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT s.port, s.key
-                FROM session s
-                JOIN session_link sl ON sl.session_id = s.id
-                WHERE sl.http_request_id = ?
-                """,
-                (request_id,),
-            )
-            result = cursor.fetchone()
-            if result:
-                return result
-            return None
-
-    def get_related_requests(self, request_id: int) -> list[int]:
-        session_info = self.get_session_for_request(request_id)
-        if not session_info:
-            return []
-        port, session_key = session_info
-        requests = self.get_requests_by_session(port, session_key)
-        return [r for r in requests if r != request_id]
-
-
-class TcpConnectionTable(BaseTable):
+class TcpConnectionTable:
     def insert(self, tx: sqlite3.Cursor, **kwargs) -> int:
         row = (
             TcpConnectionRow.Insert(**kwargs)
@@ -704,7 +662,7 @@ class TcpConnectionTable(BaseTable):
         return tx.lastrowid
 
 
-class TcpEventTable(BaseTable):
+class TcpEventTable:
     def insert(self, tx: sqlite3.Cursor, **kwargs) -> int:
         row = TcpEventRow.Insert(**kwargs)
 
@@ -729,7 +687,7 @@ class TcpEventTable(BaseTable):
         return tx.lastrowid
 
 
-class TcpConnectionStatsTable(BaseTable):
+class TcpConnectionStatsTable:
     def increment(self, tx: sqlite3.Cursor, row: TcpConnectionStatsRow.Increment) -> RowStatus:
         # Try to update existing record
         tx.execute(
@@ -754,56 +712,83 @@ class TcpConnectionStatsTable(BaseTable):
 
         return RowStatus.UPDATED
 
-    def get_by_port(self, port: int) -> list[TcpConnectionStatsRow]:
-        with self.get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT * FROM tcp_connection_stats
-                WHERE port = ?
-                ORDER BY read_min, write_min
+
+class WebSocketConnectionTable:
+    def insert(self, tx: sqlite3.Cursor, http_request_id: int) -> int:
+        tx.execute(
+            """
+            INSERT INTO websocket_connection (http_request_id) VALUES (?)
             """,
-                (port,),
-            )
-            rows = cursor.fetchall()
-            return [TcpConnectionStatsRow(**dict(row)) for row in rows]
+            (http_request_id,),
+        )
+        return tx.lastrowid
 
 
-def make_db(path: str = "proxy_stats.db"):
-    db = ProxyStatsDB(path)
-    db.init_db()
-    return db
+class WebSocketFrameTable:
+    def insert_many(self, tx: sqlite3.Cursor, frames: list[WebSocketFrameRow.Insert]) -> None:
+        tx.executemany(
+            """
+            INSERT INTO websocket_frame (
+                connection_id, ord, opcode, payload, payload_text,
+                payload_size, is_client
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    frame.connection_id,
+                    frame.order,
+                    frame.opcode,
+                    frame.payload,
+                    frame.payload_text,
+                    frame.payload_size,
+                    frame.is_client,
+                )
+                for frame in frames
+            ],
+        )
+
+
+class DbProvider:
+    def __init__(self, path: str):
+        self.path = path
+
+    def connect(self) -> sqlite3.Connection:
+        return sqlite3.connect(self.path)
 
 
 class ProxyStatsDB:
-    def __init__(self, db_file="proxy_stats.db"):
+    db_provider: DbProvider
+
+    def __init__(self, db_file="proxy_stats.db", db_provider: type[DbProvider] = DbProvider):
         self.db_file = db_file
-        self.http_requests = HttpRequestTable(db_file)
-        self.http_responses = HttpResponseTable(db_file)
-        self.http_headers = HttpHeaderTable(db_file)
-        self.alerts = AlertTable(db_file)
-        self.flags = FlagTable(db_file)
-        self.service_stats = ServiceStatsTable(db_file)
-        self.http_response_code_stats = HttpResponseCodeStatsTable(db_file)
-        self.http_path_stats = HttpPathStatsTable(db_file)
+        self.db_provider = db_provider(db_file)
+
+        self.http_requests = HttpRequestTable()
+        self.http_responses = HttpResponseTable()
+        self.http_headers = HttpHeaderTable()
+        self.alerts = AlertTable()
+        self.flags = FlagTable()
+        self.service_stats = ServiceStatsTable()
+        self.http_response_code_stats = HttpResponseCodeStatsTable()
+        self.http_path_stats = HttpPathStatsTable()
         self.http_path_time_stats = HttpPathTimeStatsTable()
         self.http_query_param_time_stats = HttpQueryParamTimeStatsTable()
         self.http_header_time_stats = HttpHeaderTimeStatsTable()
         self.http_request_time_stats = HttpRequestTimeStatsTable()
         self.flag_time_stats = FlagTimeStatsTable()
-        self.sessions = SessionTable(db_file)
-        self.session_links = SessionLinkTable(db_file)
-        self.tcp_connections = TcpConnectionTable(db_file)
-        self.tcp_events = TcpEventTable(db_file)
-        self.tcp_connection_stats = TcpConnectionStatsTable(db_file)
-        # self.conn = sqlite3.connect(self.db_file)
+        self.sessions = SessionTable()
+        self.session_links = SessionLinkTable()
+        self.tcp_connections = TcpConnectionTable()
+        self.tcp_events = TcpEventTable()
+        self.tcp_connection_stats = TcpConnectionStatsTable()
+        self.websocket_connections = WebSocketConnectionTable()
+        self.websocket_frames = WebSocketFrameTable()
 
     # def transaction(self):
     #     return closing(self.conn.cursor())
 
     def connect(self):
-        return sqlite3.connect(self.db_file)
+        return self.db_provider.connect()
 
     def init_schema(self, schema_file: str = None) -> None:
         if schema_file is None:
@@ -816,7 +801,7 @@ class ProxyStatsDB:
         with open(schema_file) as f:
             schema_sql = f.read()
 
-        with sqlite3.connect(self.db_file) as conn:
+        with self.connect() as conn:
             conn.executescript(schema_sql)
 
         logger.info(f"Database schema initialized from {schema_file}")
@@ -824,13 +809,6 @@ class ProxyStatsDB:
     def init_db(self) -> None:
         self.init_schema()
         logger.info(f"Database initialized: {self.db_file}")
-
-    def get_stats(self):
-        total_requests = self.http_requests.get_count()
-
-        return {
-            "total_requests": total_requests,
-        }
 
     def execute_sql(
         self, query: str, default_limit: int = 1000, timeout: float = 10.0
@@ -871,7 +849,7 @@ class ProxyStatsDB:
         def execute_query():
             nonlocal results, columns, exception, conn, query_time
             try:
-                conn = sqlite3.connect(self.db_file)
+                conn = self.connect()
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 start_time = time.perf_counter()
@@ -910,3 +888,11 @@ class ProxyStatsDB:
             raise exception
 
         return SqlExecutionResult(rows=results, columns=columns, query_time_ms=query_time)
+
+
+def make_db(
+    path: str = "proxy_stats.db", db_provider: type[DbProvider] = DbProvider
+) -> ProxyStatsDB:
+    db = ProxyStatsDB(path, db_provider=db_provider)
+    db.init_db()
+    return db

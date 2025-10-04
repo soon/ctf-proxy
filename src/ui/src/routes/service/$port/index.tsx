@@ -11,6 +11,7 @@ import {
 	getServiceRequestsApiServicesPortRequestsGet,
 	getRequestRawApiRequestsRequestIdRawGet,
 } from "@/client/sdk.gen";
+import type { HttpRequest, TcpConnection } from "@/client/types.gen";
 import {
 	Card,
 	Table,
@@ -66,7 +67,7 @@ function formatBytes(bytes: number): string {
 
 function ServiceDetail() {
 	const { port } = Route.useParams();
-	const portNumber = parseInt(port);
+	const portNumber = Number.parseInt(port);
 	const navigate = useNavigate();
 	const [currentPage, setCurrentPage] = useState(1);
 	const [pageSize, setPageSize] = useState(30);
@@ -82,7 +83,7 @@ function ServiceDetail() {
 	const [selectedRequestId, setSelectedRequestId] = useState<number | null>(
 		null,
 	);
-	const [rawRequestData, setRawRequestData] = useState<any>(null);
+	const [rawRequestData, setRawRequestData] = useState<unknown>(null);
 	const [loadingRawData, setLoadingRawData] = useState(false);
 	const [newRequestsAvailable, setNewRequestsAvailable] = useState(0);
 	const lastRequestCountRef = useRef<number>(0);
@@ -167,7 +168,7 @@ function ServiceDetail() {
 		if (trimmed.startsWith("/")) {
 			setFilters({ filter_path: trimmed });
 		} else if (trimmed.match(/^[1-5]\d{2}$/)) {
-			setFilters({ filter_status: parseInt(trimmed) });
+			setFilters({ filter_status: Number.parseInt(trimmed) });
 		} else if (
 			["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"].includes(
 				trimmed.toUpperCase(),
@@ -235,7 +236,7 @@ function ServiceDetail() {
 		}
 	};
 
-	const httpColumns: ColumnsType<any> = [
+	const httpColumns: ColumnsType<HttpRequest> = [
 		{
 			title: "ID",
 			dataIndex: "id",
@@ -318,7 +319,7 @@ function ServiceDetail() {
 			title: "Flags",
 			key: "flags",
 			width: 100,
-			render: (_, record: any) => {
+			render: (_, record: HttpRequest) => {
 				if (!record.request_flags && !record.response_flags) return null;
 				return (
 					<Space size={2}>
@@ -340,7 +341,7 @@ function ServiceDetail() {
 			title: "Session",
 			key: "links",
 			width: 80,
-			render: (_, record: any) => {
+			render: (_, record: HttpRequest) => {
 				const totalLinks = record.total_links || 0;
 
 				if (totalLinks === 0) return null;
@@ -359,6 +360,7 @@ function ServiceDetail() {
 							viewBox="0 0 40 20"
 							className="inline-block"
 						>
+							<title>Session link</title>
 							<circle cx="10" cy="10" r="3" fill="#3b82f6" />
 							<line
 								x1="13"
@@ -381,7 +383,7 @@ function ServiceDetail() {
 			title: "Blocked",
 			key: "blocked",
 			width: 70,
-			render: (_, record: any) =>
+			render: (_, record: HttpRequest) =>
 				record.is_blocked ? (
 					<Tag color="error" className="text-xs">
 						BLOCKED
@@ -392,7 +394,7 @@ function ServiceDetail() {
 			title: "Raw",
 			key: "actions",
 			width: 60,
-			render: (_, record: any) => (
+			render: (_, record: HttpRequest) => (
 				<Button
 					size="small"
 					icon={<CodeOutlined />}
@@ -419,7 +421,7 @@ function ServiceDetail() {
 	];
 
 	// TCP Connections columns
-	const tcpColumns: ColumnsType<any> = [
+	const tcpColumns: ColumnsType<TcpConnection> = [
 		{
 			title: "ID",
 			dataIndex: "id",
@@ -781,9 +783,7 @@ function ServiceDetail() {
 					<Table
 						columns={tcpColumns}
 						dataSource={tcpConnectionsData.connections}
-						rowKey={(record, index) =>
-							`${record.id || index}-${record.timestamp || index}`
-						}
+						rowKey={(record) => `${record.id}-${record.timestamp}`}
 						size="small"
 						pagination={{
 							current: currentPage,
@@ -866,7 +866,7 @@ function ServiceDetail() {
 				service.stats.recent_alerts.length > 0 ? (
 					<List
 						dataSource={service.stats.recent_alerts}
-						renderItem={(alert: [string, any]) => (
+						renderItem={(alert: [string, unknown]) => (
 							<List.Item>
 								<Space direction="vertical" style={{ width: "100%" }}>
 									<Text strong>{alert[0]}</Text>

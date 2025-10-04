@@ -1,10 +1,8 @@
 install:
 	./ctf_proxy/bin/setup.sh
 
-config:
-	mkdir -p traefik
-	./uv.sh run ./ctf_proxy/bin/traefik-config-gen.py ./data/config.yml ./traefik
-	./uv.sh run ./ctf_proxy/bin/docker-compose-gen.py ./data/config.yml ./docker-compose.template.yml ./docker-compose.yml
+setup-test:
+	./ctf_proxy/bin/setup.sh --test
 
 ui:
 	docker compose run --rm ui

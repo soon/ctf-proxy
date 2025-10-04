@@ -16,6 +16,7 @@ from ctf_proxy.db.models import (
     RowStatus,
     ServiceStatsRow,
     SessionLinkRow,
+    WebSocketFrameRow,
 )
 from ctf_proxy.db.stats import (
     FlagTimeStatsRow,
@@ -30,6 +31,7 @@ from ctf_proxy.logs_processor.flags import find_body_flags
 from ctf_proxy.logs_processor.sessions import SessionsStorage
 from ctf_proxy.logs_processor.taps import TapsFolder
 from ctf_proxy.logs_processor.utils import try_get_port_from_upstream_host
+from ctf_proxy.logs_processor.ws import parse_ws_frames
 
 DEFAULT_DURATION_MS = 100
 
@@ -109,7 +111,6 @@ class HttpProcessor:
                 logger.warning(f"Tap data not loaded for file {tap_filename}")
                 continue
 
-            to_archive[tap_filename] = tap_data
             try:
                 self.tap_processor.process_tap(
                     tx=tx,
@@ -118,6 +119,7 @@ class HttpProcessor:
                     batch_id=batch_id,
                     log_entry=log_entry,
                 )
+                to_archive[tap_filename] = tap_data
             except Exception as e:
                 logger.error(f"Error processing tap file {tap_filename}: {e}")
 
@@ -129,6 +131,65 @@ class HttpProcessor:
 
         return to_archive
 
+    def check_is_websocket(self, tap_data: dict) -> bool:
+        try:
+            http_trace = tap_data.get("http_buffered_trace", {})
+            request = http_trace.get("request", {})
+            request_headers = {
+                h.get("key", "").lower(): h.get("value", "")
+                for h in request.get("headers", [])
+                if h.get("key")
+            }
+            upgrade_header = request_headers.get("upgrade", "").lower()
+            connection_header = request_headers.get("connection", "").lower()
+            return upgrade_header == "websocket" and "upgrade" in connection_header
+        except Exception:
+            return False
+
+
+class HttpTapPartBody:
+    def __init__(self, data: dict):
+        self.data = data
+        self.bytes: str | None = data.get("as_bytes")
+
+
+class HttpTapHeaders:
+    def __init__(self, data: list[dict]):
+        self.data = data
+        self.values = {}
+        for header in data:
+            key = header.get("key") or ""
+            normalized_key = key.lower()
+            value = header.get("value")
+            if normalized_key not in self.values:
+                self.values[normalized_key] = []
+            self.values[normalized_key].append(value)
+
+    def get(self, key: str, default: str = None) -> str | None:
+        values = self.values.get(key.lower())
+        if values:
+            return values[0]
+        return default
+
+    def get_list(self, key: str) -> list[str]:
+        return self.values.get(key.lower(), [])
+
+
+class HttpTapPart:
+    def __init__(self, data: dict):
+        self.data = data
+        self.body = HttpTapPartBody(data.get("body", {}))
+        self.headers = HttpTapHeaders(data.get("headers", []))
+        self.trailers = HttpTapHeaders(data.get("trailers", []))
+
+
+class HttpTap:
+    def __init__(self, data: dict):
+        self.data = data
+        buffered_trace = data.get("http_buffered_trace", {})
+        self.request = HttpTapPart(buffered_trace.get("request", {}))
+        self.response = HttpTapPart(buffered_trace.get("response", {}))
+
 
 class HttpTapProcessor:
     def __init__(self, db: ProxyStatsDB, config: Config):
@@ -139,32 +200,37 @@ class HttpTapProcessor:
     def process_tap(
         self, tx: sqlite3.Cursor, data: dict, tap_id: str, batch_id: str, log_entry: dict
     ):
-        http_trace = data.get("http_buffered_trace", {})
-        request = http_trace.get("request", {})
-        response = http_trace.get("response", {})
+        tap = HttpTap(data)
+        # http_trace = data.get("http_buffered_trace", {})
+        # request = http_trace.get("request", {})
+        # response = http_trace.get("response", {})
 
-        request_headers = [
-            (h.get("key").lower(), h.get("value"))
-            for h in request.get("headers", [])
-            if h.get("key")
-        ]
-        request_headers_dict = dict(request_headers)
-        request_trailers = {
-            h.get("key").lower(): h.get("value")
-            for h in request.get("trailers", [])
-            if h.get("key")
-        }
-        response_headers = [
-            (h.get("key").lower(), h.get("value"))
-            for h in response.get("headers", [])
-            if h.get("key")
-        ]
-        response_headers_dict = dict(response_headers)
+        # request_headers = [
+        #     (h.get("key").lower(), h.get("value"))
+        #     for h in request.get("headers", [])
+        #     if h.get("key")
+        # ]
+        # request_headers_dict = dict(request_headers)
+        # request_trailers = {
+        #     h.get("key").lower(): h.get("value")
+        #     for h in request.get("trailers", [])
+        #     if h.get("key")
+        # }
+        # response_headers = [
+        #     (h.get("key").lower(), h.get("value"))
+        #     for h in response.get("headers", [])
+        #     if h.get("key")
+        # ]
+        # response_headers_dict = dict(response_headers)
 
-        is_blocked = request_trailers.get("x-blocked") == "1"
+        is_blocked = tap.request.trailers.get("x-blocked") == "1"
 
-        method = log_entry.get("method") or request_headers_dict.get(":method")
-        full_path = log_entry.get("path") or request_headers_dict.get(":path") or ""
+        upgrade_header = tap.request.headers.get("upgrade", "").lower()
+        connection_header = tap.request.headers.get("connection", "").lower()
+        is_websocket = upgrade_header == "websocket" and "upgrade" in connection_header
+
+        method = log_entry.get("method") or tap.request.headers.get(":method")
+        full_path = log_entry.get("path") or tap.request.headers.get(":path") or ""
         try:
             parsed_url = urlparse(full_path)
             path = parsed_url.path
@@ -178,10 +244,10 @@ class HttpTapProcessor:
         except Exception:
             query_params = {}
 
-        status_str = log_entry.get("status") or response_headers_dict.get(":status")
+        status_str = log_entry.get("status") or tap.response.headers.get(":status")
         status = int(status_str) if status_str and str(status_str).isdigit() else -1
 
-        user_agent = request_headers_dict.get("user-agent")
+        user_agent = tap.request.headers.get("user-agent")
         start_time_str = log_entry.get("start_time")
 
         start_time = (
@@ -198,8 +264,8 @@ class HttpTapProcessor:
 
         service_config = self.config.get_service_by_port(port) if port else None
 
-        req_body = self.extract_body(request.get("body"))
-        resp_body = self.extract_body(response.get("body"))
+        req_body = self.decode_body(tap.request.body.bytes)
+        resp_body = self.decode_body(tap.response.body.bytes)
 
         request_id = self.db.http_requests.insert(
             tx=tx,
@@ -210,6 +276,7 @@ class HttpTapProcessor:
             user_agent=user_agent,
             body=req_body,
             is_blocked=is_blocked,
+            is_websocket=is_websocket,
             tap_id=tap_id,
             batch_id=batch_id,
         )
@@ -221,40 +288,46 @@ class HttpTapProcessor:
         headers = [
             *(
                 HttpHeaderRow.Insert(request_id=request_id, name=key, value=value)
-                for key, value in request_headers
+                for key, values in tap.request.headers.values.items()
+                for value in values
             ),
             *(
                 HttpHeaderRow.Insert(response_id=response_id, name=key, value=value)
-                for key, value in response_headers
+                for key, values in tap.response.headers.values.items()
+                for value in values
             ),
         ]
         if headers:
             self.db.http_headers.insert_many(tx=tx, headers=headers)
 
-        flags_written = [
-            FlagRow.Insert(
-                value=flag,
-                http_request_id=request_id,
-                location="body",
-                offset=offset,
-            )
-            for offset, flag in find_body_flags(req_body or "", self.config.flag_format)
-        ]
-        flags_retrieved = [
-            FlagRow.Insert(
-                value=flag,
-                http_response_id=response_id,
-                location="body",
-                offset=offset,
-            )
-            for offset, flag in find_body_flags(resp_body or "", self.config.flag_format)
-        ]
-        flags = [
-            *flags_written,
-            *flags_retrieved,
-        ]
-        if flags:
-            self.db.flags.insert_many(tx=tx, flags=flags)
+        if not is_websocket:
+            flags_written = [
+                FlagRow.Insert(
+                    value=flag,
+                    http_request_id=request_id,
+                    location="body",
+                    offset=offset,
+                )
+                for offset, flag in find_body_flags(req_body or "", self.config.flag_format)
+            ]
+            flags_retrieved = [
+                FlagRow.Insert(
+                    value=flag,
+                    http_response_id=response_id,
+                    location="body",
+                    offset=offset,
+                )
+                for offset, flag in find_body_flags(resp_body or "", self.config.flag_format)
+            ]
+            flags = [
+                *flags_written,
+                *flags_retrieved,
+            ]
+            if flags:
+                self.db.flags.insert_many(tx=tx, flags=flags)
+        else:
+            flags_written = []
+            flags_retrieved = []
         if port:
             self.db.service_stats.increment(
                 tx,
@@ -327,7 +400,7 @@ class HttpTapProcessor:
                             count=1,
                         ),
                     )
-            for key, value in request_headers:
+            for key, values in tap.request.headers.values.items():
                 if key in IGNORED_HEADER_STATS:
                     continue
                 reg = (
@@ -335,18 +408,19 @@ class HttpTapProcessor:
                     if service_config and key in service_config.ignore_header_stats
                     else None
                 )
-                if reg and reg.fullmatch(value):
-                    continue
-                self.db.http_header_time_stats.increment(
-                    tx,
-                    HttpHeaderTimeStatsRow.Increment(
-                        port=port,
-                        name=key,
-                        value=value,
-                        time=start_minute_ts,
-                        count=1,
-                    ),
-                )
+                for value in values:
+                    if reg and reg.fullmatch(value):
+                        continue
+                    self.db.http_header_time_stats.increment(
+                        tx,
+                        HttpHeaderTimeStatsRow.Increment(
+                            port=port,
+                            name=key,
+                            value=value,
+                            time=start_minute_ts,
+                            count=1,
+                        ),
+                    )
 
             self.db.http_request_time_stats.increment(
                 tx,
@@ -373,8 +447,8 @@ class HttpTapProcessor:
                 port=port,
                 request_id=request_id,
                 start_time=start_time_ts,
-                request_headers=request_headers,
-                response_headers=response_headers,
+                request_headers=tap.request.headers.values,
+                response_headers=tap.response.headers.values,
             )
             for session in sessions:
                 self.db.session_links.insert(
@@ -386,8 +460,68 @@ class HttpTapProcessor:
                     ),
                 )
 
-    def extract_body(self, body_data):
-        if not body_data:
+        if is_websocket:
+            self.process_websocket(tx, tap, log_entry, request_id)
+
+        return request_id
+
+    def process_websocket(
+        self, tx: sqlite3.Cursor, tap: HttpTap, log_entry: dict, http_request_id: int
+    ):
+        connection_id = self.db.websocket_connections.insert(
+            tx=tx,
+            http_request_id=http_request_id,
+        )
+
+        request_frames = parse_ws_frames(
+            tap.request.body.bytes,
+            is_client=True,
+            extensions_header=", ".join(tap.request.headers.get_list("sec-websocket-extensions")),
+            max_size=None,  # todo what to pass
+        )
+
+        response_frames = parse_ws_frames(
+            tap.response.body.bytes,
+            is_client=False,
+            extensions_header=", ".join(tap.response.headers.get_list("sec-websocket-extensions")),
+            max_size=None,  # todo what to pass
+        )
+
+        frames_rows = [
+            *(
+                WebSocketFrameRow.Insert(
+                    connection_id=connection_id,
+                    order=i,
+                    opcode=opcode.name,
+                    payload=payload,
+                    payload_text=payload.decode("utf-8", errors="ignore"),
+                    payload_size=len(payload),
+                    is_client=True,
+                )
+                for i, (fin, opcode, payload) in enumerate(request_frames)
+            ),
+            *(
+                WebSocketFrameRow.Insert(
+                    connection_id=connection_id,
+                    order=i,
+                    opcode=opcode.name,
+                    payload=payload,
+                    payload_text=payload.decode("utf-8", errors="ignore"),
+                    payload_size=len(payload),
+                    is_client=False,
+                )
+                for i, (fin, opcode, payload) in enumerate(response_frames)
+            ),
+        ]
+
+        if frames_rows:
+            self.db.websocket_frames.insert_many(
+                tx=tx,
+                frames=frames_rows,
+            )
+
+    def decode_body(self, body_data: str | None) -> str | None:
+        if body_data is None:
             return None
 
-        return base64.b64decode(body_data.get("as_bytes")).decode("utf-8", errors="ignore")
+        return base64.b64decode(body_data).decode("utf-8", errors="ignore")

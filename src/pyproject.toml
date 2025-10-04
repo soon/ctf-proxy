@@ -20,6 +20,7 @@ dependencies = [
     "textual>=0.45.0",
     "uvicorn>=0.35.0",
     "watchdog>=3.0.0",
+    "websockets>=15.0.1",
 ]
 
 [project.scripts]

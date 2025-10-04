@@ -31,7 +31,9 @@ export function useHealthCheck(): HealthCheckResult {
 
 				setApiUrl(currentApiUrl);
 
-				const config: any = { baseUrl: currentApiUrl };
+				const config: { baseUrl: string; headers?: Record<string, string> } = {
+					baseUrl: currentApiUrl,
+				};
 				if (storedToken) {
 					config.headers = {
 						...client.getConfig().headers,
@@ -61,7 +63,9 @@ export function useHealthCheck(): HealthCheckResult {
 export function updateApiUrl(url: string) {
 	localStorage.setItem("ctf-proxy-api-host", url);
 	const storedToken = localStorage.getItem("apiToken");
-	const config: any = { baseUrl: url };
+	const config: { baseUrl: string; headers?: Record<string, string> } = {
+		baseUrl: url,
+	};
 	if (storedToken) {
 		config.headers = {
 			...client.getConfig().headers,

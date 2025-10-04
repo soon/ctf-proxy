@@ -1,7 +1,6 @@
 from .models import (
     AlertRow,
     AlertTable,
-    BaseTable,
     HttpHeaderRow,
     HttpHeaderTable,
     HttpRequestRow,
@@ -17,7 +16,6 @@ __all__ = [
     "HttpRequestRow",
     "HttpResponseRow",
     "HttpHeaderRow",
-    "BaseTable",
     "HttpRequestTable",
     "HttpResponseTable",
     "HttpHeaderTable",

@@ -159,12 +159,13 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 			}
 
 			// Process matches to build breadcrumb trail
-			matches.forEach((match) => {
+			for (const match of matches) {
 				// Skip the root match
-				if (match.pathname === "/") return;
+				if (match.pathname === "/") continue;
 
 				// Get breadcrumb from route's static data
-				const staticData = (match as any).staticData;
+				const staticData = (match as { staticData?: { breadcrumb?: string } })
+					.staticData;
 				const breadcrumb = staticData?.breadcrumb;
 
 				// Normalize pathname by removing trailing slash
@@ -176,7 +177,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 					if (portMatch) {
 						const port = portMatch[1];
 						const service = data?.services?.find(
-							(s) => s.port === parseInt(port),
+							(s) => s.port === Number.parseInt(port),
 						);
 						if (service) {
 							items.push({
@@ -192,7 +193,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 					if (servicePortMatch) {
 						const port = servicePortMatch[1];
 						const service = data?.services?.find(
-							(s) => s.port === parseInt(port),
+							(s) => s.port === Number.parseInt(port),
 						);
 						if (
 							service &&
@@ -216,7 +217,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 						const port = requestMatch[1];
 						const requestId = requestMatch[2];
 						const service = data?.services?.find(
-							(s) => s.port === parseInt(port),
+							(s) => s.port === Number.parseInt(port),
 						);
 						if (
 							service &&
@@ -237,7 +238,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 						const port = tcpMatch[1];
 						const connId = tcpMatch[2];
 						const service = data?.services?.find(
-							(s) => s.port === parseInt(port),
+							(s) => s.port === Number.parseInt(port),
 						);
 						if (
 							service &&
@@ -267,7 +268,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 				else if (match.pathname.startsWith("/stats/") && breadcrumb) {
 					items.push({ title: breadcrumb });
 				}
-			});
+			}
 
 			return items;
 		};
@@ -322,9 +323,26 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 										return <span>{item.title}</span>;
 									}
 									return (
-										<a onClick={() => item.href && navigate({ to: item.href })}>
+										<button
+											type="button"
+											onClick={() => item.href && navigate({ to: item.href })}
+											style={{
+												background: "none",
+												border: "none",
+												padding: 0,
+												color: "inherit",
+												cursor: "pointer",
+												textDecoration: "none",
+											}}
+											onMouseEnter={(e) => {
+												e.currentTarget.style.textDecoration = "underline";
+											}}
+											onMouseLeave={(e) => {
+												e.currentTarget.style.textDecoration = "none";
+											}}
+										>
 											{item.title}
-										</a>
+										</button>
 									);
 								}}
 							/>
@@ -341,7 +359,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 							<Outlet />
 						</div>
 					</Content>
-					<Footer style={{ textAlign: "center" }}></Footer>
+					<Footer style={{ textAlign: "center" }} />
 				</Layout>
 				<SettingsModal
 					open={settingsOpen}

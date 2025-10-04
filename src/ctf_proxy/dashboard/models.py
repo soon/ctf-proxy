@@ -21,6 +21,8 @@ class TCPStats(BaseModel):
 class ServiceStats(BaseModel):
     total_requests: int
     blocked_requests: int
+    total_responses: int
+    blocked_responses: int
     requests_delta: int
     error_responses: int
     success_responses: int
@@ -96,6 +98,16 @@ class LinkedRequestItem(BaseModel):
     session_key: str | None = None
 
 
+class WebSocketFrame(BaseModel):
+    id: int
+    ord: int
+    opcode: str
+    payload_text: str | None
+    payload_size: int
+    is_client: bool
+    flags: list[str]
+
+
 class RequestDetail(BaseModel):
     id: int
     method: str
@@ -109,6 +121,8 @@ class RequestDetail(BaseModel):
     query_params: dict[str, str]
     flags: list[FlagItem]
     linked_requests: list[LinkedRequestItem]
+    is_websocket: bool = False
+    websocket_frames: list[WebSocketFrame] = []
 
 
 class ResponseDetail(BaseModel):
@@ -234,6 +248,53 @@ class TCPConnectionDetail(BaseModel):
     bytes_in: int
     bytes_out: int
     events: list[TCPEventItem]
+    total_flags: int
+    is_blocked: bool
+
+
+class WebSocketConnectionItem(BaseModel):
+    id: int
+    timestamp: datetime
+    duration_ms: int | None
+    frames_in: int
+    frames_out: int
+    bytes_in: int
+    bytes_out: int
+    flags_in: int
+    flags_out: int
+    is_blocked: bool
+
+
+class WebSocketConnectionListResponse(BaseModel):
+    connections: list[WebSocketConnectionItem]
+    total: int
+    service_name: str
+    service_port: int
+    page: int = 1
+    page_size: int = 30
+    total_pages: int = 1
+
+
+class WebSocketFrameItem(BaseModel):
+    id: int
+    timestamp: datetime
+    direction: str
+    opcode: str
+    payload_size: int
+    payload_text: str | None
+    flags: list[str]
+
+
+class WebSocketConnectionDetail(BaseModel):
+    id: int
+    port: int
+    timestamp: datetime
+    duration_ms: int | None
+    frames_in: int
+    frames_out: int
+    bytes_in: int
+    bytes_out: int
+    frames: list[WebSocketFrameItem]
     total_flags: int
     is_blocked: bool
 

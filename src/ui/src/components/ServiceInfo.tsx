@@ -100,7 +100,16 @@ export function ServiceInfo({
 						<span className="font-bold text-sm">
 							{shortName}:{service.port}
 						</span>
-						<Badge status={getStatusColor() as any} />
+						<Badge
+							status={
+								getStatusColor() as
+									| "success"
+									| "processing"
+									| "error"
+									| "default"
+									| "warning"
+							}
+						/>
 					</div>
 				}
 				className="cursor-pointer transition-all hover:shadow-lg"
@@ -244,9 +253,9 @@ export function ServiceInfo({
 									<div className="mt-0.5 text-xs space-y-0.5">
 										{service.stats.recent_alerts
 											.slice(0, 1)
-											.map(([description], idx) => (
+											.map(([description]) => (
 												<div
-													key={idx}
+													key={description}
 													className="text-red-600 truncate text-xs"
 												>
 													{description}

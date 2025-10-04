@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS http_request (
     user_agent TEXT,
     body TEXT,
     is_blocked INTEGER NOT NULL,
+    is_websocket INTEGER NOT NULL DEFAULT 0,
     -- trace request data in archive
     tap_id TEXT,
     batch_id TEXT
@@ -84,19 +85,25 @@ CREATE TABLE IF NOT EXISTS flag (
     http_response_id INTEGER,
     tcp_connection_id INTEGER,
     tcp_event_id INTEGER,
+    websocket_connection_id INTEGER,
+    websocket_frame_id INTEGER,
     location TEXT,
     offset INTEGER,
     value TEXT NOT NULL,
     FOREIGN KEY (http_request_id) REFERENCES http_request (id),
     FOREIGN KEY (http_response_id) REFERENCES http_response (id),
     FOREIGN KEY (tcp_connection_id) REFERENCES tcp_connection (id),
-    FOREIGN KEY (tcp_event_id) REFERENCES tcp_event (id)
+    FOREIGN KEY (tcp_event_id) REFERENCES tcp_event (id),
+    FOREIGN KEY (websocket_connection_id) REFERENCES websocket_connection (id),
+    FOREIGN KEY (websocket_frame_id) REFERENCES websocket_frame (id)
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS flag_http_request_id ON flag(http_request_id);
 CREATE INDEX IF NOT EXISTS flag_http_response_id ON flag(http_response_id);
 CREATE INDEX IF NOT EXISTS flag_tcp_connection_id ON flag(tcp_connection_id);
 CREATE INDEX IF NOT EXISTS flag_tcp_event_id ON flag(tcp_event_id);
+CREATE INDEX IF NOT EXISTS flag_websocket_connection_id ON flag(websocket_connection_id);
+CREATE INDEX IF NOT EXISTS flag_websocket_frame_id ON flag(websocket_frame_id);
 
 CREATE TABLE IF NOT EXISTS flag_time_stats (
     id INTEGER PRIMARY KEY,
@@ -117,7 +124,9 @@ CREATE TABLE IF NOT EXISTS service_stats (
     total_blocked_responses INTEGER NOT NULL DEFAULT 0,
     total_flags_written INTEGER NOT NULL DEFAULT 0,
     total_flags_retrieved INTEGER NOT NULL DEFAULT 0,
-    total_flags_blocked INTEGER NOT NULL DEFAULT 0
+    total_flags_blocked INTEGER NOT NULL DEFAULT 0,
+    total_websocket_connections INTEGER NOT NULL DEFAULT 0,
+    total_websocket_frames INTEGER NOT NULL DEFAULT 0
 ) STRICT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS service_stats_unique_port ON service_stats(port);
@@ -266,3 +275,25 @@ CREATE TABLE IF NOT EXISTS tcp_connection_time_stats (
 ) STRICT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS tcp_connection_time_stats_unique ON tcp_connection_time_stats(port, read_min, read_max, write_min, write_max, time);
+
+CREATE TABLE IF NOT EXISTS websocket_connection (
+    id INTEGER PRIMARY KEY,
+    http_request_id INTEGER NOT NULL,
+    FOREIGN KEY (http_request_id) REFERENCES http_request (id)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS websocket_connection_http_request_id ON websocket_connection(http_request_id);
+
+CREATE TABLE IF NOT EXISTS websocket_frame (
+    id INTEGER PRIMARY KEY,
+    connection_id INTEGER NOT NULL,
+    ord INTEGER NOT NULL,
+    opcode TEXT NOT NULL,
+    payload BLOB,
+    payload_text TEXT,
+    payload_size INTEGER NOT NULL,
+    is_client INTEGER NOT NULL,
+    FOREIGN KEY (connection_id) REFERENCES websocket_connection (id)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS websocket_frame_connection_id ON websocket_frame(connection_id);

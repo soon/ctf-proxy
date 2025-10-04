@@ -107,17 +107,21 @@ def parse_port_mapping(port_mapping: str) -> dict[str, Any] | None:
 
 def determine_service_type(port: int, protocol: str, container_name: str) -> str:
     """Determine service type based on port, protocol and container name."""
-    available_types = {"http", "ws", "tcp", "udp"}
+    available_types = ["http", "tcp", "udp"]
+    default_type = "http"
+    supported_message = ", ".join(
+        f"{t} [default]" if t == default_type else t for t in available_types
+    )
     while True:
         res = (
             input(
-                f"Enter service type for container '{container_name}' on port {port}/{protocol} (http [default], ws, tcp, udp): "
+                f"Enter service type for container '{container_name}' on port {port}/{protocol} ({supported_message}): "
             )
             .strip()
             .lower()
         )
         if not res:
-            res = "http"
+            res = default_type
         if res in available_types:
             return res
         print(f"Invalid service type: {res}. Please enter one of: {', '.join(available_types)}")
@@ -173,7 +177,9 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def generate_config(existing_config: dict[str, Any] = None) -> dict[str, Any]:
+def generate_config(
+    existing_config: dict[str, Any] = None, is_test: bool = False
+) -> dict[str, Any]:
     """Generate configuration based on running Docker containers, merging with existing config."""
     containers = get_running_containers()
 
@@ -265,10 +271,16 @@ def generate_config(existing_config: dict[str, Any] = None) -> dict[str, Any]:
 
     # Add default API token hash if not present
     if "api_token_hash" not in result:
-        api_token = generate_random_token()
+        if is_test:
+            print("\nNOTE: THIS IS AN INSECURE TEST SETUP", file=sys.stderr)
+            api_token = "TEST_API_TOKEN"
+        else:
+            api_token = generate_random_token()
         result["api_token_hash"] = hash_token(api_token)
-        print(f"Generated new API token: {api_token}", file=sys.stderr)
-        print("IMPORTANT: Save this token securely as it will not be shown again!", file=sys.stderr)
+        print(f"\nGenerated new API token: {api_token}", file=sys.stderr)
+        print(
+            "IMPORTANT: Save this token securely as it will not be shown again!\n", file=sys.stderr
+        )
 
     return result
 
@@ -303,7 +315,7 @@ def main():
         if existing_config:
             print(f"Loaded existing configuration from {output_file}", file=sys.stderr)
 
-    config = generate_config(existing_config)
+    config = generate_config(existing_config, is_test=["--test" in sys.argv])
 
     if not config.get("services"):
         print("No services found in configuration.", file=sys.stderr)

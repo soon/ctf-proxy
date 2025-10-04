@@ -42,6 +42,11 @@ from ctf_proxy.dashboard.models import (
     TCPConnectionStatsResponse,
     TCPEventItem,
     TCPStats,
+    WebSocketConnectionDetail,
+    WebSocketConnectionItem,
+    WebSocketConnectionListResponse,
+    WebSocketFrame,
+    WebSocketFrameItem,
 )
 from ctf_proxy.dashboard.models import (
     ServiceStats as ServiceStatsModel,
@@ -103,7 +108,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     media_type="application/json",
                 )
 
-            token = auth_header[7:]  # Remove "Bearer " prefix
+            token = auth_header[len("Bearer ") :]
 
             if config is None:
                 return Response(
@@ -451,6 +456,8 @@ def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
             result[port] = {
                 "total_requests": service_data[0],
                 "blocked_requests": service_data[1],
+                "total_responses": service_data[2],
+                "blocked_responses": service_data[3],
                 "requests_delta": request_deltas.get(port, 0),
                 "blocked_requests_delta": blocked_request_deltas.get(port, 0),
                 "flags_written": service_data[4],
@@ -503,6 +510,8 @@ async def get_services() -> ServiceListResponse:
         stats_model = ServiceStatsModel(
             total_requests=stats.get("total_requests", 0),
             blocked_requests=stats.get("blocked_requests", 0),
+            total_responses=stats.get("total_responses", 0),
+            blocked_responses=stats.get("blocked_responses", 0),
             requests_delta=stats.get("requests_delta", 0),
             blocked_requests_delta=stats.get("blocked_requests_delta", 0),
             error_responses=stats.get("error_responses", 0),
@@ -605,6 +614,8 @@ async def get_service_by_port(port: int) -> ServiceListItem:
     stats_model = ServiceStatsModel(
         total_requests=current_stats["total_requests"],
         blocked_requests=current_stats["blocked_requests"],
+        total_responses=current_stats["total_responses"],
+        blocked_responses=current_stats["blocked_responses"],
         requests_delta=requests_delta,
         blocked_requests_delta=blocked_requests_delta,
         error_responses=current_stats["error_responses"],
@@ -842,6 +853,7 @@ async def get_request_detail(request_id: int) -> RequestDetailResponse:
                 req.start_time,
                 req.port,
                 req.is_blocked,
+                req.is_websocket,
                 resp.id as response_id,
                 resp.status,
                 resp.body as response_body
@@ -864,6 +876,7 @@ async def get_request_detail(request_id: int) -> RequestDetailResponse:
             start_time,
             port,
             is_blocked,
+            is_websocket,
             response_id,
             status,
             response_body,
@@ -977,6 +990,52 @@ async def get_request_detail(request_id: int) -> RequestDetailResponse:
         # Convert timestamp
         timestamp = convert_timestamp_to_datetime(start_time) if start_time else datetime.now()
 
+        # Get WebSocket frames if this is a WebSocket request
+        websocket_frames = []
+        if is_websocket:
+            cursor.execute(
+                """
+                SELECT wc.id
+                FROM websocket_connection wc
+                WHERE wc.http_request_id = ?
+                """,
+                (request_id,),
+            )
+            ws_conn_row = cursor.fetchone()
+            if ws_conn_row:
+                ws_connection_id = ws_conn_row[0]
+                cursor.execute(
+                    """
+                    SELECT wf.id, wf.ord, wf.opcode, wf.payload_text, wf.payload_size, wf.is_client
+                    FROM websocket_frame wf
+                    WHERE wf.connection_id = ?
+                    ORDER BY wf.ord
+                    """,
+                    (ws_connection_id,),
+                )
+                for frame_row in cursor.fetchall():
+                    frame_id, ord_num, opcode, payload_text, payload_size, is_client = frame_row
+
+                    cursor.execute(
+                        """
+                        SELECT value FROM flag WHERE websocket_frame_id = ?
+                        """,
+                        (frame_id,),
+                    )
+                    frame_flags = [f[0] for f in cursor.fetchall()]
+
+                    websocket_frames.append(
+                        WebSocketFrame(
+                            id=frame_id,
+                            ord=ord_num,
+                            opcode=opcode,
+                            payload_text=payload_text,
+                            payload_size=payload_size,
+                            is_client=bool(is_client),
+                            flags=frame_flags,
+                        )
+                    )
+
         request_detail = RequestDetail(
             id=request_id,
             method=method,
@@ -990,6 +1049,8 @@ async def get_request_detail(request_id: int) -> RequestDetailResponse:
             query_params=query_params,
             flags=request_flags,
             linked_requests=linked_requests,
+            is_websocket=bool(is_websocket),
+            websocket_frames=websocket_frames,
         )
 
         # Build response detail if exists
@@ -1515,6 +1576,185 @@ def get_tcp_connection_stats(port: int, window_minutes: int = 60) -> TCPConnecti
         precision=precision,
         window_minutes=window_minutes,
     )
+
+
+@app.get(
+    "/api/services/{port}/websocket-connections", response_model=WebSocketConnectionListResponse
+)
+async def get_websocket_connections(
+    port: int,
+    page: int = 1,
+    page_size: int = 30,
+) -> WebSocketConnectionListResponse:
+    if config is None or db is None:
+        raise HTTPException(status_code=500, detail="Server not properly initialized")
+
+    service = config.get_service_by_port(port)
+    if not service:
+        raise HTTPException(status_code=404, detail=f"Service not found on port {port}")
+
+    offset = (page - 1) * page_size
+
+    with db.connect() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT COUNT(*) FROM websocket_connection WHERE port = ?
+        """,
+            (port,),
+        )
+        total = cursor.fetchone()[0]
+
+        cursor.execute(
+            """
+            WITH ws_ids AS (
+                SELECT id FROM websocket_connection
+                WHERE port = ?
+                ORDER BY start_time DESC
+                LIMIT ? OFFSET ?
+            )
+            SELECT
+                wc.id, wc.start_time, wc.duration_ms,
+                wc.frames_in, wc.frames_out, wc.bytes_in, wc.bytes_out,
+                COALESCE(f_in.count, 0) as flags_in,
+                COALESCE(f_out.count, 0) as flags_out,
+                wc.is_blocked
+            FROM websocket_connection wc
+            LEFT JOIN (
+                SELECT wf.connection_id, COUNT(DISTINCT f.id) as count
+                FROM websocket_frame wf
+                JOIN flag f ON f.websocket_frame_id = wf.id
+                WHERE wf.direction = 'receive' AND wf.connection_id IN (SELECT id FROM ws_ids)
+                GROUP BY wf.connection_id
+            ) f_in ON wc.id = f_in.connection_id
+            LEFT JOIN (
+                SELECT wf.connection_id, COUNT(DISTINCT f.id) as count
+                FROM websocket_frame wf
+                JOIN flag f ON f.websocket_frame_id = wf.id
+                WHERE wf.direction = 'send' AND wf.connection_id IN (SELECT id FROM ws_ids)
+                GROUP BY wf.connection_id
+            ) f_out ON wc.id = f_out.connection_id
+            WHERE wc.id IN (SELECT id FROM ws_ids)
+            ORDER BY wc.start_time DESC
+        """,
+            (port, page_size, offset),
+        )
+
+        connections = []
+        for row in cursor.fetchall():
+            connections.append(
+                WebSocketConnectionItem(
+                    id=row[0],
+                    timestamp=datetime.fromtimestamp(row[1] / 1000),
+                    duration_ms=row[2],
+                    frames_in=row[3],
+                    frames_out=row[4],
+                    bytes_in=row[5],
+                    bytes_out=row[6],
+                    flags_in=row[7],
+                    flags_out=row[8],
+                    is_blocked=bool(row[9]),
+                )
+            )
+
+    total_pages = (total + page_size - 1) // page_size
+
+    return WebSocketConnectionListResponse(
+        connections=connections,
+        total=total,
+        service_name=service.name,
+        service_port=port,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
+
+
+@app.get("/api/websocket-connections/{connection_id}", response_model=WebSocketConnectionDetail)
+async def get_websocket_connection_detail(connection_id: int) -> WebSocketConnectionDetail:
+    if db is None:
+        raise HTTPException(status_code=500, detail="Server not properly initialized")
+
+    with db.connect() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                wc.id, wc.port, wc.start_time, wc.duration_ms,
+                wc.frames_in, wc.frames_out, wc.bytes_in, wc.bytes_out, wc.is_blocked
+            FROM websocket_connection wc
+            WHERE wc.id = ?
+        """,
+            (connection_id,),
+        )
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(
+                status_code=404, detail=f"WebSocket connection not found: {connection_id}"
+            )
+
+        cursor.execute(
+            """
+            SELECT
+                wf.id, wf.timestamp, wf.direction, wf.opcode, wf.payload_size, wf.payload_text
+            FROM websocket_frame wf
+            WHERE wf.connection_id = ?
+            ORDER BY wf.timestamp
+        """,
+            (connection_id,),
+        )
+
+        frames = []
+        for frame_row in cursor.fetchall():
+            frame_id = frame_row[0]
+
+            cursor.execute(
+                """
+                SELECT value FROM flag WHERE websocket_frame_id = ?
+            """,
+                (frame_id,),
+            )
+            flags = [f[0] for f in cursor.fetchall()]
+
+            frames.append(
+                WebSocketFrameItem(
+                    id=frame_id,
+                    timestamp=datetime.fromtimestamp(frame_row[1] / 1000),
+                    direction=frame_row[2],
+                    opcode=frame_row[3],
+                    payload_size=frame_row[4],
+                    payload_text=frame_row[5],
+                    flags=flags,
+                )
+            )
+
+        cursor.execute(
+            """
+            SELECT COUNT(DISTINCT f.id)
+            FROM websocket_frame wf
+            JOIN flag f ON f.websocket_frame_id = wf.id
+            WHERE wf.connection_id = ?
+        """,
+            (connection_id,),
+        )
+        total_flags = cursor.fetchone()[0]
+
+        return WebSocketConnectionDetail(
+            id=row[0],
+            port=row[1],
+            timestamp=datetime.fromtimestamp(row[2] / 1000),
+            duration_ms=row[3],
+            frames_in=row[4],
+            frames_out=row[5],
+            bytes_in=row[6],
+            bytes_out=row[7],
+            frames=frames,
+            total_flags=total_flags,
+            is_blocked=bool(row[8]),
+        )
 
 
 @app.get("/api/flags/recent", response_model=FlagTimeStatsResponse)

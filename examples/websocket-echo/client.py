@@ -5,7 +5,8 @@ import json
 import time
 
 async def test_websocket():
-    uri = "ws://localhost:8765"
+    # uri = "ws://localhost:8765"
+    uri = "ws://ubuntu-24-04-vm.local:8765"
 
     async with websockets.connect(uri) as websocket:
         print(f"Connected to {uri}")

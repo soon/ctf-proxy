@@ -1,3 +1,4 @@
+import hashlib
 import tempfile
 from pathlib import Path
 
@@ -8,12 +9,16 @@ from fastapi.testclient import TestClient
 from ctf_proxy.dashboard.app import app, init_app
 from ctf_proxy.db import ProxyStatsDB
 
+TEST_API_TOKEN = "test-token-123"
+TEST_API_TOKEN_HASH = hashlib.sha256(TEST_API_TOKEN.encode()).hexdigest()
+
 
 @pytest.fixture
 def temp_config():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
         config_data = {
             "flag_format": "CTF{.*}",
+            "api_token_hash": TEST_API_TOKEN_HASH,
             "services": [
                 {"name": "web", "port": 8001, "type": "http"},
                 {"name": "api", "port": 8002, "type": "http"},
@@ -73,7 +78,7 @@ def client(temp_config, temp_db):
 
 
 def test_get_services(client):
-    response = client.get("/api/services")
+    response = client.get("/api/services", headers={"Authorization": f"Bearer {TEST_API_TOKEN}"})
     assert response.status_code == 200
 
     data = response.json()
@@ -100,7 +105,9 @@ def test_get_services(client):
 
 
 def test_get_service_by_port(client):
-    response = client.get("/api/services/8001")
+    response = client.get(
+        "/api/services/8001", headers={"Authorization": f"Bearer {TEST_API_TOKEN}"}
+    )
     assert response.status_code == 200
 
     service_data = response.json()
@@ -114,13 +121,15 @@ def test_get_service_by_port(client):
 
 
 def test_get_service_not_found(client):
-    response = client.get("/api/services/9999")
+    response = client.get(
+        "/api/services/9999", headers={"Authorization": f"Bearer {TEST_API_TOKEN}"}
+    )
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
 
 def test_multiple_service_types(client):
-    response = client.get("/api/services")
+    response = client.get("/api/services", headers={"Authorization": f"Bearer {TEST_API_TOKEN}"})
     assert response.status_code == 200
 
     data = response.json()

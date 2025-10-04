@@ -11,4 +11,4 @@ RUN GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o wasm/interceptor_tcp
 RUN GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o wasm/interceptor_http.wasm -tags http .
 
 FROM scratch AS export-stage
-COPY --from=builder /build/wasm/ /wasm/
+COPY --from=builder /build/wasm/* /

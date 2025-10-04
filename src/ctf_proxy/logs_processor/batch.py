@@ -92,14 +92,21 @@ class BatchProcessor:
         with self.db.connect() as conn:
             tx = conn.cursor()
 
-            for processor in self.processors:
-                try:
-                    batch_id = self.create_batch_id()
-                    processed = processor.process_new_access_log_entries(tx, batch_id)
-                    total_processed += len(processed)
-                    self.save_archive(batch_id, processed)
-                except Exception as e:
-                    logger.error(f"Error processing entries by {processor.__class__.__name__}: {e}")
+            try:
+                batch_id = self.create_batch_id()
+                http_archive = self.http_processor.process_new_access_log_entries(tx, batch_id)
+                total_processed += len(http_archive)
+                self.save_archive(batch_id, http_archive)
+            except Exception as e:
+                logger.error(f"Error processing HTTP entries: {e}")
+
+            try:
+                batch_id = self.create_batch_id()
+                tcp_archive = self.tcp_processor.process_new_access_log_entries(tx, batch_id)
+                total_processed += len(tcp_archive)
+                self.save_archive(batch_id, tcp_archive)
+            except Exception as e:
+                logger.error(f"Error processing TCP entries: {e}")
 
         return total_processed
 
@@ -140,18 +147,6 @@ class BatchProcessor:
                 logger.exception("Unable to process taps")
                 if self.wait_or_shutdown(SLEEP_ON_ERROR):
                     break
-
-    def print_stats(self):
-        stats = self.db.get_stats()
-
-        logger.info("\n--- CTF Proxy Stats ---")
-        logger.info(f"Total requests: {stats['total_requests']}")
-        logger.info(f"Unique paths: {stats['unique_paths']}")
-        logger.info(f"Top methods: {', '.join([f'{m}({c})' for m, c in stats['top_methods']])}")
-        logger.info("Top paths:")
-        for path, count in stats["top_paths"]:
-            logger.info(f"  {path}: {count} hits")
-        logger.info("--- End Stats ---\n")
 
     def run(self):
         logger.info("Starting post-processor...")

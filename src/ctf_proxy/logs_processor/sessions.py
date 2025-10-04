@@ -10,7 +10,7 @@ __all__ = ["SessionsStorage"]
 RequestID = int
 Port = int
 Timestamp = int
-Headers = list[tuple[str, str]]
+Headers = dict[str, list[str]]
 Session = str
 
 
@@ -57,7 +57,7 @@ class SessionsStorage:
         self.config = config
 
     def get_in_session(self, headers: Headers, port: Port) -> Session | None:
-        cookie_headers = [value for key, value in headers if key == "cookie"]
+        cookie_headers = headers.get("cookie", [])
         if not cookie_headers:
             return None
 
@@ -87,7 +87,7 @@ class SessionsStorage:
         return None
 
     def get_out_session(self, headers: Headers, port: Port) -> Session | None:
-        set_cookie_headers = [value for key, value in headers if key == "set-cookie"]
+        set_cookie_headers = headers.get("set-cookie", [])
         if not set_cookie_headers:
             return None
 

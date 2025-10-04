@@ -16,9 +16,11 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
 	});
 
 	useEffect(() => {
-		const savedHost = localStorage.getItem(STORAGE_KEY);
-		if (savedHost) {
-			setApiHost(savedHost);
+		if (open) {
+			const savedHost = localStorage.getItem(STORAGE_KEY);
+			if (savedHost) {
+				setApiHost(savedHost);
+			}
 		}
 	}, [open]);
 
@@ -85,8 +87,11 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
 			]}
 		>
 			<div className="py-4">
-				<label className="block mb-2 font-medium">API Host</label>
+				<label htmlFor="api-host-input" className="block mb-2 font-medium">
+					API Host
+				</label>
 				<Input
+					id="api-host-input"
 					value={apiHost}
 					onChange={(e) => setApiHost(e.target.value)}
 					placeholder="http://localhost:48955"

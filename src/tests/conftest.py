@@ -1,10 +1,14 @@
 """Test configuration and fixtures for CTF Proxy tests."""
 
 import shutil
+import sqlite3
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+
+from ctf_proxy.db.models import make_db
 
 
 @pytest.fixture
@@ -57,3 +61,27 @@ def sample_tap_files(test_data_dir, temp_directories):
         assert data_file.exists(), f"Original test data file {data_file} was affected!"
 
     return copied_files
+
+
+@contextmanager
+def persisted_connection(connection):
+    yield connection
+
+
+class PersistedDbProvider:
+    def __init__(self, path: str):
+        self.path = path
+        self.connection = sqlite3.connect(path)
+
+    def connect(self) -> sqlite3.Connection:
+        return persisted_connection(self.connection)
+
+    def close(self):
+        self.connection.close()
+
+
+@pytest.fixture
+def db():
+    db = make_db(":memory:", db_provider=PersistedDbProvider)
+    yield db
+    db.db_provider.close()

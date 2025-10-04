@@ -32,7 +32,7 @@ export const Route = createFileRoute("/service/$port/request/$id")({
 
 function RequestDetail() {
 	const { id, port } = Route.useParams();
-	const requestId = parseInt(id);
+	const requestId = Number.parseInt(id);
 	const navigate = useNavigate();
 	const [rawModalVisible, setRawModalVisible] = useState(false);
 
@@ -71,7 +71,12 @@ function RequestDetail() {
 
 	const { request, response } = data;
 
-	const headerColumns: ColumnsType<any> = [
+	interface HeaderRow {
+		name: string;
+		value: string;
+	}
+
+	const headerColumns: ColumnsType<HeaderRow> = [
 		{
 			title: "Name",
 			dataIndex: "name",
@@ -90,7 +95,11 @@ function RequestDetail() {
 		},
 	];
 
-	const flagColumns: ColumnsType<any> = [
+	interface FlagRow {
+		flag: string;
+	}
+
+	const flagColumns: ColumnsType<FlagRow> = [
 		{
 			title: "Flag",
 			dataIndex: "flag",
@@ -110,7 +119,76 @@ function RequestDetail() {
 		},
 	];
 
-	const linkedRequestColumns: ColumnsType<any> = [
+	interface WebSocketFrameRow {
+		ord: number;
+		opcode: string;
+		payload_size: number;
+		payload_text: string | null;
+		flags: string[];
+	}
+
+	const websocketFrameColumns: ColumnsType<WebSocketFrameRow> = [
+		{
+			title: "#",
+			dataIndex: "ord",
+			key: "ord",
+			width: 60,
+			render: (ord: number) => ord + 1,
+		},
+		{
+			title: "Opcode",
+			dataIndex: "opcode",
+			key: "opcode",
+			width: 100,
+			render: (opcode: string) => <Tag>{opcode}</Tag>,
+		},
+		{
+			title: "Size",
+			dataIndex: "payload_size",
+			key: "payload_size",
+			width: 80,
+			render: (size: number) => `${size} B`,
+		},
+		{
+			title: "Payload",
+			dataIndex: "payload_text",
+			key: "payload_text",
+			ellipsis: true,
+			render: (text: string | null) =>
+				text ? (
+					<Text className="font-mono text-xs">{text}</Text>
+				) : (
+					<Text type="secondary">Binary</Text>
+				),
+		},
+		{
+			title: "Flags",
+			dataIndex: "flags",
+			key: "flags",
+			width: 100,
+			render: (flags: string[]) =>
+				flags.length > 0 ? (
+					<Space size="small">
+						{flags.map((flag) => (
+							<Tag key={flag} color="red" className="text-xs">
+								FLAG
+							</Tag>
+						))}
+					</Space>
+				) : (
+					<Text type="secondary">-</Text>
+				),
+		},
+	];
+
+	interface LinkedRequestRow {
+		id: number;
+		method: string;
+		path: string;
+		status: number | null;
+	}
+
+	const linkedRequestColumns: ColumnsType<LinkedRequestRow> = [
 		{
 			title: "Direction",
 			dataIndex: "direction",
@@ -172,7 +250,7 @@ function RequestDetail() {
 			title: "Action",
 			key: "action",
 			width: 60,
-			render: (_, record: any) => (
+			render: (_, record: LinkedRequestRow) => (
 				<Button
 					size="small"
 					type="link"
@@ -292,10 +370,12 @@ function RequestDetail() {
 					(() => {
 						// Get incoming and outgoing requests
 						const incoming = request.linked_requests.filter(
-							(r: any) => r.direction === "incoming",
+							(r: LinkedRequestRow & { direction: string }) =>
+								r.direction === "incoming",
 						);
 						const outgoing = request.linked_requests.filter(
-							(r: any) => r.direction === "outgoing",
+							(r: LinkedRequestRow & { direction: string }) =>
+								r.direction === "outgoing",
 						);
 
 						// Take last 5 incoming and first 5 outgoing
@@ -304,7 +384,7 @@ function RequestDetail() {
 
 						// Get session key from any linked request
 						const sessionKey = request.linked_requests.find(
-							(r: any) => r.session_key,
+							(r: { session_key?: string }) => r.session_key,
 						)?.session_key;
 
 						// Combine all requests for the flow
@@ -351,7 +431,10 @@ function RequestDetail() {
 								title: "Action",
 								key: "action",
 								width: 80,
-								render: (_: any, record: any) => {
+								render: (
+									_: unknown,
+									record: LinkedRequestRow & { direction: string },
+								) => {
 									if (record.direction === "current") {
 										return <Text type="secondary">Current</Text>;
 									}
@@ -411,6 +494,35 @@ function RequestDetail() {
 		},
 	];
 
+	if (
+		request.is_websocket &&
+		request.websocket_frames &&
+		request.websocket_frames.length > 0
+	) {
+		const clientFrames = request.websocket_frames.filter(
+			(f: { is_client: boolean }) => f.is_client,
+		);
+		const serverFrames = request.websocket_frames.filter(
+			(f: { is_client: boolean }) => !f.is_client,
+		);
+
+		if (clientFrames.length > 0) {
+			requestTabItems.push({
+				key: "websocket",
+				label: `WebSocket Frames (${clientFrames.length})`,
+				children: (
+					<Table
+						columns={websocketFrameColumns}
+						dataSource={clientFrames}
+						rowKey="id"
+						size="small"
+						pagination={false}
+					/>
+				),
+			});
+		}
+	}
+
 	const responseTabItems = response
 		? [
 				{
@@ -464,6 +576,32 @@ function RequestDetail() {
 				},
 			]
 		: [];
+
+	if (
+		request.is_websocket &&
+		request.websocket_frames &&
+		request.websocket_frames.length > 0
+	) {
+		const serverFrames = request.websocket_frames.filter(
+			(f: { is_client: boolean }) => !f.is_client,
+		);
+
+		if (serverFrames.length > 0) {
+			responseTabItems.push({
+				key: "websocket",
+				label: `WebSocket Frames (${serverFrames.length})`,
+				children: (
+					<Table
+						columns={websocketFrameColumns}
+						dataSource={serverFrames}
+						rowKey="id"
+						size="small"
+						pagination={false}
+					/>
+				),
+			});
+		}
+	}
 
 	const handleViewRaw = async () => {
 		const result = await fetchRawData();

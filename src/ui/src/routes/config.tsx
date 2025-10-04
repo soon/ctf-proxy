@@ -97,8 +97,8 @@ function ConfigEditor() {
 					message: "Validation Errors",
 					description: (
 						<ul style={{ margin: 0, paddingLeft: 20 }}>
-							{result.errors.map((error, i) => (
-								<li key={i}>{error}</li>
+							{result.errors.map((error) => (
+								<li key={error}>{error}</li>
 							))}
 						</ul>
 					),
@@ -139,7 +139,10 @@ function ConfigEditor() {
 			setIsModified(false);
 			refetch();
 		},
-		onError: (error: any) => {
+		onError: (error: {
+			validation_errors?: string[];
+			detail?: string;
+		}) => {
 			if (error?.validation_errors) {
 				notification.error({
 					message: "Validation Failed",
@@ -169,8 +172,8 @@ function ConfigEditor() {
 						<div>
 							<p>The configuration has validation errors:</p>
 							<ul style={{ color: "red" }}>
-								{validationResult.errors.map((error: string, i: number) => (
-									<li key={i}>{error}</li>
+								{validationResult.errors.map((error: string) => (
+									<li key={error}>{error}</li>
 								))}
 							</ul>
 							<p>Do you want to save anyway?</p>

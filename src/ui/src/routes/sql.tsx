@@ -35,10 +35,23 @@ export const Route = createFileRoute("/sql")({
 	},
 });
 
+interface SqlColumn {
+	title: string;
+	dataIndex: string;
+	key: string;
+	ellipsis: boolean;
+	render: (text: unknown) => React.ReactNode;
+}
+
+interface SqlRow {
+	key: number;
+	[key: string]: unknown;
+}
+
 function SqlExecutor() {
 	const [query, setQuery] = useState("SELECT * FROM http_request LIMIT 100");
-	const [results, setResults] = useState<any[]>([]);
-	const [columns, setColumns] = useState<any[]>([]);
+	const [results, setResults] = useState<SqlRow[]>([]);
+	const [columns, setColumns] = useState<SqlColumn[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [queryTime, setQueryTime] = useState<number | null>(null);
@@ -49,7 +62,7 @@ function SqlExecutor() {
 
 	// Fetch schema using React Query
 	const { data: schemaData } = useQuery(getSqlSchemaApiSqlSchemaGetOptions());
-	const schema = (schemaData as any)?.schema || "";
+	const schema = (schemaData as { schema?: string } | undefined)?.schema || "";
 
 	// Mutations for SQL operations
 	const executeSqlMutation = useMutation(executeSqlApiSqlPostMutation());
@@ -64,7 +77,10 @@ function SqlExecutor() {
 			const result = await executeSqlMutation.mutateAsync({
 				body: { query, timeout },
 			});
-			const data = result as any;
+			const data = result as {
+				query_time?: number;
+				rows?: Record<string, unknown>[];
+			};
 			const totalTimeMs = Date.now() - startTime;
 			setTotalTime(totalTimeMs);
 			setQueryTime(data.query_time || null);
@@ -76,7 +92,7 @@ function SqlExecutor() {
 					dataIndex: key,
 					key: key,
 					ellipsis: true,
-					render: (text: any) => {
+					render: (text: unknown) => {
 						if (text === null) return <Text type="secondary">NULL</Text>;
 						if (typeof text === "boolean") return text ? "true" : "false";
 						if (typeof text === "object") return JSON.stringify(text);
@@ -84,25 +100,27 @@ function SqlExecutor() {
 					},
 				}));
 				setColumns(cols);
-				setResults(
-					data.rows.map((row: any, index: number) => ({ ...row, key: index })),
-				);
+				setResults(data.rows.map((row, index) => ({ ...row, key: index })));
 			} else {
 				setColumns([]);
 				setResults([]);
 				message.info("Query executed successfully but returned no rows");
 			}
-		} catch (err: any) {
+		} catch (err) {
 			let errorMessage = "Unknown error occurred";
-			if (err?.body?.detail) {
+			const error = err as {
+				body?: { detail?: string | object };
+				message?: string;
+			};
+			if (error?.body?.detail) {
 				errorMessage =
-					typeof err.body.detail === "object"
-						? JSON.stringify(err.body.detail)
-						: err.body.detail;
-			} else if (err?.message) {
-				errorMessage = err.message;
+					typeof error.body.detail === "object"
+						? JSON.stringify(error.body.detail)
+						: error.body.detail;
+			} else if (error?.message) {
+				errorMessage = error.message;
 			} else if (err) {
-				errorMessage = err.toString();
+				errorMessage = String(err);
 			}
 			setError(errorMessage);
 			setResults([]);
@@ -124,7 +142,7 @@ function SqlExecutor() {
 			});
 
 			// The mutation returns the blob data, need to handle download
-			const blob = new Blob([result as any], { type: "text/csv" });
+			const blob = new Blob([result as BlobPart], { type: "text/csv" });
 			const url = URL.createObjectURL(blob);
 			const link = document.createElement("a");
 			link.setAttribute("href", url);
@@ -135,17 +153,21 @@ function SqlExecutor() {
 			document.body.removeChild(link);
 			URL.revokeObjectURL(url);
 			message.success("Results exported to CSV");
-		} catch (err: any) {
+		} catch (err) {
 			let errorMessage = "Export failed";
-			if (err?.body?.detail) {
+			const error = err as {
+				body?: { detail?: string | object };
+				message?: string;
+			};
+			if (error?.body?.detail) {
 				errorMessage =
-					typeof err.body.detail === "object"
-						? JSON.stringify(err.body.detail)
-						: err.body.detail;
-			} else if (err?.message) {
-				errorMessage = err.message;
+					typeof error.body.detail === "object"
+						? JSON.stringify(error.body.detail)
+						: error.body.detail;
+			} else if (error?.message) {
+				errorMessage = error.message;
 			} else if (err) {
-				errorMessage = err.toString();
+				errorMessage = String(err);
 			}
 			message.error(errorMessage);
 		}

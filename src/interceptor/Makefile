@@ -2,6 +2,7 @@
 
 build:
 	@echo "Building interceptor WASM files..."
+	@rm -rf wasm
 	@mkdir -p wasm
 	@TIMESTAMP=$$(date +"%Y%m%d_%H%M%S"); \
 	if [ -n "$(LABEL)" ]; then \
@@ -15,7 +16,7 @@ build:
 		SUFFIX="$$TIMESTAMP"; \
 	fi; \
 	echo "Building with suffix: $$SUFFIX"; \
-	docker buildx build --output type=local,dest=./ -f Dockerfile.build .; \
+	docker buildx build --output type=local,dest=./wasm -f Dockerfile.build .; \
 	if [ -f wasm/interceptor_http.wasm ]; then \
 		cp wasm/interceptor_http.wasm wasm/interceptor_http_$$SUFFIX.wasm; \
 		echo "Created: wasm/interceptor_http_$$SUFFIX.wasm"; \

@@ -64,6 +64,12 @@ import type {
 	GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetData,
 	GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetErrors,
 	GetTcpConnectionStatsApiServicesPortTcpConnectionStatsGetResponses,
+	GetWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGetData,
+	GetWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGetErrors,
+	GetWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGetResponses,
+	GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetData,
+	GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetErrors,
+	GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetResponses,
 	HealthCheckApiHealthGetData,
 	HealthCheckApiHealthGetResponses,
 	SaveConfigApiConfigPostData,
@@ -72,6 +78,8 @@ import type {
 	ValidateConfigApiConfigValidatePostData,
 	ValidateConfigApiConfigValidatePostErrors,
 	ValidateConfigApiConfigValidatePostResponses,
+	VerifyAuthApiAuthVerifyGetData,
+	VerifyAuthApiAuthVerifyGetResponses,
 } from "./types.gen";
 
 export type Options<
@@ -89,6 +97,24 @@ export type Options<
 	 * used to access values that aren't defined as part of the SDK function.
 	 */
 	meta?: Record<string, unknown>;
+};
+
+/**
+ * Verify Auth
+ */
+export const verifyAuthApiAuthVerifyGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options?: Options<VerifyAuthApiAuthVerifyGetData, ThrowOnError>,
+) => {
+	return (options?.client ?? client).get<
+		VerifyAuthApiAuthVerifyGetResponses,
+		unknown,
+		ThrowOnError
+	>({
+		url: "/api/auth/verify",
+		...options,
+	});
 };
 
 /**
@@ -385,7 +411,49 @@ export const getTcpConnectionStatsApiServicesPortTcpConnectionStatsGet = <
 };
 
 /**
+ * Get Websocket Connections
+ */
+export const getWebsocketConnectionsApiServicesPortWebsocketConnectionsGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<
+		GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetData,
+		ThrowOnError
+	>,
+) => {
+	return (options.client ?? client).get<
+		GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetResponses,
+		GetWebsocketConnectionsApiServicesPortWebsocketConnectionsGetErrors,
+		ThrowOnError
+	>({
+		url: "/api/services/{port}/websocket-connections",
+		...options,
+	});
+};
+
+/**
+ * Get Websocket Connection Detail
+ */
+export const getWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGet =
+	<ThrowOnError extends boolean = false>(
+		options: Options<
+			GetWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGetData,
+			ThrowOnError
+		>,
+	) => {
+		return (options.client ?? client).get<
+			GetWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGetResponses,
+			GetWebsocketConnectionDetailApiWebsocketConnectionsConnectionIdGetErrors,
+			ThrowOnError
+		>({
+			url: "/api/websocket-connections/{connection_id}",
+			...options,
+		});
+	};
+
+/**
  * Get Recent Flag Stats
+ *
  * Get flag statistics for the last 5 minutes.
  */
 export const getRecentFlagStatsApiFlagsRecentGet = <
@@ -405,6 +473,7 @@ export const getRecentFlagStatsApiFlagsRecentGet = <
 
 /**
  * Get Service Flag Time Stats
+ *
  * Get flag statistics for a specific service.
  */
 export const getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGet = <
@@ -427,6 +496,7 @@ export const getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGet = <
 
 /**
  * Get Service Request Time Stats
+ *
  * Get request statistics for a specific service.
  */
 export const getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGet = <
@@ -449,6 +519,7 @@ export const getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGet = <
 
 /**
  * Get All Request Time Stats
+ *
  * Get request statistics for all services.
  */
 export const getAllRequestTimeStatsApiRequestTimeStatsGet = <
@@ -471,6 +542,7 @@ export const getAllRequestTimeStatsApiRequestTimeStatsGet = <
 
 /**
  * Get All Flag Time Stats
+ *
  * Get flag statistics for all services.
  */
 export const getAllFlagTimeStatsApiFlagTimeStatsGet = <
@@ -490,6 +562,7 @@ export const getAllFlagTimeStatsApiFlagTimeStatsGet = <
 
 /**
  * Get Config
+ *
  * Get current config content and list of revisions.
  */
 export const getConfigApiConfigGet = <ThrowOnError extends boolean = false>(
@@ -507,6 +580,7 @@ export const getConfigApiConfigGet = <ThrowOnError extends boolean = false>(
 
 /**
  * Save Config
+ *
  * Save config after validation and create a backup.
  */
 export const saveConfigApiConfigPost = <ThrowOnError extends boolean = false>(
@@ -528,6 +602,7 @@ export const saveConfigApiConfigPost = <ThrowOnError extends boolean = false>(
 
 /**
  * Get Config Revision
+ *
  * Get content of a specific config revision.
  */
 export const getConfigRevisionApiConfigRevisionFilenameGet = <
@@ -550,6 +625,7 @@ export const getConfigRevisionApiConfigRevisionFilenameGet = <
 
 /**
  * Validate Config
+ *
  * Validate config without saving.
  */
 export const validateConfigApiConfigValidatePost = <
@@ -573,6 +649,7 @@ export const validateConfigApiConfigValidatePost = <
 
 /**
  * Get Code Server Info
+ *
  * Get code server configuration.
  */
 export const getCodeServerInfoApiCodeServerInfoGet = <

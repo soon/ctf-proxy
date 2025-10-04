@@ -65,18 +65,18 @@ function Dashboard() {
 
 			if (trimmed.startsWith("s ") || trimmed.startsWith("/s ")) {
 				const port = trimmed.replace(/^\/?s\s+/, "");
-				if (port && !isNaN(Number(port))) {
+				if (port && !Number.isNaN(Number(port))) {
 					navigate({ to: `/service/${port}` });
 				}
 			} else if (trimmed.startsWith("r ") || trimmed.startsWith("/r ")) {
 				const reqId = trimmed.replace(/^\/?r\s+/, "");
-				if (reqId && !isNaN(Number(reqId))) {
+				if (reqId && !Number.isNaN(Number(reqId))) {
 					// Request routes now need port, just use a placeholder
 					navigate({ to: `/service/3000/request/${reqId}` });
 				}
 			} else if (trimmed.startsWith("p ") || trimmed.startsWith("/p ")) {
 				const port = trimmed.replace(/^\/?p\s+/, "");
-				if (port && !isNaN(Number(port))) {
+				if (port && !Number.isNaN(Number(port))) {
 					navigate({ to: `/service/${port}/paths` });
 				}
 			} else if (trimmed === "h" || trimmed === "/h" || trimmed === "help") {
