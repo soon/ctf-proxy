@@ -6,14 +6,12 @@ from datetime import datetime
 from io import StringIO
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from ctf_proxy.config import Config
-from ctf_proxy.config.config import verify_token
 from ctf_proxy.dashboard.models import (
     FlagItem,
     FlagTimeStatsItem,
@@ -85,57 +83,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="CTF Proxy Dashboard API", version="1.0.0", lifespan=lifespan)
 
 
-class AuthMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        # Skip auth middleware for the auth verify endpoint (it handles its own auth)
-        if request.url.path == "/api/auth/verify":
-            return await call_next(request)
-
-        # All /api routes require authentication
-        if request.url.path.startswith("/api"):
-            auth_header = request.headers.get("Authorization")
-            if not auth_header:
-                return Response(
-                    content='{"detail":"Missing Authorization header"}',
-                    status_code=401,
-                    media_type="application/json",
-                )
-
-            if not auth_header.startswith("Bearer "):
-                return Response(
-                    content='{"detail":"Invalid authorization header format"}',
-                    status_code=401,
-                    media_type="application/json",
-                )
-
-            token = auth_header[len("Bearer ") :]
-
-            if config is None:
-                return Response(
-                    content='{"detail":"Server not properly initialized"}',
-                    status_code=500,
-                    media_type="application/json",
-                )
-
-            expected_token_hash = getattr(config, "api_token_hash", None)
-            if not expected_token_hash:
-                return Response(
-                    content='{"detail":"API token not configured"}',
-                    status_code=500,
-                    media_type="application/json",
-                )
-
-            if not verify_token(token, expected_token_hash):
-                return Response(
-                    content='{"detail":"Invalid API token"}',
-                    status_code=401,
-                    media_type="application/json",
-                )
-
-        return await call_next(request)
-
-
-app.add_middleware(AuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -143,59 +90,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.get("/api/auth/verify")
-async def verify_auth(request: Request) -> Response:
-    import logging
-    from urllib.parse import parse_qs, urlparse
-
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
-
-    expected_token_hash = getattr(config, "api_token_hash", None)
-    if not expected_token_hash:
-        return Response(status_code=500)
-
-    # Log for debugging
-    logger.info(f"Auth verify - URL: {request.url}")
-    logger.info(f"Auth verify - Query params: {dict(request.query_params)}")
-    forwarded_uri = request.headers.get("x-forwarded-uri", "")
-    logger.info(f"Auth verify - X-Forwarded-Uri: {forwarded_uri}")
-
-    # Try Authorization header first
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-        if verify_token(token, expected_token_hash):
-            return Response(status_code=200)
-
-    # Try query parameter (for iframe access)
-    token = request.query_params.get("tkn", "")
-    if token and verify_token(token, expected_token_hash):
-        return Response(status_code=200)
-
-    # Check X-Forwarded-Uri header from Traefik
-    if forwarded_uri and "tkn=" in forwarded_uri:
-        # Extract token from forwarded URI
-        parsed = urlparse(forwarded_uri)
-        params = parse_qs(parsed.query)
-        token = params.get("tkn", [""])[0]
-        if token and verify_token(token, expected_token_hash):
-            return Response(status_code=200)
-
-    # Check cookie (for code-server iframe access)
-    cookies = request.headers.get("cookie", "")
-    if "code_server_token=" in cookies:
-        # Extract token from cookie
-        for cookie in cookies.split(";"):
-            cookie = cookie.strip()
-            if cookie.startswith("code_server_token="):
-                token = cookie.split("=", 1)[1]
-                if verify_token(token, expected_token_hash):
-                    return Response(status_code=200)
-
-    return Response(status_code=401)
 
 
 def init_app(config_path: str = "config.yml", db_path: str = "proxy_stats.db") -> None:

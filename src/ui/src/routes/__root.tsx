@@ -26,9 +26,8 @@ import { useHealthCheck } from "@/hooks/useHealthCheck";
 import { HostConfig } from "@/components/HostConfig";
 import SettingsModal from "@/components/SettingsModal";
 import { useState } from "react";
-import { Button } from "antd";
 
-const { Header, Content, Footer } = Layout;
+const { Header, Content } = Layout;
 
 interface MyRouterContext {
 	queryClient: QueryClient;
@@ -292,6 +291,11 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 			return <HostConfig visible={true} currentUrl={apiUrl} error={error} />;
 		}
 
+		const isWide = matches.some(
+			(match) =>
+				(match as { staticData?: { isWide?: boolean } }).staticData?.isWide,
+		);
+
 		return (
 			<App>
 				<Layout style={{ minHeight: "100vh" }}>
@@ -305,7 +309,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 							style={{ flex: 1, minWidth: 0 }}
 						/>
 					</Header>
-					<Content style={{ padding: "0 48px" }}>
+					<Content style={{ padding: isWide ? "0" : "0 48px"  }}>
 						<div
 							style={{
 								margin: "16px 0",
@@ -313,6 +317,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 								justifyContent: "space-between",
 								alignItems: "center",
 								minHeight: "32px",
+								padding: isWide ? "0 48px" : "0",
 							}}
 						>
 							<Breadcrumb
@@ -359,7 +364,6 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 							<Outlet />
 						</div>
 					</Content>
-					<Footer style={{ textAlign: "center" }} />
 				</Layout>
 				<SettingsModal
 					open={settingsOpen}

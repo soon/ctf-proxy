@@ -93,11 +93,6 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def verify_token(token: str, token_hash: str) -> bool:
-    """Verify token against stored hash."""
-    return hash_token(token) == token_hash
-
-
 class Config:
     flag_format: str
     tcp_connection_stats_precision: int

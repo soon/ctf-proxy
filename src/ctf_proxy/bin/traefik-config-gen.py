@@ -9,7 +9,7 @@ def generate_traefik_config(config_path: str, output_dir: str) -> None:
     with open(config_path) as f:
         config = yaml.safe_load(f)
 
-    services_with_mount = [s for s in config.get("services", []) if s.get("mount_folder")]
+    token = config.get("api_token_hash", "")
 
     traefik_config = {
         "http": {
@@ -17,32 +17,44 @@ def generate_traefik_config(config_path: str, output_dir: str) -> None:
                 "code-server": {
                     "rule": "PathPrefix(`/code-server`)",
                     "service": "code-server",
-                    "middlewares": ["code-server-strip"],
+                    "middlewares": ["cookie-token-auth", "code-server-strip"],
                     "priority": 90,
                 },
-                "api": {
-                    "rule": "PathPrefix(`/api`)",
-                    "service": "dashboard-backend",
-                    "priority": 80,
-                },
-                "frontend": {
+                "dashboard-backend": {
                     "rule": "PathPrefix(`/`)",
-                    "service": "frontend",
+                    "service": "dashboard-backend",
+                    "middlewares": ["header-token-auth"],
                     "priority": 1,
                 },
             },
+            # todo - 3000 is still being intercepted by envoy, should be fixed
             "services": {
                 "dashboard-backend": {
-                    "loadBalancer": {"servers": [{"url": "http://dashboard-backend:48956"}]}
+                    "loadBalancer": {"servers": [{"url": "http://dashboard-backend:8080"}]}
                 },
                 "code-server": {"loadBalancer": {"servers": [{"url": "http://code-server:3000"}]}},
-                "frontend": {"loadBalancer": {"servers": [{"url": "http://frontend:80"}]}},
             },
             "middlewares": {
                 "code-server-strip": {
                     "stripPrefix": {
                         "prefixes": ["/code-server"],
-                        "forceSlash": False,
+                    }
+                },
+                "header-token-auth": {
+                    "plugin": {
+                        "auth": {
+                            "mode": "header",
+                            "tokenSHA256": token,
+                        }
+                    }
+                },
+                "cookie-token-auth": {
+                    "plugin": {
+                        "auth": {
+                            "mode": "cookie",
+                            "tokenSHA256": token,
+                            "cookiePath": "/code-server",
+                        }
                     }
                 },
             },
@@ -51,14 +63,6 @@ def generate_traefik_config(config_path: str, output_dir: str) -> None:
 
     with open(f"{output_dir}/dynamic.yml", "w") as f:
         yaml.dump(traefik_config, f, sort_keys=False)
-
-    mount_volumes = []
-    for service in services_with_mount:
-        mount_folder = service["mount_folder"]
-        mount_name = service["name"].replace("-", "_")
-        mount_volumes.append(f"      - {mount_folder}:/workspace/{mount_name}")
-
-    print("\n".join(mount_volumes), file=sys.stderr)
 
 
 if __name__ == "__main__":

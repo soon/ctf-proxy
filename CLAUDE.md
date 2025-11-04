@@ -182,9 +182,9 @@ You're a senior software engineer. When working follow engineering principles:
 
 YOU'RE WORKING IN A MAC OS VM WHICH DOESN'T HAVE DOCKER. IN ORDER TO DEPLOY YOUR CHANGES YOU CAN USE UBUNTU VM. TO ACCESS IT USE THE FOLLOWING:
 
-1. **Use ssh-exec.sh**: If you need to run a command in the vm, use `./scripts/ssh-exec.sh "<command>"`.
-2. **Shared folder**: The project is mounted to `/mnt/shared` in the vm and symlinked to `~/shared`. 
-3. **Project restart**: You can restart project by executing the following command on a remote vm: `~/setup.sh`
+1. **Use ssh-exec.sh**: If you need to run a command in the vm, use `./scripts/ssh-exec.sh "<command>"`. 
+2. **Project restart**: You can restart project by executing the following command on a remote vm: `~/setup.sh`.
+3. **VM Project folder**: After `~/setup.sh` is executed, project is available at `~/src` in VM.
 4. **Available commands**: The vm has `docker`, `docker compose`, `make`.
 
                                                                                                                                    ff

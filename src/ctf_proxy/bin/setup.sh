@@ -14,15 +14,15 @@ echo 'Updating config.yml...'
 python3 ./ctf_proxy/bin/config-gen.py ~/config.yml "$@"
 cp ~/config.yml data/config.yml
 
-echo 'Generating Traefik and docker-compose configs...'
+echo 'Generating Traefik config...'
+mkdir -p ./traefik
 python3 ./ctf_proxy/bin/traefik-config-gen.py ./data/config.yml ./traefik
+
+echo 'Generating docker-compose.yml...'
 python3 ./ctf_proxy/bin/docker-compose-gen.py ./data/config.yml ./docker-compose.template.yml ./docker-compose.yml
 
 echo 'Setting ownership for container directories...'
 sudo chown -R 1337:1337 logs logs-archive data
-
-echo 'Setting up iptables rules for proxying...'
-sudo PORTS_FILE=data/config.yml python3 ./ctf_proxy/bin/iptables-config.py setup
 
 echo 'Building interceptor...'
 sudo make -C ./interceptor build LABEL=setup
@@ -33,3 +33,7 @@ echo 'Refreshing Envoy config with latest WASM files...'
 
 echo 'Starting all services...'
 docker-compose up -d --build --force-recreate
+
+# must be in the end, so all bridges are known to iptables-config.py
+echo 'Setting up iptables rules for proxying...'
+sudo PORTS_FILE=data/config.yml python3 ./ctf_proxy/bin/iptables-config.py setup

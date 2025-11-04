@@ -1,0 +1,5 @@
+displayName: Auth Middleware
+type: middleware
+import: github.com/ctfproxy/auth
+summary: Authenticates requests using a token provided via header or cookie
+testData: {}

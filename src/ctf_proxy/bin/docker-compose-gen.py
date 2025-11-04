@@ -14,8 +14,6 @@ def generate_docker_compose(config_path: str, template_path: str, output_path: s
 
     services_with_mount = [s for s in config.get("services", []) if s.get("mount_folder")]
 
-    api_token = config.get("api_token", "")
-
     if services_with_mount:
         volumes = []
         for service in services_with_mount:
@@ -25,11 +23,6 @@ def generate_docker_compose(config_path: str, template_path: str, output_path: s
 
         if "code-server" in docker_compose["services"]:
             docker_compose["services"]["code-server"]["volumes"] = volumes
-            if api_token:
-                # openvscode-server expects plain text token
-                docker_compose["services"]["code-server"]["environment"].append(
-                    f"CONNECTION_TOKEN={api_token}"
-                )
 
     with open(output_path, "w") as f:
         yaml.dump(docker_compose, f, sort_keys=False, default_flow_style=False)
