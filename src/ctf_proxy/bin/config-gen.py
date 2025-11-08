@@ -315,7 +315,7 @@ def main():
         if existing_config:
             print(f"Loaded existing configuration from {output_file}", file=sys.stderr)
 
-    config = generate_config(existing_config, is_test=["--test" in sys.argv])
+    config = generate_config(existing_config, is_test="--test" in sys.argv)
 
     if not config.get("services"):
         print("No services found in configuration.", file=sys.stderr)
