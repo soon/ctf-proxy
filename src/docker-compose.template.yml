@@ -54,6 +54,14 @@ services:
     networks:
       - control-panel
 
+  dashboard-ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - control-panel
+
   traefik:
     image: traefik:v3.2
     command:
@@ -73,6 +81,7 @@ services:
     restart: unless-stopped
     depends_on:
       - dashboard-backend
+      - dashboard-ui
       - code-server
     networks:
       - control-panel

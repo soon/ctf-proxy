@@ -309,7 +309,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 							style={{ flex: 1, minWidth: 0 }}
 						/>
 					</Header>
-					<Content style={{ padding: isWide ? "0" : "0 48px"  }}>
+					<Content style={{ padding: isWide ? "0" : "0 48px" }}>
 						<div
 							style={{
 								margin: "16px 0",

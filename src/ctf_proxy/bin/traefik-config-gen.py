@@ -18,20 +18,22 @@ def generate_traefik_config(config_path: str, output_dir: str) -> None:
                     "rule": "PathPrefix(`/code-server`)",
                     "service": "code-server",
                     "middlewares": ["cookie-token-auth", "code-server-strip"],
-                    "priority": 90,
                 },
                 "dashboard-backend": {
-                    "rule": "PathPrefix(`/`)",
+                    "rule": "PathPrefix(`/api`)",
                     "service": "dashboard-backend",
                     "middlewares": ["header-token-auth"],
-                    "priority": 1,
+                },
+                "dashboard-ui": {
+                    "rule": "PathPrefix(`/`)",
+                    "service": "dashboard-ui",
                 },
             },
-            # todo - 3000 is still being intercepted by envoy, should be fixed
             "services": {
                 "dashboard-backend": {
                     "loadBalancer": {"servers": [{"url": "http://dashboard-backend:8080"}]}
                 },
+                "dashboard-ui": {"loadBalancer": {"servers": [{"url": "http://dashboard-ui:80"}]}},
                 "code-server": {"loadBalancer": {"servers": [{"url": "http://code-server:3000"}]}},
             },
             "middlewares": {

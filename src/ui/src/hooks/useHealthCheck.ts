@@ -36,13 +36,14 @@ export function useHealthCheck(): HealthCheckResult {
 				};
 				if (storedToken) {
 					config.headers = {
-						...client.getConfig().headers,
 						Authorization: `Bearer ${storedToken}`,
 					};
 				}
 				client.setConfig(config);
 
-				const { data } = await healthCheckApiHealthGet();
+				await healthCheckApiHealthGet({
+					throwOnError: true,
+				});
 				setIsHealthy(true);
 			} catch (err) {
 				setIsHealthy(false);
@@ -68,7 +69,6 @@ export function updateApiUrl(url: string) {
 	};
 	if (storedToken) {
 		config.headers = {
-			...client.getConfig().headers,
 			Authorization: `Bearer ${storedToken}`,
 		};
 	}

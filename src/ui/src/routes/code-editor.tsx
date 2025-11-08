@@ -7,96 +7,96 @@ import { getCodeServerInfoApiCodeServerInfoGetOptions } from "@/client/@tanstack
 import { client } from "@/client/client.gen";
 
 export const Route = createFileRoute("/code-editor")({
-  staticData: {
-    breadcrumb: "Code Editor",
+	staticData: {
+		breadcrumb: "Code Editor",
 		isWide: true,
-  },
-  component: CodeEditorPage,
+	},
+	component: CodeEditorPage,
 });
 
 function CodeEditorPage() {
-  const [selectedService, setSelectedService] = useState<string | null>(null);
-  const [pageActionsEl, setPageActionsEl] = useState<HTMLElement | null>(null);
-  const apiToken = localStorage.getItem("apiToken") || "";
+	const [selectedService, setSelectedService] = useState<string | null>(null);
+	const [pageActionsEl, setPageActionsEl] = useState<HTMLElement | null>(null);
+	const apiToken = localStorage.getItem("apiToken") || "";
 
-  const { data, isLoading } = useQuery({
-    ...getCodeServerInfoApiCodeServerInfoGetOptions(),
-  });
+	const { data, isLoading } = useQuery({
+		...getCodeServerInfoApiCodeServerInfoGetOptions(),
+	});
 
-  useEffect(() => {
-    const el = document.getElementById("page-actions");
-    setPageActionsEl(el);
-  }, []);
+	useEffect(() => {
+		const el = document.getElementById("page-actions");
+		setPageActionsEl(el);
+	}, []);
 
-  if (isLoading) {
-    return (
-      <div style={{ textAlign: "center", padding: "50px" }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
+	if (isLoading) {
+		return (
+			<div style={{ textAlign: "center", padding: "50px" }}>
+				<Spin size="large" />
+			</div>
+		);
+	}
 
-  if (!data?.enabled || data.services.length === 0) {
-    return (
-      <Empty
-        description={
-          <span>
-            No services with mount folders configured.
-            <br />
-            Add mount_folder to services in config to enable code editing.
-          </span>
-        }
-      />
-    );
-  }
+	if (!data?.enabled || data.services.length === 0) {
+		return (
+			<Empty
+				description={
+					<span>
+						No services with mount folders configured.
+						<br />
+						Add mount_folder to services in config to enable code editing.
+					</span>
+				}
+			/>
+		);
+	}
 
-  const currentService =
-    selectedService || data.services[0]?.workspace_path || null;
+	const currentService =
+		selectedService || data.services[0]?.workspace_path || null;
 
-  const getCodeServerUrl = (workspace: string) => {
-    const baseUrl = client.getConfig().baseUrl;
-    if (baseUrl == null) {
-      return undefined;
-    }
-    return `${baseUrl}/code-server/?folder=${workspace}&token=${apiToken}`;
-  };
+	const getCodeServerUrl = (workspace: string) => {
+		const baseUrl = client.getConfig().baseUrl;
+		if (baseUrl == null) {
+			return undefined;
+		}
+		return `${baseUrl}/code-server/?folder=${workspace}&token=${apiToken}`;
+	};
 
-  return (
-    <>
-      {pageActionsEl &&
-        createPortal(
-          <Select
-            style={{ width: 250 }}
-            placeholder="Select service"
-            value={currentService}
-            onChange={(value) => setSelectedService(value)}
-            options={data.services.map((s) => ({
-              label: s.name,
-              value: s.workspace_path,
-            }))}
-          />,
-          pageActionsEl
-        )}
-      {currentService && (
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            border: "none",
+	return (
+		<>
+			{pageActionsEl &&
+				createPortal(
+					<Select
+						style={{ width: 250 }}
+						placeholder="Select service"
+						value={currentService}
+						onChange={(value) => setSelectedService(value)}
+						options={data.services.map((s) => ({
+							label: s.name,
+							value: s.workspace_path,
+						}))}
+					/>,
+					pageActionsEl,
+				)}
+			{currentService && (
+				<div
+					style={{
+						width: "100%",
+						height: "100%",
+						border: "none",
 						boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
-          }}
-        >
-          <iframe
-            src={getCodeServerUrl(currentService)}
-            style={{
-              width: "100%",
-              height: "calc(100vh - 128px)",
-              border: "none",
-            }}
-            title="Code Editor"
-          />
-        </div>
-      )}
-    </>
-  );
+					}}
+				>
+					<iframe
+						src={getCodeServerUrl(currentService)}
+						style={{
+							width: "100%",
+							height: "calc(100vh - 128px)",
+							border: "none",
+						}}
+						title="Code Editor"
+					/>
+				</div>
+			)}
+		</>
+	);
 }
