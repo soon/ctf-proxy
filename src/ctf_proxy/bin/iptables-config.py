@@ -711,14 +711,20 @@ def remove_port_family(ipt: str, label: str, port: int, port_type: str):
     print(f"[✓] ({label}) Port {port} redirect removed.")
 
 
-def add_port(port: int):
+def add_port(port: int, force: bool = False, port_type: str = "http"):
     http_ports, tcp_ports = load_ports()
-    if port in http_ports:
-        port_type = "http"
-    elif port in tcp_ports:
-        port_type = "tcp"
+
+    if not force:
+        if port in http_ports:
+            port_type = "http"
+        elif port in tcp_ports:
+            port_type = "tcp"
+        else:
+            raise ValueError(f"Port {port} not found in configuration. Use --force to add anyway.")
     else:
-        raise ValueError(f"Port {port} not found in configuration")
+        if port_type not in ["http", "tcp"]:
+            raise ValueError(f"Invalid port type: {port_type}. Must be 'http' or 'tcp'.")
+        print(f"[i] Force mode: adding port {port} as {port_type} type (not in config)")
 
     # Resolve bridges
     if BRIDGE_IFS.strip().lower() in {"auto", ""}:
@@ -733,14 +739,22 @@ def add_port(port: int):
         print("[i] IPv6 disabled or unavailable; skipping IPv6 rules.")
 
 
-def remove_port(port: int):
+def remove_port(port: int, force: bool = False, port_type: str = "http"):
     http_ports, tcp_ports = load_ports()
-    if port in http_ports:
-        port_type = "http"
-    elif port in tcp_ports:
-        port_type = "tcp"
+
+    if not force:
+        if port in http_ports:
+            port_type = "http"
+        elif port in tcp_ports:
+            port_type = "tcp"
+        else:
+            raise ValueError(
+                f"Port {port} not found in configuration. Use --force to remove anyway."
+            )
     else:
-        raise ValueError(f"Port {port} not found in configuration")
+        if port_type not in ["http", "tcp"]:
+            raise ValueError(f"Invalid port type: {port_type}. Must be 'http' or 'tcp'.")
+        print(f"[i] Force mode: removing port {port} as {port_type} type (not in config)")
 
     remove_port_family(IPT, "IPv4", port, port_type)
     if ipv6_wanted():
@@ -1010,7 +1024,7 @@ def info():
 def usage():
     exe = Path(sys.argv[0]).name
     print(
-        f"""Usage: sudo {exe} setup|teardown|add-port <port>|remove-port <port>|info
+        f"""Usage: sudo {exe} setup|teardown|add-port <port> [--force] [--type http|tcp]|remove-port <port> [--force] [--type http|tcp]|info
 
 Environment overrides:
   PORTS_FILE={PORTS_FILE or "<unset>"}   # path to config file listing ports (YAML)
@@ -1028,8 +1042,12 @@ Environment overrides:
 Notes:
   • setup: Configure redirects for all ports from PORTS_FILE.
   • teardown: Remove all existing redirects.
-  • add-port <port>: Add redirect for a specific port.
-  • remove-port <port>: Remove redirect for a specific port.
+  • add-port <port> [--force] [--type http|tcp]: Add redirect for a specific port.
+    - Without --force: port must be in PORTS_FILE
+    - With --force: port can be added even if not in config (default type: http)
+  • remove-port <port> [--force] [--type http|tcp]: Remove redirect for a specific port.
+    - Without --force: port must be in PORTS_FILE
+    - With --force: port can be removed even if not in config (default type: http)
   • info: Display current iptables rules related to proxying.
   • Services are classified by type in PORTS_FILE:
     - HTTP/WS services (type: http, https, ws, wss) → :{ENVOY_HTTP_PORT}
@@ -1070,9 +1088,21 @@ def main():
             port = int(sys.argv[2])
             if not (1 <= port <= 65535):
                 raise ValueError("Port must be between 1 and 65535")
-            add_port(port)
+
+            force = "--force" in sys.argv[3:]
+            port_type = "http"
+
+            if "--type" in sys.argv[3:]:
+                type_idx = sys.argv[3:].index("--type")
+                if type_idx + 1 < len(sys.argv[3:]):
+                    port_type = sys.argv[3 + type_idx + 1]
+                else:
+                    print("Error: --type requires an argument (http or tcp)", file=sys.stderr)
+                    sys.exit(1)
+
+            add_port(port, force=force, port_type=port_type)
         except ValueError as e:
-            print(f"Error: Invalid port number - {e}", file=sys.stderr)
+            print(f"Error: {e}", file=sys.stderr)
             sys.exit(1)
     elif cmd == "remove-port":
         if len(sys.argv) < 3:
@@ -1082,9 +1112,21 @@ def main():
             port = int(sys.argv[2])
             if not (1 <= port <= 65535):
                 raise ValueError("Port must be between 1 and 65535")
-            remove_port(port)
+
+            force = "--force" in sys.argv[3:]
+            port_type = "http"
+
+            if "--type" in sys.argv[3:]:
+                type_idx = sys.argv[3:].index("--type")
+                if type_idx + 1 < len(sys.argv[3:]):
+                    port_type = sys.argv[3 + type_idx + 1]
+                else:
+                    print("Error: --type requires an argument (http or tcp)", file=sys.stderr)
+                    sys.exit(1)
+
+            remove_port(port, force=force, port_type=port_type)
         except ValueError as e:
-            print(f"Error: Invalid port number - {e}", file=sys.stderr)
+            print(f"Error: {e}", file=sys.stderr)
             sys.exit(1)
     else:
         usage()
