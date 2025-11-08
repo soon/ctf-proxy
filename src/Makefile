@@ -12,7 +12,7 @@ ui-logs:
 	docker compose logs -f ui
 
 stop:
-	docker-compose down
+	docker compose down
 
 dev:
 	@$(MAKE) -f Makefile.dev $(filter-out $@,$(MAKECMDGOALS))

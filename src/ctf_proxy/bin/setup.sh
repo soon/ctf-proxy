@@ -32,7 +32,7 @@ echo 'Refreshing Envoy config with latest WASM files...'
 ./ctf_proxy/bin/refresh-envoy.sh
 
 echo 'Starting all services...'
-docker-compose up -d --build --force-recreate
+docker compose up -d --build --force-recreate
 
 # must be in the end, so all bridges are known to iptables-config.py
 echo 'Setting up iptables rules for proxying...'

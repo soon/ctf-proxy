@@ -2,22 +2,22 @@
 
 test: test-setup
 	@echo "Running integration tests in Docker..."
-	@docker-compose build test_runner
-	@docker-compose run --rm test_runner
+	@docker compose build test_runner
+	@docker compose run --rm test_runner
 	@$(MAKE) test-down
 
 test-setup:
 	@echo "Building and starting test environment..."
-	@docker-compose up -d --build --force-recreate
+	@docker compose up -d --build --force-recreate
 	@echo "Test environment started!"
 
 test-down:
 	@echo "Stopping test environment..."
-	@docker-compose down -v
+	@docker compose down -v
 
 clean: test-down
 	@echo "Cleaning up test artifacts..."
-	@docker-compose down -v --rmi all 2>/dev/null || true
+	@docker compose down -v --rmi all 2>/dev/null || true
 	@docker system prune -f
 
 test-watch:
