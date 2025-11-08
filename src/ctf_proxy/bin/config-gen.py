@@ -185,9 +185,6 @@ def generate_config(
 
     if not containers:
         print("No running containers found.", file=sys.stderr)
-        if existing_config:
-            return existing_config
-        return {"services": []}
 
     # Get existing services and their ports
     if existing_config is None:
