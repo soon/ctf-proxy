@@ -19,12 +19,10 @@ if [ ! -d "$INTERCEPTOR_DIR/wasm" ]; then
     exit 1
 fi
 
-# Find latest WASM files
-HTTP_LATEST=$(ls -t "$INTERCEPTOR_DIR/wasm/interceptor_http_"*.wasm 2>/dev/null | head -n1 | xargs basename 2>/dev/null || echo "interceptor_http.wasm")
-TCP_LATEST=$(ls -t "$INTERCEPTOR_DIR/wasm/interceptor_tcp_"*.wasm 2>/dev/null | head -n1 | xargs basename 2>/dev/null || echo "interceptor_tcp.wasm")
+# Find latest WASM file
+INTERCEPTOR_LATEST=$(ls -t "$INTERCEPTOR_DIR/wasm/interceptor_"*.wasm 2>/dev/null | head -n1 | xargs basename 2>/dev/null || echo "interceptor.wasm")
 
-echo "Using HTTP WASM: $HTTP_LATEST"
-echo "Using TCP WASM: $TCP_LATEST"
+echo "Using WASM: $INTERCEPTOR_LATEST"
 
 # Check if template exists
 if [ ! -f "$PROXY_DIR/envoy.template.yaml" ]; then
@@ -33,7 +31,7 @@ if [ ! -f "$PROXY_DIR/envoy.template.yaml" ]; then
 fi
 
 # Generate new envoy.yaml from template
-sed "s/{HTTP_INTERCEPTOR_FILENAME}/$HTTP_LATEST/g; s/{TCP_INTERCEPTOR_FILENAME}/$TCP_LATEST/g" \
+sed "s/{INTERCEPTOR_FILENAME}/$INTERCEPTOR_LATEST/g" \
     "$PROXY_DIR/envoy.template.yaml" > "$PROXY_DIR/envoy.yaml"
 
 echo "Envoy configuration updated: $PROXY_DIR/envoy.yaml"

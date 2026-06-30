@@ -28,6 +28,16 @@ echo 'Building interceptor...'
 sudo make -C ./interceptor build LABEL=setup
 sudo chown -R $(whoami):$(whoami) ./interceptor/wasm
 
+echo 'Generating self-signed TLS cert for HTTPS interception (if missing)...'
+mkdir -p ./ctf_proxy/proxy/tls
+if [ ! -f ./ctf_proxy/proxy/tls/cert.pem ] || [ ! -f ./ctf_proxy/proxy/tls/key.pem ]; then
+    openssl req -x509 -newkey rsa:2048 -nodes \
+        -keyout ./ctf_proxy/proxy/tls/key.pem \
+        -out ./ctf_proxy/proxy/tls/cert.pem \
+        -days 3650 -subj "/CN=ctf-proxy"
+fi
+chmod 644 ./ctf_proxy/proxy/tls/key.pem ./ctf_proxy/proxy/tls/cert.pem
+
 echo 'Refreshing Envoy config with latest WASM files...'
 ./ctf_proxy/bin/refresh-envoy.sh
 

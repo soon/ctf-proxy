@@ -17,11 +17,7 @@ build:
 	fi; \
 	echo "Building with suffix: $$SUFFIX"; \
 	docker buildx build --output type=local,dest=./wasm -f Dockerfile.build .; \
-	if [ -f wasm/interceptor_http.wasm ]; then \
-		cp wasm/interceptor_http.wasm wasm/interceptor_http_$$SUFFIX.wasm; \
-		echo "Created: wasm/interceptor_http_$$SUFFIX.wasm"; \
-	fi; \
-	if [ -f wasm/interceptor_tcp.wasm ]; then \
-		cp wasm/interceptor_tcp.wasm wasm/interceptor_tcp_$$SUFFIX.wasm; \
-		echo "Created: wasm/interceptor_tcp_$$SUFFIX.wasm"; \
+	if [ -f wasm/interceptor.wasm ]; then \
+		cp wasm/interceptor.wasm wasm/interceptor_$$SUFFIX.wasm; \
+		echo "Created: wasm/interceptor_$$SUFFIX.wasm"; \
 	fi

@@ -46,7 +46,6 @@ class Container:
 
 def get_running_containers() -> list[Container]:
     """Get list of running containers with their port mappings."""
-    # containers_json = run_docker_command(["ps", "--format", "json", "--filter", "status=running"])
     containers_json = run_docker_command(
         [
             "ps",
@@ -107,7 +106,7 @@ def parse_port_mapping(port_mapping: str) -> dict[str, Any] | None:
 
 def determine_service_type(port: int, protocol: str, container_name: str) -> str:
     """Determine service type based on port, protocol and container name."""
-    available_types = ["http", "tcp", "udp"]
+    available_types = ["http", "https", "tcp", "udp"]
     default_type = "http"
     supported_message = ", ".join(
         f"{t} [default]" if t == default_type else t for t in available_types

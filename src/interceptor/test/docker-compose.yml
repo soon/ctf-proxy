@@ -5,9 +5,12 @@ services:
       dockerfile: test/Dockerfile.envoy
     ports:
       - "15001:15001"
+      - "15002:15002"
       - "15000:15000"
     depends_on:
       - test_backend
+      - tcp_backend
+      - https_backend
 
   test_backend:
     image: nginx:alpine
@@ -16,6 +19,19 @@ services:
     expose:
       - "3000"
 
+  tcp_backend:
+    image: alpine/socat
+    command: TCP-LISTEN:3000,fork,reuseaddr EXEC:/bin/cat
+    expose:
+      - "3000"
+
+  https_backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.https-backend
+    expose:
+      - "443"
+
   test_runner:
     build:
       context: ../
@@ -23,6 +39,7 @@ services:
     depends_on:
       - envoy
       - test_backend
+      - tcp_backend
     environment:
       - DOCKER_TEST=true
     volumes:

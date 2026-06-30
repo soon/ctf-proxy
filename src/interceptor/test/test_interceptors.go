@@ -2,6 +2,8 @@ package main
 
 import (
 	"strings"
+
+	"github.com/proxy-wasm/proxy-wasm-go-sdk/proxywasm"
 )
 
 func registerHttpInterceptors() {
@@ -29,4 +31,15 @@ func registerHttpInterceptors() {
 }
 
 func registerTcpInterceptors() {
+	RegisterTcpInterceptor(15002, "block on marker",
+		func(w *TcpWhenContext) bool {
+			if w.Stage != TcpStageDownstreamData {
+				return false
+			}
+			data, err := proxywasm.GetDownstreamData(0, w.Size)
+			if err != nil {
+				return false
+			}
+			return strings.Contains(string(data), "BLOCK")
+		}, DoTcpBlock)
 }

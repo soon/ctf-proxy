@@ -1,0 +1,10 @@
+FROM nginx:alpine
+
+RUN apk add --no-cache openssl && \
+    mkdir -p /etc/nginx/ssl && \
+    openssl req -x509 -newkey rsa:2048 -nodes \
+        -keyout /etc/nginx/ssl/nginx.key \
+        -out /etc/nginx/ssl/nginx.crt \
+        -days 3650 -subj "/CN=localhost"
+
+COPY nginx.https.conf /etc/nginx/nginx.conf

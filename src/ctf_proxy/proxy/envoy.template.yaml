@@ -1,6 +1,10 @@
 static_resources:
   listeners:
-  # HTTP listener
+  # HTTP listener. Handles both plaintext HTTP and TLS (HTTPS) on the same port:
+  # tls_inspector selects the TLS-terminating filter chain for encrypted connections,
+  # and the plaintext default_filter_chain for everything else.
+  # HTTPS interception terminates TLS with a single shared cert and re-encrypts to the
+  # upstream. For per-service cert pinning, see docs/envoy.md.
   - name: http_listener
     address:
       socket_address:
@@ -11,9 +15,101 @@ static_resources:
     - name: envoy.filters.listener.original_dst
       typed_config:
         "@type": type.googleapis.com/envoy.extensions.filters.listener.original_dst.v3.OriginalDst
+    - name: envoy.filters.listener.tls_inspector
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.filters.listener.tls_inspector.v3.TlsInspector
 
     filter_chains:
-    - filters:
+    # HTTPS: terminate TLS, intercept, re-encrypt to the original destination.
+    - filter_chain_match:
+        transport_protocol: tls
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+          common_tls_context:
+            tls_certificates:
+            - certificate_chain: { filename: /etc/envoy/tls/cert.pem }
+              private_key: { filename: /etc/envoy/tls/key.pem }
+      filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          stat_prefix: hcm
+          generate_request_id: true
+          add_user_agent: false
+          use_remote_address: false
+          skip_xff_append: true
+          server_header_transformation: PASS_THROUGH
+          upgrade_configs:
+          - upgrade_type: websocket
+
+          access_log:
+          - name: envoy.access_loggers.file
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog
+              path: /var/log/envoy/http_access.log
+              json_format:
+                start_time: "%START_TIME%"
+                method: "%REQ(:METHOD)%"
+                path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+                status: "%RESPONSE_CODE%"
+                duration_ms: "%DURATION%"
+                upstream_host: "%UPSTREAM_HOST%"
+                upstream_connection_id: "%UPSTREAM_CONNECTION_ID%"
+                stream_id: "%STREAM_ID%"
+                bytes_in: "%BYTES_RECEIVED%"
+                bytes_out: "%BYTES_SENT%"
+
+          http_filters:
+          - name: envoy.filters.http.wasm
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm
+              config:
+                name: interceptor
+                vm_config:
+                  vm_id: https_interceptor_vm
+                  runtime: envoy.wasm.runtime.v8
+                  environment_variables:
+                    key_values:
+                      CTF_PROXY_IS_HTTP: "1"
+                  code:
+                    local:
+                      filename: /etc/envoy/wasm/{INTERCEPTOR_FILENAME}
+                  allow_precompiled: true
+
+          - name: envoy.filters.http.tap
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.tap.v3.Tap
+              common_config:
+                static_config:
+                  match_config: { any_match: true }
+                  output_config:
+                    sinks:
+                    - file_per_tap:
+                        path_prefix: /var/log/envoy/tap/http_
+                    max_buffered_rx_bytes: 0xFFFFFFFF
+                    max_buffered_tx_bytes: 0xFFFFFFFF
+
+          - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+              suppress_envoy_headers: true
+
+          route_config:
+            name: all
+            virtual_hosts:
+            - name: vhost
+              domains: ["*"]
+              routes:
+              - match: { prefix: "/" }
+                route:
+                  cluster: https_passthrough
+                  timeout: 0s
+
+    # Plaintext HTTP (any non-TLS connection).
+    default_filter_chain:
+      filters:
       - name: envoy.filters.network.http_connection_manager
         typed_config:
           "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
@@ -52,9 +148,12 @@ static_resources:
                 vm_config:
                   vm_id: interceptor_vm
                   runtime: envoy.wasm.runtime.v8
+                  environment_variables:
+                    key_values:
+                      CTF_PROXY_IS_HTTP: "1"
                   code:
                     local:
-                      filename: /etc/envoy/wasm/{HTTP_INTERCEPTOR_FILENAME}
+                      filename: /etc/envoy/wasm/{INTERCEPTOR_FILENAME}
                   allow_precompiled: true
 
           - name: envoy.filters.http.tap
@@ -124,9 +223,12 @@ static_resources:
             vm_config:
               vm_id: tcp_interceptor_vm
               runtime: envoy.wasm.runtime.v8
+              environment_variables:
+                key_values:
+                  CTF_PROXY_IS_TCP: "1"
               code:
                 local:
-                  filename: /etc/envoy/wasm/{TCP_INTERCEPTOR_FILENAME}
+                  filename: /etc/envoy/wasm/{INTERCEPTOR_FILENAME}
               allow_precompiled: true
       - name: envoy.filters.network.tcp_proxy
         typed_config:
@@ -156,6 +258,24 @@ static_resources:
     type: ORIGINAL_DST
     lb_policy: CLUSTER_PROVIDED
     connect_timeout: 1s
+
+  # HTTPS passthrough cluster: re-encrypt to the original destination.
+  # auto_sni forwards the request Host as upstream SNI; the backend cert is not verified.
+  - name: https_passthrough
+    type: ORIGINAL_DST
+    lb_policy: CLUSTER_PROVIDED
+    connect_timeout: 1s
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        upstream_http_protocol_options:
+          auto_sni: true
+        explicit_http_config:
+          http_protocol_options: {}
+    transport_socket:
+      name: envoy.transport_sockets.tls
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
 
   # TCP passthrough cluster
   - name: tcp_passthrough

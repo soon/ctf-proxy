@@ -6,4 +6,4 @@ WORKDIR /app
 
 ENV CI=true
 
-CMD ["pytest", "-v", "-s", "./checker/test.py"]
+CMD ["pytest", "-v", "-s", "./checker"]
