@@ -30,3 +30,5 @@ config*.yml
 
 src/traefik/dynamic.yml
 src/docker-compose.yml
+
+docs/analysis/
