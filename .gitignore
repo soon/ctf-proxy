@@ -27,3 +27,6 @@ config*.yml
 *.local.json
 
 *.csv
+
+src/traefik/dynamic.yml
+src/docker-compose.yml
