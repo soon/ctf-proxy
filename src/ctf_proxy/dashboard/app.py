@@ -1205,11 +1205,30 @@ def get_tcp_stats_for_port(port: int) -> TCPStats | None:
         )
 
 
+def build_tcp_search_filter(search: str) -> tuple[str, list]:
+    if len(search) >= 3:
+        match_query = '"' + search.replace('"', '""') + '"'
+        return (
+            """ AND id IN (
+                SELECT te.connection_id
+                FROM tcp_event_fts fts
+                JOIN tcp_event te ON te.id = fts.rowid
+                WHERE tcp_event_fts MATCH ?
+            )""",
+            [match_query],
+        )
+    return (
+        " AND id IN (SELECT connection_id FROM tcp_event WHERE data_text LIKE ?)",
+        [f"%{search}%"],
+    )
+
+
 @app.get("/api/services/{port}/tcp-connections", response_model=TCPConnectionListResponse)
 async def get_tcp_connections(
     port: int,
     page: int = 1,
     page_size: int = 30,
+    search: str | None = None,
 ) -> TCPConnectionListResponse:
     if config is None or db is None:
         raise HTTPException(status_code=500, detail="Server not properly initialized")
@@ -1223,22 +1242,25 @@ async def get_tcp_connections(
 
     offset = (page - 1) * page_size
 
+    search = search.strip() if search else None
+    search_clause, search_params = build_tcp_search_filter(search) if search else ("", [])
+
     with db.connect() as conn:
         cursor = conn.cursor()
 
         cursor.execute(
-            """
-            SELECT COUNT(*) FROM tcp_connection WHERE port = ?
+            f"""
+            SELECT COUNT(*) FROM tcp_connection WHERE port = ?{search_clause}
         """,
-            (port,),
+            (port, *search_params),
         )
         total = cursor.fetchone()[0]
 
         cursor.execute(
-            """
+            f"""
             WITH tcp_ids AS (
                 SELECT id FROM tcp_connection
-                WHERE port = ?
+                WHERE port = ?{search_clause}
                 ORDER BY start_time DESC
                 LIMIT ? OFFSET ?
             )
@@ -1264,7 +1286,7 @@ async def get_tcp_connections(
             WHERE tc.id IN (SELECT id FROM tcp_ids)
             ORDER BY tc.start_time DESC
         """,
-            (port, page_size, offset),
+            (port, *search_params, page_size, offset),
         )
 
         connections = []

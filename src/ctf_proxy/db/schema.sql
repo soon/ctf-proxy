@@ -238,6 +238,26 @@ CREATE INDEX IF NOT EXISTS tcp_event_connection_id ON tcp_event(connection_id);
 CREATE INDEX IF NOT EXISTS tcp_event_timestamp ON tcp_event(timestamp);
 CREATE INDEX IF NOT EXISTS tcp_event_type ON tcp_event(event_type);
 
+CREATE VIRTUAL TABLE IF NOT EXISTS tcp_event_fts USING fts5(
+    data_text,
+    content='tcp_event',
+    content_rowid='id',
+    tokenize='trigram'
+);
+
+CREATE TRIGGER IF NOT EXISTS tcp_event_fts_ai AFTER INSERT ON tcp_event BEGIN
+    INSERT INTO tcp_event_fts(rowid, data_text) VALUES (new.id, new.data_text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS tcp_event_fts_ad AFTER DELETE ON tcp_event BEGIN
+    INSERT INTO tcp_event_fts(tcp_event_fts, rowid, data_text) VALUES ('delete', old.id, old.data_text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS tcp_event_fts_au AFTER UPDATE ON tcp_event BEGIN
+    INSERT INTO tcp_event_fts(tcp_event_fts, rowid, data_text) VALUES ('delete', old.id, old.data_text);
+    INSERT INTO tcp_event_fts(rowid, data_text) VALUES (new.id, new.data_text);
+END;
+
 
 CREATE TABLE IF NOT EXISTS tcp_stats (
     id INTEGER PRIMARY KEY,

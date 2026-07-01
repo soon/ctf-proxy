@@ -1,57 +1,63 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import {
 	getServiceByPortApiServicesPortGetOptions,
-	getServiceRequestsApiServicesPortRequestsGetOptions,
-	getTcpConnectionsApiServicesPortTcpConnectionsGetOptions,
 	getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetOptions,
 	getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetOptions,
+	getServiceRequestsApiServicesPortRequestsGetOptions,
+	getTcpConnectionsApiServicesPortTcpConnectionsGetOptions,
 } from "@/client/@tanstack/react-query.gen";
 import {
-	getServiceRequestsApiServicesPortRequestsGet,
 	getRequestRawApiRequestsRequestIdRawGet,
+	getServiceRequestsApiServicesPortRequestsGet,
 } from "@/client/sdk.gen";
-import type { HttpRequest, TcpConnection } from "@/client/types.gen";
+import type { RequestListItem, TcpConnectionItem } from "@/client/types.gen";
+import { SparklineChart } from "@/components/SparklineChart";
 import {
+	AlertOutlined,
+	ApiOutlined,
+	ClearOutlined,
+	CodeOutlined,
+	FileTextOutlined,
+	FilterOutlined,
+	FlagOutlined,
+	LineChartOutlined,
+	LinkOutlined,
+	ReloadOutlined,
+	SearchOutlined,
+	WarningOutlined,
+} from "@ant-design/icons";
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+	Button,
 	Card,
+	Col,
+	Empty,
+	Input,
+	List,
+	Modal,
+	Row,
+	Space,
+	Spin,
+	Statistic,
 	Table,
 	Tag,
-	Button,
-	Input,
-	Row,
-	Col,
-	Statistic,
-	Space,
-	Empty,
-	Spin,
-	Modal,
-	List,
 	Typography,
 } from "antd";
-import {
-	ReloadOutlined,
-	FlagOutlined,
-	ApiOutlined,
-	AlertOutlined,
-	LinkOutlined,
-	FilterOutlined,
-	ClearOutlined,
-	LineChartOutlined,
-	SearchOutlined,
-	FileTextOutlined,
-	WarningOutlined,
-	CodeOutlined,
-} from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { SparklineChart } from "@/components/SparklineChart";
+import { z } from "zod";
 
 const { Search } = Input;
 const { Text } = Typography;
 
+const serviceSearchSchema = z.object({
+	tcpSearch: z.string().optional(),
+});
+
 export const Route = createFileRoute("/service/$port/")({
 	component: ServiceDetail,
+	validateSearch: serviceSearchSchema,
 	staticData: {
 		breadcrumb: "Service",
 	},
@@ -67,8 +73,20 @@ function formatBytes(bytes: number): string {
 
 function ServiceDetail() {
 	const { port } = Route.useParams();
+	const search = Route.useSearch();
 	const portNumber = Number.parseInt(port);
 	const navigate = useNavigate();
+	const tcpSearch = search.tcpSearch ?? "";
+	const setTcpSearch = useCallback(
+		(value: string) => {
+			navigate({
+				to: `/service/${port}`,
+				search: (prev) => ({ ...prev, tcpSearch: value || undefined }),
+				replace: true,
+			});
+		},
+		[navigate, port],
+	);
 	const [currentPage, setCurrentPage] = useState(1);
 	const [pageSize, setPageSize] = useState(30);
 	const [filters, setFilters] = useState<{
@@ -77,7 +95,7 @@ function ServiceDetail() {
 		filter_status?: number;
 		filter_blocked?: boolean;
 	}>({});
-	const [searchValue, setSearchValue] = useState("");
+	const [searchValue, setSearchValue] = useState(tcpSearch);
 	const [alertsModalVisible, setAlertsModalVisible] = useState(false);
 	const [rawRequestModalVisible, setRawRequestModalVisible] = useState(false);
 	const [selectedRequestId, setSelectedRequestId] = useState<number | null>(
@@ -151,37 +169,47 @@ function ServiceDetail() {
 			query: {
 				page: currentPage,
 				page_size: pageSize,
+				search: tcpSearch || undefined,
 			},
 		}),
 		enabled: isTcpService && !!service,
 	});
 
-	const handleSearch = useCallback((value: string) => {
-		const trimmed = value.trim();
-		setCurrentPage(1); // Reset to first page on new search
-		if (!trimmed) {
-			setFilters({});
-			return;
-		}
+	const handleSearch = useCallback(
+		(value: string) => {
+			const trimmed = value.trim();
+			setCurrentPage(1); // Reset to first page on new search
 
-		// Parse filter commands similar to CLI
-		if (trimmed.startsWith("/")) {
-			setFilters({ filter_path: trimmed });
-		} else if (trimmed.match(/^[1-5]\d{2}$/)) {
-			setFilters({ filter_status: Number.parseInt(trimmed) });
-		} else if (
-			["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"].includes(
-				trimmed.toUpperCase(),
-			)
-		) {
-			setFilters({ filter_method: trimmed.toUpperCase() });
-		} else if (trimmed.toLowerCase() === "blocked") {
-			setFilters({ filter_blocked: true });
-		} else {
-			// Default to path contains
-			setFilters({ filter_path: trimmed });
-		}
-	}, []);
+			if (isTcpService) {
+				setTcpSearch(trimmed);
+				return;
+			}
+
+			if (!trimmed) {
+				setFilters({});
+				return;
+			}
+
+			// Parse filter commands similar to CLI
+			if (trimmed.startsWith("/")) {
+				setFilters({ filter_path: trimmed });
+			} else if (trimmed.match(/^[1-5]\d{2}$/)) {
+				setFilters({ filter_status: Number.parseInt(trimmed) });
+			} else if (
+				["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"].includes(
+					trimmed.toUpperCase(),
+				)
+			) {
+				setFilters({ filter_method: trimmed.toUpperCase() });
+			} else if (trimmed.toLowerCase() === "blocked") {
+				setFilters({ filter_blocked: true });
+			} else {
+				// Default to path contains
+				setFilters({ filter_path: trimmed });
+			}
+		},
+		[isTcpService, setTcpSearch],
+	);
 
 	// Check for new requests periodically
 	useEffect(() => {
@@ -225,6 +253,7 @@ function ServiceDetail() {
 
 	const clearFilters = () => {
 		setFilters({});
+		setTcpSearch("");
 		setSearchValue("");
 		setCurrentPage(1);
 	};
@@ -236,7 +265,7 @@ function ServiceDetail() {
 		}
 	};
 
-	const httpColumns: ColumnsType<HttpRequest> = [
+	const httpColumns: ColumnsType<RequestListItem> = [
 		{
 			title: "ID",
 			dataIndex: "id",
@@ -319,7 +348,7 @@ function ServiceDetail() {
 			title: "Flags",
 			key: "flags",
 			width: 100,
-			render: (_, record: HttpRequest) => {
+			render: (_, record: RequestListItem) => {
 				if (!record.request_flags && !record.response_flags) return null;
 				return (
 					<Space size={2}>
@@ -341,7 +370,7 @@ function ServiceDetail() {
 			title: "Session",
 			key: "links",
 			width: 80,
-			render: (_, record: HttpRequest) => {
+			render: (_, record: RequestListItem) => {
 				const totalLinks = record.total_links || 0;
 
 				if (totalLinks === 0) return null;
@@ -383,7 +412,7 @@ function ServiceDetail() {
 			title: "Blocked",
 			key: "blocked",
 			width: 70,
-			render: (_, record: HttpRequest) =>
+			render: (_, record: RequestListItem) =>
 				record.is_blocked ? (
 					<Tag color="error" className="text-xs">
 						BLOCKED
@@ -394,7 +423,7 @@ function ServiceDetail() {
 			title: "Raw",
 			key: "actions",
 			width: 60,
-			render: (_, record: HttpRequest) => (
+			render: (_, record: RequestListItem) => (
 				<Button
 					size="small"
 					icon={<CodeOutlined />}
@@ -421,7 +450,7 @@ function ServiceDetail() {
 	];
 
 	// TCP Connections columns
-	const tcpColumns: ColumnsType<TcpConnection> = [
+	const tcpColumns: ColumnsType<TcpConnectionItem> = [
 		{
 			title: "ID",
 			dataIndex: "id",
@@ -538,7 +567,11 @@ function ServiceDetail() {
 	const controls = (
 		<Space size={4}>
 			<Search
-				placeholder="Filter: /path, 404, GET, blocked"
+				placeholder={
+					isTcpService
+						? "Search payload content"
+						: "Filter: /path, 404, GET, blocked"
+				}
 				allowClear
 				enterButton={<FilterOutlined />}
 				style={{ width: 250 }}
@@ -546,7 +579,7 @@ function ServiceDetail() {
 				onChange={(e) => setSearchValue(e.target.value)}
 				onSearch={handleSearch}
 			/>
-			{Object.keys(filters).length > 0 && (
+			{(Object.keys(filters).length > 0 || tcpSearch) && (
 				<Button icon={<ClearOutlined />} onClick={clearFilters}>
 					Clear
 				</Button>

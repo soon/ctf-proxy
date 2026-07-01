@@ -1,14 +1,20 @@
 {
 	"$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
 	"vcs": {
-		"enabled": false,
+		"enabled": true,
 		"clientKind": "git",
-		"useIgnoreFile": false
+		"useIgnoreFile": true
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"ignore": ["src/routeTree.gen.ts", "dist/**", "src/client/**/*.gen.ts"],
-		"include": ["src/*", ".vscode/*", "index.html", "vite.config.js"]
+		"ignore": [
+			"dist/**",
+			"package.json",
+			"tsconfig.json",
+			"public/manifest.json",
+			".cta.json"
+		],
+		"include": ["src/**", ".vscode/*", "index.html", "vite.config.ts"]
 	},
 	"formatter": {
 		"enabled": true,
@@ -27,5 +33,12 @@
 		"formatter": {
 			"quoteStyle": "double"
 		}
-	}
+	},
+	"overrides": [
+		{
+			"include": ["src/routeTree.gen.ts", "src/client/**"],
+			"linter": { "enabled": false },
+			"organizeImports": { "enabled": false }
+		}
+	]
 }

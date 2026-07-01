@@ -197,6 +197,7 @@ class TcpTapProcessor:
                     timestamp=timestamp,
                     event_type="read",
                     data=data_bytes,
+                    data_text=data_bytes.decode("utf-8", errors="ignore"),
                     data_size=len(data_bytes),
                     truncated=truncated,
                 )
@@ -213,6 +214,7 @@ class TcpTapProcessor:
                     timestamp=timestamp,
                     event_type="write",
                     data=data_bytes,
+                    data_text=data_bytes.decode("utf-8", errors="ignore"),
                     data_size=len(data_bytes),
                     end_stream=end_stream,
                     truncated=truncated,

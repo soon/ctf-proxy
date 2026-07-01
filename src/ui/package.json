@@ -12,7 +12,7 @@
     "format": "biome format",
     "lint": "biome lint",
     "check": "biome check",
-    "gen:api": "npx @hey-api/openapi-ts -i http://localhost:48955/openapi.json -o src/client -p @tanstack/react-query",
+    "gen:api": "npx @hey-api/openapi-ts -i http://localhost:48955/openapi.json -o src/client -p @tanstack/react-query && biome format --write src/client src/routeTree.gen.ts",
     "deploy:prod": "npm run build && npx netlify deploy --prod --dir dist"
   },
   "dependencies": {
