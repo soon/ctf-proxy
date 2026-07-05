@@ -9,6 +9,35 @@ import type {
 } from "./client";
 import { client } from "./client.gen";
 import type {
+	AnalyzerCreateBackfillApiAnalyzerBackfillPostData,
+	AnalyzerCreateBackfillApiAnalyzerBackfillPostErrors,
+	AnalyzerCreateBackfillApiAnalyzerBackfillPostResponses,
+	AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteData,
+	AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteErrors,
+	AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteResponses,
+	AnalyzerGetBackfillApiAnalyzerBackfillGetData,
+	AnalyzerGetBackfillApiAnalyzerBackfillGetResponses,
+	AnalyzerGetRuleApiAnalyzerRulesNameGetData,
+	AnalyzerGetRuleApiAnalyzerRulesNameGetErrors,
+	AnalyzerGetRuleApiAnalyzerRulesNameGetResponses,
+	AnalyzerListRulesApiAnalyzerRulesGetData,
+	AnalyzerListRulesApiAnalyzerRulesGetErrors,
+	AnalyzerListRulesApiAnalyzerRulesGetResponses,
+	AnalyzerPreviewApiAnalyzerPreviewPostData,
+	AnalyzerPreviewApiAnalyzerPreviewPostErrors,
+	AnalyzerPreviewApiAnalyzerPreviewPostResponses,
+	AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostData,
+	AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostErrors,
+	AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostResponses,
+	AnalyzerSaveRuleApiAnalyzerRulesNamePutData,
+	AnalyzerSaveRuleApiAnalyzerRulesNamePutErrors,
+	AnalyzerSaveRuleApiAnalyzerRulesNamePutResponses,
+	AnalyzerTagStatsApiAnalyzerTagStatsGetData,
+	AnalyzerTagStatsApiAnalyzerTagStatsGetErrors,
+	AnalyzerTagStatsApiAnalyzerTagStatsGetResponses,
+	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetData,
+	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetErrors,
+	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetResponses,
 	ExecuteSqlApiSqlPostData,
 	ExecuteSqlApiSqlPostErrors,
 	ExecuteSqlApiSqlPostResponses,
@@ -649,3 +678,219 @@ export const getCodeServerInfoApiCodeServerInfoGet = <
 		unknown,
 		ThrowOnError
 	>({ url: "/api/code-server/info", ...options });
+
+/**
+ * Analyzer List Rules
+ */
+export const analyzerListRulesApiAnalyzerRulesGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options?: Options<AnalyzerListRulesApiAnalyzerRulesGetData, ThrowOnError>,
+): RequestResult<
+	AnalyzerListRulesApiAnalyzerRulesGetResponses,
+	AnalyzerListRulesApiAnalyzerRulesGetErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		AnalyzerListRulesApiAnalyzerRulesGetResponses,
+		AnalyzerListRulesApiAnalyzerRulesGetErrors,
+		ThrowOnError
+	>({ url: "/api/analyzer/rules", ...options });
+
+/**
+ * Analyzer Delete Rule
+ */
+export const analyzerDeleteRuleApiAnalyzerRulesNameDelete = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<
+		AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteData,
+		ThrowOnError
+	>,
+): RequestResult<
+	AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteResponses,
+	AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).delete<
+		AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteResponses,
+		AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteErrors,
+		ThrowOnError
+	>({ url: "/api/analyzer/rules/{name}", ...options });
+
+/**
+ * Analyzer Get Rule
+ */
+export const analyzerGetRuleApiAnalyzerRulesNameGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<AnalyzerGetRuleApiAnalyzerRulesNameGetData, ThrowOnError>,
+): RequestResult<
+	AnalyzerGetRuleApiAnalyzerRulesNameGetResponses,
+	AnalyzerGetRuleApiAnalyzerRulesNameGetErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		AnalyzerGetRuleApiAnalyzerRulesNameGetResponses,
+		AnalyzerGetRuleApiAnalyzerRulesNameGetErrors,
+		ThrowOnError
+	>({ url: "/api/analyzer/rules/{name}", ...options });
+
+/**
+ * Analyzer Save Rule
+ */
+export const analyzerSaveRuleApiAnalyzerRulesNamePut = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<AnalyzerSaveRuleApiAnalyzerRulesNamePutData, ThrowOnError>,
+): RequestResult<
+	AnalyzerSaveRuleApiAnalyzerRulesNamePutResponses,
+	AnalyzerSaveRuleApiAnalyzerRulesNamePutErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		AnalyzerSaveRuleApiAnalyzerRulesNamePutResponses,
+		AnalyzerSaveRuleApiAnalyzerRulesNamePutErrors,
+		ThrowOnError
+	>({
+		url: "/api/analyzer/rules/{name}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
+ * Analyzer Promote Rule
+ */
+export const analyzerPromoteRuleApiAnalyzerRulesNamePromotePost = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<
+		AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostData,
+		ThrowOnError
+	>,
+): RequestResult<
+	AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostResponses,
+	AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostResponses,
+		AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostErrors,
+		ThrowOnError
+	>({ url: "/api/analyzer/rules/{name}/promote", ...options });
+
+/**
+ * Analyzer Preview
+ */
+export const analyzerPreviewApiAnalyzerPreviewPost = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<AnalyzerPreviewApiAnalyzerPreviewPostData, ThrowOnError>,
+): RequestResult<
+	AnalyzerPreviewApiAnalyzerPreviewPostResponses,
+	AnalyzerPreviewApiAnalyzerPreviewPostErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		AnalyzerPreviewApiAnalyzerPreviewPostResponses,
+		AnalyzerPreviewApiAnalyzerPreviewPostErrors,
+		ThrowOnError
+	>({
+		url: "/api/analyzer/preview",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
+ * Analyzer Tag Stats
+ */
+export const analyzerTagStatsApiAnalyzerTagStatsGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<AnalyzerTagStatsApiAnalyzerTagStatsGetData, ThrowOnError>,
+): RequestResult<
+	AnalyzerTagStatsApiAnalyzerTagStatsGetResponses,
+	AnalyzerTagStatsApiAnalyzerTagStatsGetErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		AnalyzerTagStatsApiAnalyzerTagStatsGetResponses,
+		AnalyzerTagStatsApiAnalyzerTagStatsGetErrors,
+		ThrowOnError
+	>({ url: "/api/analyzer/tag-stats", ...options });
+
+/**
+ * Analyzer Tag Time Stats
+ */
+export const analyzerTagTimeStatsApiAnalyzerTagTimeStatsGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<
+		AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetData,
+		ThrowOnError
+	>,
+): RequestResult<
+	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetResponses,
+	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetResponses,
+		AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetErrors,
+		ThrowOnError
+	>({ url: "/api/analyzer/tag-time-stats", ...options });
+
+/**
+ * Analyzer Get Backfill
+ */
+export const analyzerGetBackfillApiAnalyzerBackfillGet = <
+	ThrowOnError extends boolean = false,
+>(
+	options?: Options<
+		AnalyzerGetBackfillApiAnalyzerBackfillGetData,
+		ThrowOnError
+	>,
+): RequestResult<
+	AnalyzerGetBackfillApiAnalyzerBackfillGetResponses,
+	unknown,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		AnalyzerGetBackfillApiAnalyzerBackfillGetResponses,
+		unknown,
+		ThrowOnError
+	>({ url: "/api/analyzer/backfill", ...options });
+
+/**
+ * Analyzer Create Backfill
+ */
+export const analyzerCreateBackfillApiAnalyzerBackfillPost = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<
+		AnalyzerCreateBackfillApiAnalyzerBackfillPostData,
+		ThrowOnError
+	>,
+): RequestResult<
+	AnalyzerCreateBackfillApiAnalyzerBackfillPostResponses,
+	AnalyzerCreateBackfillApiAnalyzerBackfillPostErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		AnalyzerCreateBackfillApiAnalyzerBackfillPostResponses,
+		AnalyzerCreateBackfillApiAnalyzerBackfillPostErrors,
+		ThrowOnError
+	>({
+		url: "/api/analyzer/backfill",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});

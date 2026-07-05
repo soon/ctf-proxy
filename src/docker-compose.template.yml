@@ -26,6 +26,44 @@ services:
     depends_on:
       - envoy
 
+  analyzer:
+    build:
+      context: .
+      dockerfile: Dockerfile.logs-processor
+    user: "1337:1337"
+    command: ["python", "-m", "ctf_proxy.analyzer"]
+    volumes:
+      - ./data:/app/data
+      - ./analyzer-rules:/app/rules:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SOURCE_DB_FILE=/app/data/proxy_stats.db
+      - ANALYSIS_DB_FILE=/app/data/analysis.db
+      - RULES_FOLDER=/app/rules
+    restart: unless-stopped
+    depends_on:
+      - logs-processor
+
+  analyzer-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.logs-processor
+    user: "1337:1337"
+    volumes:
+      - ./data:/app/data
+      - ./analyzer-rules:/app/rules
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SOURCE_DB_FILE=/app/data/proxy_stats.db
+      - ANALYSIS_DB_FILE=/app/data/analysis.db
+      - RULES_FOLDER=/app/rules
+    command: ["gunicorn", "ctf_proxy.analyzer.api:app", "--workers", "2", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8090", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
+    restart: unless-stopped
+    depends_on:
+      - analyzer
+    networks:
+      - control-panel
+
   dashboard-backend:
     build:
       context: .
@@ -38,10 +76,12 @@ services:
       - PYTHONUNBUFFERED=1
       - CONFIG_PATH=/app/data/config.yml
       - DB_PATH=/app/data/proxy_stats.db
+      - ANALYZER_API_URL=http://analyzer-api:8090
     command: ["gunicorn", "ctf_proxy.dashboard.app:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8080", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
     restart: unless-stopped
     depends_on:
       - envoy
+      - analyzer-api
     networks:
       - control-panel
 

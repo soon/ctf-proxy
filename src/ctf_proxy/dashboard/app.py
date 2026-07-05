@@ -1,4 +1,5 @@
 import csv
+import os
 import sqlite3
 import time
 from contextlib import asynccontextmanager
@@ -6,11 +7,24 @@ from datetime import datetime
 from io import StringIO
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from ctf_proxy.analyzer.schemas import (
+    BackfillJobModel,
+    BackfillRequest,
+    MessageResponse,
+    PreviewRequest,
+    PreviewResponse,
+    RuleListResponse,
+    RuleSourceResponse,
+    SaveRuleRequest,
+    TagStatsResponse,
+    TagTimeStatsResponse,
+)
 from ctf_proxy.config import Config
 from ctf_proxy.dashboard.models import (
     FlagItem,
@@ -31,6 +45,7 @@ from ctf_proxy.dashboard.models import (
     RequestTimeStatsItem,
     RequestTimeStatsResponse,
     ResponseDetail,
+    RuleTagItem,
     ServiceListItem,
     ServiceListResponse,
     TCPConnectionDetail,
@@ -59,6 +74,7 @@ from ctf_proxy.ui.components.service_stats import ServiceStats
 
 config: Config | None = None
 db: ProxyStatsDB | None = None
+analysis_db_path: str | None = None
 
 
 @asynccontextmanager
@@ -93,7 +109,7 @@ app.add_middleware(
 
 
 def init_app(config_path: str = "config.yml", db_path: str = "proxy_stats.db") -> None:
-    global config, db
+    global config, db, analysis_db_path
 
     config_file = Path(config_path)
     db_file = Path(db_path)
@@ -107,6 +123,28 @@ def init_app(config_path: str = "config.yml", db_path: str = "proxy_stats.db") -
     config = Config(config_file)
     config.start_watching()
     db = ProxyStatsDB(str(db_file))
+    analysis_db_path = os.environ.get("ANALYSIS_DB_PATH", str(db_file.parent / "analysis.db"))
+
+
+def attach_analysis(conn) -> bool:
+    if not analysis_db_path or not Path(analysis_db_path).exists():
+        return False
+    conn.execute("ATTACH DATABASE ? AS analysisdb", (analysis_db_path,))
+    return True
+
+
+def tag_filter_clause(source: str, port: int, tag: str, outer_column: str) -> tuple[str, list]:
+    """Clause restricting `outer_column` to ids carrying `tag`.
+
+    Assumes the analysis DB is already ATTACHed as `analysisdb`.
+    """
+    table = "http_analysis_result" if source == "http" else "tcp_analysis_result"
+    ref_column = "http_request_id" if source == "http" else "tcp_connection_id"
+    clause = (
+        f" AND {outer_column} IN ("
+        f"SELECT {ref_column} FROM analysisdb.{table} WHERE tag = ? AND port = ?)"
+    )
+    return clause, [tag, port]
 
 
 @app.get("/api/health")
@@ -547,6 +585,8 @@ async def get_service_requests(
     filter_method: str | None = None,
     filter_status: int | None = None,
     filter_blocked: bool | None = None,
+    filter_tag: str | None = None,
+    visible_rules: str | None = None,
 ) -> RequestListResponse:
     if config is None or db is None:
         raise HTTPException(status_code=500, detail="Server not properly initialized")
@@ -568,6 +608,14 @@ async def get_service_requests(
         """
 
         params = [port]
+
+        if filter_tag:
+            if attach_analysis(conn):
+                clause, tag_params = tag_filter_clause("http", port, filter_tag, "req.id")
+            else:
+                clause, tag_params = " AND 1 = 0", []
+            base_query += clause
+            params.extend(tag_params)
 
         if filter_path:
             base_query += " AND req.path LIKE ?"
@@ -716,6 +764,10 @@ async def get_service_requests(
                     total_links=total_session_requests or 0,
                 )
             )
+
+    tag_map = await fetch_tags_for_refs("http", [item.id for item in requests], visible_rules)
+    for item in requests:
+        item.tags = tag_map.get(item.id, [])
 
     return RequestListResponse(
         requests=requests,
@@ -986,6 +1038,8 @@ async def get_request_detail(request_id: int) -> RequestDetailResponse:
                 flags=response_flags,
             )
 
+    request_detail.tags = await fetch_analysis_rows("http", request_id)
+
     return RequestDetailResponse(request=request_detail, response=response_detail)
 
 
@@ -1229,6 +1283,8 @@ async def get_tcp_connections(
     page: int = 1,
     page_size: int = 30,
     search: str | None = None,
+    filter_tag: str | None = None,
+    visible_rules: str | None = None,
 ) -> TCPConnectionListResponse:
     if config is None or db is None:
         raise HTTPException(status_code=500, detail="Server not properly initialized")
@@ -1248,11 +1304,20 @@ async def get_tcp_connections(
     with db.connect() as conn:
         cursor = conn.cursor()
 
+        tag_clause, tag_params = "", []
+        if filter_tag:
+            if attach_analysis(conn):
+                tag_clause, tag_params = tag_filter_clause("tcp", port, filter_tag, "id")
+            else:
+                tag_clause, tag_params = " AND 1 = 0", []
+        filter_clause = f"{search_clause}{tag_clause}"
+        filter_params = [*search_params, *tag_params]
+
         cursor.execute(
             f"""
-            SELECT COUNT(*) FROM tcp_connection WHERE port = ?{search_clause}
+            SELECT COUNT(*) FROM tcp_connection WHERE port = ?{filter_clause}
         """,
-            (port, *search_params),
+            (port, *filter_params),
         )
         total = cursor.fetchone()[0]
 
@@ -1260,7 +1325,7 @@ async def get_tcp_connections(
             f"""
             WITH tcp_ids AS (
                 SELECT id FROM tcp_connection
-                WHERE port = ?{search_clause}
+                WHERE port = ?{filter_clause}
                 ORDER BY start_time DESC
                 LIMIT ? OFFSET ?
             )
@@ -1286,7 +1351,7 @@ async def get_tcp_connections(
             WHERE tc.id IN (SELECT id FROM tcp_ids)
             ORDER BY tc.start_time DESC
         """,
-            (port, *search_params, page_size, offset),
+            (port, *filter_params, page_size, offset),
         )
 
         connections = []
@@ -1304,6 +1369,10 @@ async def get_tcp_connections(
                     is_blocked=bool(row[8]),
                 )
             )
+
+    tag_map = await fetch_tags_for_refs("tcp", [c.id for c in connections], visible_rules)
+    for c in connections:
+        c.tags = tag_map.get(c.id, [])
 
     total_pages = (total + page_size - 1) // page_size
 
@@ -1987,3 +2056,107 @@ async def get_code_server_info() -> CodeServerInfo:
         services=services_with_mount,
         token_required=True,
     )
+
+
+ANALYZER_API_URL = os.environ.get("ANALYZER_API_URL", "http://analyzer-api:8090")
+
+
+async def analyzer_request(method: str, path: str, *, params: dict | None = None, json=None):
+    url = f"{ANALYZER_API_URL}{path}"
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.request(method, url, params=params, json=json)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"Analyzer API unreachable: {e}") from e
+
+    if response.status_code >= 400:
+        detail = response.text
+        if response.headers.get("content-type", "").startswith("application/json"):
+            detail = response.json().get("detail", detail)
+        raise HTTPException(status_code=response.status_code, detail=detail)
+
+    return response.json()
+
+
+@app.get("/api/analyzer/rules", response_model=RuleListResponse)
+async def analyzer_list_rules(port: int | None = None):
+    params = {"port": port} if port is not None else None
+    return await analyzer_request("GET", "/api/rules", params=params)
+
+
+@app.get("/api/analyzer/rules/{name}", response_model=RuleSourceResponse)
+async def analyzer_get_rule(name: str, status: str = "draft"):
+    return await analyzer_request("GET", f"/api/rules/{name}", params={"status": status})
+
+
+@app.put("/api/analyzer/rules/{name}", response_model=MessageResponse)
+async def analyzer_save_rule(name: str, body: SaveRuleRequest):
+    return await analyzer_request("PUT", f"/api/rules/{name}", json=body.model_dump())
+
+
+@app.delete("/api/analyzer/rules/{name}", response_model=MessageResponse)
+async def analyzer_delete_rule(name: str, status: str = "draft"):
+    return await analyzer_request("DELETE", f"/api/rules/{name}", params={"status": status})
+
+
+@app.post("/api/analyzer/rules/{name}/promote", response_model=MessageResponse)
+async def analyzer_promote_rule(name: str):
+    return await analyzer_request("POST", f"/api/rules/{name}/promote")
+
+
+@app.post("/api/analyzer/preview", response_model=PreviewResponse)
+async def analyzer_preview(body: PreviewRequest):
+    return await analyzer_request("POST", "/api/preview", json=body.model_dump())
+
+
+@app.get("/api/analyzer/tag-stats", response_model=TagStatsResponse)
+async def analyzer_tag_stats(port: int):
+    return await analyzer_request("GET", "/api/tag-stats", params={"port": port})
+
+
+@app.get("/api/analyzer/tag-time-stats", response_model=TagTimeStatsResponse)
+async def analyzer_tag_time_stats(port: int, window_minutes: int = 60):
+    return await analyzer_request(
+        "GET", "/api/tag-time-stats", params={"port": port, "window_minutes": window_minutes}
+    )
+
+
+@app.post("/api/analyzer/backfill", response_model=BackfillJobModel)
+async def analyzer_create_backfill(body: BackfillRequest):
+    return await analyzer_request("POST", "/api/backfill", json=body.model_dump())
+
+
+@app.get("/api/analyzer/backfill", response_model=BackfillJobModel | None)
+async def analyzer_get_backfill():
+    return await analyzer_request("GET", "/api/backfill")
+
+
+async def fetch_tags_for_refs(
+    source_type: str, ids: list[int], visible_rules: str | None
+) -> dict[int, list[str]]:
+    if not ids or visible_rules is None:
+        return {}
+    rules = [r for r in visible_rules.split(",") if r]
+    if not rules:
+        return {}
+    try:
+        result = await analyzer_request(
+            "POST",
+            "/api/tags/for-refs",
+            json={"source_type": source_type, "ids": ids, "rules": rules},
+        )
+    except HTTPException:
+        return {}
+    return {int(ref): tags for ref, tags in result.get("tags", {}).items()}
+
+
+async def fetch_analysis_rows(source_type: str, ref_id: int) -> list[RuleTagItem]:
+    try:
+        result = await analyzer_request(
+            "GET",
+            "/api/analysis/for-ref",
+            params={"source_type": source_type, "ref_id": ref_id},
+        )
+    except HTTPException:
+        return []
+    return [RuleTagItem(**row) for row in result.get("rows", [])]

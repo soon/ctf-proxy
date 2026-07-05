@@ -66,6 +66,7 @@ class RequestListItem(BaseModel):
     request_flags: int
     response_flags: int
     total_links: int
+    tags: list[str] = []
 
 
 class RequestListResponse(BaseModel):
@@ -108,6 +109,12 @@ class WebSocketFrame(BaseModel):
     flags: list[str]
 
 
+class RuleTagItem(BaseModel):
+    rule: str
+    tag: str
+    meta: str | None = None
+
+
 class RequestDetail(BaseModel):
     id: int
     method: str
@@ -123,6 +130,7 @@ class RequestDetail(BaseModel):
     linked_requests: list[LinkedRequestItem]
     is_websocket: bool = False
     websocket_frames: list[WebSocketFrame] = []
+    tags: list[RuleTagItem] = []
 
 
 class ResponseDetail(BaseModel):
@@ -198,6 +206,7 @@ class TCPConnectionItem(BaseModel):
     flags_in: int
     flags_out: int
     is_blocked: bool
+    tags: list[str] = []
 
 
 class TCPConnectionListResponse(BaseModel):

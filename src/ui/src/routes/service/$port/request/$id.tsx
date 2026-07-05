@@ -23,6 +23,7 @@ import { LinkOutlined, FlagOutlined, CodeOutlined } from "@ant-design/icons";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { ColumnsType } from "antd/es/table";
+import type { RuleTagItem } from "@/client/types.gen";
 
 const { Text, Paragraph } = Typography;
 
@@ -91,6 +92,32 @@ function RequestDetail() {
 			ellipsis: true,
 			render: (text: string) => (
 				<Text className="font-mono text-xs">{text}</Text>
+			),
+		},
+	];
+
+	const ruleTagColumns: ColumnsType<RuleTagItem> = [
+		{
+			title: "Rule",
+			dataIndex: "rule",
+			key: "rule",
+			width: 220,
+			render: (text: string) => <Text code>{text}</Text>,
+		},
+		{
+			title: "Tag",
+			dataIndex: "tag",
+			key: "tag",
+			width: 200,
+			render: (text: string) => <Tag color="purple">{text}</Tag>,
+		},
+		{
+			title: "Metadata",
+			dataIndex: "meta",
+			key: "meta",
+			ellipsis: true,
+			render: (text: string | null) => (
+				<Text className="font-mono text-xs">{text || "—"}</Text>
 			),
 		},
 	];
@@ -270,27 +297,47 @@ function RequestDetail() {
 			key: "info",
 			label: "Info",
 			children: (
-				<Descriptions column={1} size="small">
-					<Descriptions.Item label="Method">
-						<Tag>{request.method}</Tag>
-					</Descriptions.Item>
-					<Descriptions.Item label="Path">
-						<Text code>{request.path}</Text>
-					</Descriptions.Item>
-					<Descriptions.Item label="Time">
-						{new Date(request.timestamp).toLocaleString()}
-					</Descriptions.Item>
-					<Descriptions.Item label="User Agent">
-						<Text className="text-xs">{request.user_agent || "N/A"}</Text>
-					</Descriptions.Item>
-					<Descriptions.Item label="Blocked">
-						{request.is_blocked ? (
-							<Tag color="error">BLOCKED</Tag>
-						) : (
-							<Tag color="success">ALLOWED</Tag>
-						)}
-					</Descriptions.Item>
-				</Descriptions>
+				<>
+					<Descriptions column={1} size="small">
+						<Descriptions.Item label="Method">
+							<Tag>{request.method}</Tag>
+						</Descriptions.Item>
+						<Descriptions.Item label="Path">
+							<Text code>{request.path}</Text>
+						</Descriptions.Item>
+						<Descriptions.Item label="Time">
+							{new Date(request.timestamp).toLocaleString()}
+						</Descriptions.Item>
+						<Descriptions.Item label="User Agent">
+							<Text className="text-xs">{request.user_agent || "N/A"}</Text>
+						</Descriptions.Item>
+						<Descriptions.Item label="Blocked">
+							{request.is_blocked ? (
+								<Tag color="error">BLOCKED</Tag>
+							) : (
+								<Tag color="success">ALLOWED</Tag>
+							)}
+						</Descriptions.Item>
+					</Descriptions>
+
+					<Typography.Title level={5} style={{ marginTop: 16 }}>
+						Rules ({request.tags?.length ?? 0})
+					</Typography.Title>
+					{request.tags && request.tags.length > 0 ? (
+						<Table
+							size="small"
+							rowKey={(r) => `${r.rule}:${r.tag}:${r.meta ?? ""}`}
+							columns={ruleTagColumns}
+							dataSource={request.tags}
+							pagination={false}
+						/>
+					) : (
+						<Empty
+							image={Empty.PRESENTED_IMAGE_SIMPLE}
+							description="No rule matches"
+						/>
+					)}
+				</>
 			),
 		},
 		{

@@ -22,9 +22,9 @@ export function HostConfig({ visible, currentUrl, error }: HostConfigProps) {
 		setTesting(true);
 		setTestResult(null);
 
+		// Temporarily set the base URL and token for testing
+		const originalConfig = client.getConfig();
 		try {
-			// Temporarily set the base URL and token for testing
-			const originalConfig = client.getConfig();
 			client.setConfig({
 				baseUrl: url,
 				headers: {
@@ -33,20 +33,22 @@ export function HostConfig({ visible, currentUrl, error }: HostConfigProps) {
 				},
 			});
 
-			const { data, response } = await healthCheckApiHealthGet();
+			const { data, error, response } = await healthCheckApiHealthGet();
 
-			// Check if the response is successful
-			if (response.status >= 400) {
-				throw new Error(`HTTP ${response.status}: Authentication failed`);
+			// A failed/blocked request may resolve without a response object
+			const status = response?.status;
+			if (error || status === undefined || status >= 400) {
+				throw new Error(
+					status !== undefined
+						? `HTTP ${status}: Authentication failed`
+						: "Could not reach server (check URL, token, or CORS)",
+				);
 			}
 
 			setTestResult({
 				success: true,
 				message: `Connected to ${data?.backend || "CTF Proxy"} v${data?.version || "unknown"}`,
 			});
-
-			// Restore original config
-			client.setConfig(originalConfig);
 		} catch (err) {
 			setTestResult({
 				success: false,
@@ -54,6 +56,8 @@ export function HostConfig({ visible, currentUrl, error }: HostConfigProps) {
 					err instanceof Error ? err.message : "Failed to connect to server",
 			});
 		} finally {
+			// Always restore original config, even on failure
+			client.setConfig(originalConfig);
 			setTesting(false);
 		}
 	};

@@ -8,7 +8,7 @@ echo 'Creating dashboard user (uid 1338)...'
 sudo useradd --system --uid 1338 -m dashboard || true
 
 echo 'Creating container dirs...'
-mkdir -p logs/tap logs/tcp-tap logs-archive data traefik
+mkdir -p logs/tap logs/tcp-tap logs-archive data traefik analyzer-rules analyzer-rules/preview
 
 echo 'Updating config.yml...'
 python3 ./ctf_proxy/bin/config-gen.py ~/config.yml "$@"
@@ -22,7 +22,7 @@ echo 'Generating docker-compose.yml...'
 python3 ./ctf_proxy/bin/docker-compose-gen.py ./data/config.yml ./docker-compose.template.yml ./docker-compose.yml
 
 echo 'Setting ownership for container directories...'
-sudo chown -R 1337:1337 logs logs-archive data
+sudo chown -R 1337:1337 logs logs-archive data analyzer-rules
 
 echo 'Building interceptor...'
 sudo make -C ./interceptor build LABEL=setup

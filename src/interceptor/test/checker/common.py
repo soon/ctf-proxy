@@ -46,6 +46,6 @@ def tcp_roundtrip(payload: bytes, recv_timeout: float = 2, connect_timeout: floa
                 if not data:
                     break
                 chunks.append(data)
-        except socket.timeout:
+        except TimeoutError:
             pass
         return b"".join(chunks)

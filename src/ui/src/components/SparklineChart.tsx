@@ -9,6 +9,7 @@ interface SparklineChartProps {
 	onHoverChange: (timestamp: number | null) => void;
 	isCustomRange?: boolean;
 	search?: { startTime?: string; endTime?: string };
+	anchorToNow?: boolean;
 }
 
 export function SparklineChart({
@@ -18,6 +19,7 @@ export function SparklineChart({
 	onHoverChange,
 	isCustomRange = false,
 	search = {},
+	anchorToNow = false,
 }: SparklineChartProps) {
 	const width = 280;
 	const height = 40;
@@ -44,23 +46,32 @@ export function SparklineChart({
 		maxTime = dayjs(search.endTime).valueOf();
 		totalMinutes = Math.max(1, Math.ceil((maxTime - minTime) / MINUTE_MS));
 	} else {
-		// Rolling window: anchor the chart to the freshest datapoint we have
 		const defaultNow = Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS;
-		const latestTimestamp =
-			normalizedSeries.length > 0
-				? normalizedSeries[normalizedSeries.length - 1].timestamp
-				: defaultNow;
 
-		maxTime = latestTimestamp;
-		const windowMinCandidate = maxTime - (effectiveWindow - 1) * MINUTE_MS;
-
-		if (normalizedSeries.length > 0) {
-			const earliestTimestamp = normalizedSeries[0].timestamp;
-			minTime = Math.min(windowMinCandidate, earliestTimestamp);
-			totalMinutes = Math.floor((maxTime - minTime) / MINUTE_MS) + 1;
-		} else {
-			minTime = windowMinCandidate;
+		if (anchorToNow) {
+			// Fixed window ending at the current minute, so a gap of no recent
+			// activity is drawn as zeros up to "now" instead of stopping early.
+			maxTime = defaultNow;
+			minTime = maxTime - (effectiveWindow - 1) * MINUTE_MS;
 			totalMinutes = effectiveWindow;
+		} else {
+			// Rolling window: anchor the chart to the freshest datapoint we have
+			const latestTimestamp =
+				normalizedSeries.length > 0
+					? normalizedSeries[normalizedSeries.length - 1].timestamp
+					: defaultNow;
+
+			maxTime = latestTimestamp;
+			const windowMinCandidate = maxTime - (effectiveWindow - 1) * MINUTE_MS;
+
+			if (normalizedSeries.length > 0) {
+				const earliestTimestamp = normalizedSeries[0].timestamp;
+				minTime = Math.min(windowMinCandidate, earliestTimestamp);
+				totalMinutes = Math.floor((maxTime - minTime) / MINUTE_MS) + 1;
+			} else {
+				minTime = windowMinCandidate;
+				totalMinutes = effectiveWindow;
+			}
 		}
 	}
 

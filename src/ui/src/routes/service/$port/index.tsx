@@ -1,4 +1,5 @@
 import {
+	analyzerTagStatsApiAnalyzerTagStatsGetOptions,
 	getServiceByPortApiServicesPortGetOptions,
 	getServiceFlagTimeStatsApiServicesPortFlagTimeStatsGetOptions,
 	getServiceRequestTimeStatsApiServicesPortRequestTimeStatsGetOptions,
@@ -16,6 +17,7 @@ import {
 	ApiOutlined,
 	ClearOutlined,
 	CodeOutlined,
+	ExperimentOutlined,
 	FileTextOutlined,
 	FilterOutlined,
 	FlagOutlined,
@@ -36,6 +38,7 @@ import {
 	List,
 	Modal,
 	Row,
+	Select,
 	Space,
 	Spin,
 	Statistic,
@@ -62,6 +65,44 @@ export const Route = createFileRoute("/service/$port/")({
 		breadcrumb: "Service",
 	},
 });
+
+function loadVisibleRules(key: string): string[] {
+	try {
+		const raw = localStorage.getItem(key);
+		const parsed = raw ? JSON.parse(raw) : [];
+		return Array.isArray(parsed) ? parsed : [];
+	} catch {
+		return [];
+	}
+}
+
+function renderTags(
+	tags: string[] | undefined,
+	onTagClick?: (tag: string) => void,
+) {
+	if (!tags || tags.length === 0) return null;
+	return (
+		<Space size={2} wrap>
+			{tags.map((t) => (
+				<Tag
+					color="purple"
+					key={t}
+					style={onTagClick ? { cursor: "pointer" } : undefined}
+					onClick={
+						onTagClick
+							? (e) => {
+									e.stopPropagation();
+									onTagClick(t);
+								}
+							: undefined
+					}
+				>
+					{t}
+				</Tag>
+			))}
+		</Space>
+	);
+}
 
 function formatBytes(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`;
@@ -106,6 +147,34 @@ function ServiceDetail() {
 	const [newRequestsAvailable, setNewRequestsAvailable] = useState(0);
 	const lastRequestCountRef = useRef<number>(0);
 	const isRefreshingRef = useRef<boolean>(false);
+
+	const visibleRulesKey = `visibleRules:${port}`;
+	const [visibleRules, setVisibleRules] = useState<string[]>(() =>
+		loadVisibleRules(visibleRulesKey),
+	);
+	const updateVisibleRules = useCallback(
+		(next: string[]) => {
+			setVisibleRules(next);
+			localStorage.setItem(visibleRulesKey, JSON.stringify(next));
+		},
+		[visibleRulesKey],
+	);
+	const visibleRulesParam =
+		visibleRules.length > 0 ? visibleRules.join(",") : undefined;
+	const [filterTag, setFilterTag] = useState<string | undefined>(undefined);
+	const pickTag = useCallback((tag: string) => {
+		setFilterTag(tag);
+		setCurrentPage(1);
+	}, []);
+
+	const { data: tagStatsData } = useQuery({
+		...analyzerTagStatsApiAnalyzerTagStatsGetOptions({
+			query: { port: portNumber },
+		}),
+	});
+	const ruleOptions = Array.from(
+		new Set((tagStatsData?.tags ?? []).map((t) => t.rule)),
+	).map((r) => ({ label: r, value: r }));
 
 	const {
 		data: service,
@@ -153,6 +222,8 @@ function ServiceDetail() {
 				page: currentPage,
 				page_size: pageSize,
 				...filters,
+				filter_tag: filterTag,
+				visible_rules: visibleRulesParam,
 			},
 		}),
 		enabled: !isTcpService && !!service,
@@ -170,6 +241,8 @@ function ServiceDetail() {
 				page: currentPage,
 				page_size: pageSize,
 				search: tcpSearch || undefined,
+				filter_tag: filterTag,
+				visible_rules: visibleRulesParam,
 			},
 		}),
 		enabled: isTcpService && !!service,
@@ -367,6 +440,12 @@ function ServiceDetail() {
 			},
 		},
 		{
+			title: "Rules",
+			key: "tags",
+			render: (_, record: RequestListItem) =>
+				renderTags(record.tags, pickTag),
+		},
+		{
 			title: "Session",
 			key: "links",
 			width: 80,
@@ -541,6 +620,12 @@ function ServiceDetail() {
 				) : null,
 		},
 		{
+			title: "Rules",
+			key: "tags",
+			render: (_: unknown, record: TcpConnectionItem) =>
+				renderTags(record.tags, pickTag),
+		},
+		{
 			title: "Blocked",
 			dataIndex: "is_blocked",
 			key: "is_blocked",
@@ -613,6 +698,12 @@ function ServiceDetail() {
 					</Button>
 				</>
 			)}
+			<Button
+				icon={<ExperimentOutlined />}
+				onClick={() => navigate({ to: `/service/${port}/rules` })}
+			>
+				Rules
+			</Button>
 			<Button
 				icon={<ReloadOutlined />}
 				onClick={() => {
@@ -800,6 +891,44 @@ function ServiceDetail() {
 					</Button>
 				</div>
 			)}
+
+			<div className="flex items-center gap-2 mb-2">
+				<Text type="secondary" className="text-xs">
+					Show rule tags:
+				</Text>
+				<Select
+					mode="multiple"
+					allowClear
+					size="small"
+					placeholder="select rules to tag rows"
+					style={{ minWidth: 280 }}
+					value={visibleRules}
+					onChange={updateVisibleRules}
+					options={ruleOptions}
+					maxTagCount="responsive"
+				/>
+				<Button
+					size="small"
+					icon={<ExperimentOutlined />}
+					onClick={() => navigate({ to: `/service/${port}/tags` })}
+				>
+					Tag stats
+				</Button>
+				{filterTag ? (
+					<span>
+						<Text type="secondary" className="text-xs">
+							Filtered by tag:
+						</Text>{" "}
+						<Tag
+							color="purple"
+							closable
+							onClose={() => setFilterTag(undefined)}
+						>
+							{filterTag}
+						</Tag>
+					</span>
+				) : null}
+			</div>
 
 			{/* Requests Table for HTTP services or TCP Connections Table for TCP services */}
 			{isTcpService ? (

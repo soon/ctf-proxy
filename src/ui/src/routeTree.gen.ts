@@ -8,309 +8,351 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root";
-import { Route as SqlRouteImport } from "./routes/sql";
-import { Route as ConfigRouteImport } from "./routes/config";
-import { Route as CodeEditorRouteImport } from "./routes/code-editor";
-import { Route as IndexRouteImport } from "./routes/index";
-import { Route as StatsRequestsRouteImport } from "./routes/stats/requests";
-import { Route as StatsFlagsRouteImport } from "./routes/stats/flags";
-import { Route as ServicePortIndexRouteImport } from "./routes/service/$port/index";
-import { Route as ServicePortTcpStatsRouteImport } from "./routes/service/$port/tcp-stats";
-import { Route as ServicePortQueriesRouteImport } from "./routes/service/$port/queries";
-import { Route as ServicePortPathsRouteImport } from "./routes/service/$port/paths";
-import { Route as ServicePortHeadersRouteImport } from "./routes/service/$port/headers";
-import { Route as ServicePortTcpConnectionIdRouteImport } from "./routes/service/$port/tcp-connection/$id";
-import { Route as ServicePortRequestIdRouteImport } from "./routes/service/$port/request/$id";
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as SqlRouteImport } from './routes/sql'
+import { Route as ConfigRouteImport } from './routes/config'
+import { Route as CodeEditorRouteImport } from './routes/code-editor'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as StatsRequestsRouteImport } from './routes/stats/requests'
+import { Route as StatsFlagsRouteImport } from './routes/stats/flags'
+import { Route as ServicePortIndexRouteImport } from './routes/service/$port/index'
+import { Route as ServicePortTcpStatsRouteImport } from './routes/service/$port/tcp-stats'
+import { Route as ServicePortTagsRouteImport } from './routes/service/$port/tags'
+import { Route as ServicePortRulesRouteImport } from './routes/service/$port/rules'
+import { Route as ServicePortQueriesRouteImport } from './routes/service/$port/queries'
+import { Route as ServicePortPathsRouteImport } from './routes/service/$port/paths'
+import { Route as ServicePortHeadersRouteImport } from './routes/service/$port/headers'
+import { Route as ServicePortTcpConnectionIdRouteImport } from './routes/service/$port/tcp-connection/$id'
+import { Route as ServicePortRequestIdRouteImport } from './routes/service/$port/request/$id'
 
 const SqlRoute = SqlRouteImport.update({
-	id: "/sql",
-	path: "/sql",
-	getParentRoute: () => rootRouteImport,
-} as any);
+  id: '/sql',
+  path: '/sql',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConfigRoute = ConfigRouteImport.update({
-	id: "/config",
-	path: "/config",
-	getParentRoute: () => rootRouteImport,
-} as any);
+  id: '/config',
+  path: '/config',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CodeEditorRoute = CodeEditorRouteImport.update({
-	id: "/code-editor",
-	path: "/code-editor",
-	getParentRoute: () => rootRouteImport,
-} as any);
+  id: '/code-editor',
+  path: '/code-editor',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
-	id: "/",
-	path: "/",
-	getParentRoute: () => rootRouteImport,
-} as any);
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StatsRequestsRoute = StatsRequestsRouteImport.update({
-	id: "/stats/requests",
-	path: "/stats/requests",
-	getParentRoute: () => rootRouteImport,
-} as any);
+  id: '/stats/requests',
+  path: '/stats/requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StatsFlagsRoute = StatsFlagsRouteImport.update({
-	id: "/stats/flags",
-	path: "/stats/flags",
-	getParentRoute: () => rootRouteImport,
-} as any);
+  id: '/stats/flags',
+  path: '/stats/flags',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ServicePortIndexRoute = ServicePortIndexRouteImport.update({
-	id: "/service/$port/",
-	path: "/service/$port/",
-	getParentRoute: () => rootRouteImport,
-} as any);
+  id: '/service/$port/',
+  path: '/service/$port/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ServicePortTcpStatsRoute = ServicePortTcpStatsRouteImport.update({
-	id: "/service/$port/tcp-stats",
-	path: "/service/$port/tcp-stats",
-	getParentRoute: () => rootRouteImport,
-} as any);
+  id: '/service/$port/tcp-stats',
+  path: '/service/$port/tcp-stats',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServicePortTagsRoute = ServicePortTagsRouteImport.update({
+  id: '/service/$port/tags',
+  path: '/service/$port/tags',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServicePortRulesRoute = ServicePortRulesRouteImport.update({
+  id: '/service/$port/rules',
+  path: '/service/$port/rules',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ServicePortQueriesRoute = ServicePortQueriesRouteImport.update({
-	id: "/service/$port/queries",
-	path: "/service/$port/queries",
-	getParentRoute: () => rootRouteImport,
-} as any);
+  id: '/service/$port/queries',
+  path: '/service/$port/queries',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ServicePortPathsRoute = ServicePortPathsRouteImport.update({
-	id: "/service/$port/paths",
-	path: "/service/$port/paths",
-	getParentRoute: () => rootRouteImport,
-} as any);
+  id: '/service/$port/paths',
+  path: '/service/$port/paths',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ServicePortHeadersRoute = ServicePortHeadersRouteImport.update({
-	id: "/service/$port/headers",
-	path: "/service/$port/headers",
-	getParentRoute: () => rootRouteImport,
-} as any);
+  id: '/service/$port/headers',
+  path: '/service/$port/headers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ServicePortTcpConnectionIdRoute =
-	ServicePortTcpConnectionIdRouteImport.update({
-		id: "/service/$port/tcp-connection/$id",
-		path: "/service/$port/tcp-connection/$id",
-		getParentRoute: () => rootRouteImport,
-	} as any);
+  ServicePortTcpConnectionIdRouteImport.update({
+    id: '/service/$port/tcp-connection/$id',
+    path: '/service/$port/tcp-connection/$id',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ServicePortRequestIdRoute = ServicePortRequestIdRouteImport.update({
-	id: "/service/$port/request/$id",
-	path: "/service/$port/request/$id",
-	getParentRoute: () => rootRouteImport,
-} as any);
+  id: '/service/$port/request/$id',
+  path: '/service/$port/request/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
-	"/": typeof IndexRoute;
-	"/code-editor": typeof CodeEditorRoute;
-	"/config": typeof ConfigRoute;
-	"/sql": typeof SqlRoute;
-	"/stats/flags": typeof StatsFlagsRoute;
-	"/stats/requests": typeof StatsRequestsRoute;
-	"/service/$port/headers": typeof ServicePortHeadersRoute;
-	"/service/$port/paths": typeof ServicePortPathsRoute;
-	"/service/$port/queries": typeof ServicePortQueriesRoute;
-	"/service/$port/tcp-stats": typeof ServicePortTcpStatsRoute;
-	"/service/$port": typeof ServicePortIndexRoute;
-	"/service/$port/request/$id": typeof ServicePortRequestIdRoute;
-	"/service/$port/tcp-connection/$id": typeof ServicePortTcpConnectionIdRoute;
+  '/': typeof IndexRoute
+  '/code-editor': typeof CodeEditorRoute
+  '/config': typeof ConfigRoute
+  '/sql': typeof SqlRoute
+  '/stats/flags': typeof StatsFlagsRoute
+  '/stats/requests': typeof StatsRequestsRoute
+  '/service/$port/headers': typeof ServicePortHeadersRoute
+  '/service/$port/paths': typeof ServicePortPathsRoute
+  '/service/$port/queries': typeof ServicePortQueriesRoute
+  '/service/$port/rules': typeof ServicePortRulesRoute
+  '/service/$port/tags': typeof ServicePortTagsRoute
+  '/service/$port/tcp-stats': typeof ServicePortTcpStatsRoute
+  '/service/$port': typeof ServicePortIndexRoute
+  '/service/$port/request/$id': typeof ServicePortRequestIdRoute
+  '/service/$port/tcp-connection/$id': typeof ServicePortTcpConnectionIdRoute
 }
 export interface FileRoutesByTo {
-	"/": typeof IndexRoute;
-	"/code-editor": typeof CodeEditorRoute;
-	"/config": typeof ConfigRoute;
-	"/sql": typeof SqlRoute;
-	"/stats/flags": typeof StatsFlagsRoute;
-	"/stats/requests": typeof StatsRequestsRoute;
-	"/service/$port/headers": typeof ServicePortHeadersRoute;
-	"/service/$port/paths": typeof ServicePortPathsRoute;
-	"/service/$port/queries": typeof ServicePortQueriesRoute;
-	"/service/$port/tcp-stats": typeof ServicePortTcpStatsRoute;
-	"/service/$port": typeof ServicePortIndexRoute;
-	"/service/$port/request/$id": typeof ServicePortRequestIdRoute;
-	"/service/$port/tcp-connection/$id": typeof ServicePortTcpConnectionIdRoute;
+  '/': typeof IndexRoute
+  '/code-editor': typeof CodeEditorRoute
+  '/config': typeof ConfigRoute
+  '/sql': typeof SqlRoute
+  '/stats/flags': typeof StatsFlagsRoute
+  '/stats/requests': typeof StatsRequestsRoute
+  '/service/$port/headers': typeof ServicePortHeadersRoute
+  '/service/$port/paths': typeof ServicePortPathsRoute
+  '/service/$port/queries': typeof ServicePortQueriesRoute
+  '/service/$port/rules': typeof ServicePortRulesRoute
+  '/service/$port/tags': typeof ServicePortTagsRoute
+  '/service/$port/tcp-stats': typeof ServicePortTcpStatsRoute
+  '/service/$port': typeof ServicePortIndexRoute
+  '/service/$port/request/$id': typeof ServicePortRequestIdRoute
+  '/service/$port/tcp-connection/$id': typeof ServicePortTcpConnectionIdRoute
 }
 export interface FileRoutesById {
-	__root__: typeof rootRouteImport;
-	"/": typeof IndexRoute;
-	"/code-editor": typeof CodeEditorRoute;
-	"/config": typeof ConfigRoute;
-	"/sql": typeof SqlRoute;
-	"/stats/flags": typeof StatsFlagsRoute;
-	"/stats/requests": typeof StatsRequestsRoute;
-	"/service/$port/headers": typeof ServicePortHeadersRoute;
-	"/service/$port/paths": typeof ServicePortPathsRoute;
-	"/service/$port/queries": typeof ServicePortQueriesRoute;
-	"/service/$port/tcp-stats": typeof ServicePortTcpStatsRoute;
-	"/service/$port/": typeof ServicePortIndexRoute;
-	"/service/$port/request/$id": typeof ServicePortRequestIdRoute;
-	"/service/$port/tcp-connection/$id": typeof ServicePortTcpConnectionIdRoute;
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/code-editor': typeof CodeEditorRoute
+  '/config': typeof ConfigRoute
+  '/sql': typeof SqlRoute
+  '/stats/flags': typeof StatsFlagsRoute
+  '/stats/requests': typeof StatsRequestsRoute
+  '/service/$port/headers': typeof ServicePortHeadersRoute
+  '/service/$port/paths': typeof ServicePortPathsRoute
+  '/service/$port/queries': typeof ServicePortQueriesRoute
+  '/service/$port/rules': typeof ServicePortRulesRoute
+  '/service/$port/tags': typeof ServicePortTagsRoute
+  '/service/$port/tcp-stats': typeof ServicePortTcpStatsRoute
+  '/service/$port/': typeof ServicePortIndexRoute
+  '/service/$port/request/$id': typeof ServicePortRequestIdRoute
+  '/service/$port/tcp-connection/$id': typeof ServicePortTcpConnectionIdRoute
 }
 export interface FileRouteTypes {
-	fileRoutesByFullPath: FileRoutesByFullPath;
-	fullPaths:
-		| "/"
-		| "/code-editor"
-		| "/config"
-		| "/sql"
-		| "/stats/flags"
-		| "/stats/requests"
-		| "/service/$port/headers"
-		| "/service/$port/paths"
-		| "/service/$port/queries"
-		| "/service/$port/tcp-stats"
-		| "/service/$port"
-		| "/service/$port/request/$id"
-		| "/service/$port/tcp-connection/$id";
-	fileRoutesByTo: FileRoutesByTo;
-	to:
-		| "/"
-		| "/code-editor"
-		| "/config"
-		| "/sql"
-		| "/stats/flags"
-		| "/stats/requests"
-		| "/service/$port/headers"
-		| "/service/$port/paths"
-		| "/service/$port/queries"
-		| "/service/$port/tcp-stats"
-		| "/service/$port"
-		| "/service/$port/request/$id"
-		| "/service/$port/tcp-connection/$id";
-	id:
-		| "__root__"
-		| "/"
-		| "/code-editor"
-		| "/config"
-		| "/sql"
-		| "/stats/flags"
-		| "/stats/requests"
-		| "/service/$port/headers"
-		| "/service/$port/paths"
-		| "/service/$port/queries"
-		| "/service/$port/tcp-stats"
-		| "/service/$port/"
-		| "/service/$port/request/$id"
-		| "/service/$port/tcp-connection/$id";
-	fileRoutesById: FileRoutesById;
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths:
+    | '/'
+    | '/code-editor'
+    | '/config'
+    | '/sql'
+    | '/stats/flags'
+    | '/stats/requests'
+    | '/service/$port/headers'
+    | '/service/$port/paths'
+    | '/service/$port/queries'
+    | '/service/$port/rules'
+    | '/service/$port/tags'
+    | '/service/$port/tcp-stats'
+    | '/service/$port'
+    | '/service/$port/request/$id'
+    | '/service/$port/tcp-connection/$id'
+  fileRoutesByTo: FileRoutesByTo
+  to:
+    | '/'
+    | '/code-editor'
+    | '/config'
+    | '/sql'
+    | '/stats/flags'
+    | '/stats/requests'
+    | '/service/$port/headers'
+    | '/service/$port/paths'
+    | '/service/$port/queries'
+    | '/service/$port/rules'
+    | '/service/$port/tags'
+    | '/service/$port/tcp-stats'
+    | '/service/$port'
+    | '/service/$port/request/$id'
+    | '/service/$port/tcp-connection/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/code-editor'
+    | '/config'
+    | '/sql'
+    | '/stats/flags'
+    | '/stats/requests'
+    | '/service/$port/headers'
+    | '/service/$port/paths'
+    | '/service/$port/queries'
+    | '/service/$port/rules'
+    | '/service/$port/tags'
+    | '/service/$port/tcp-stats'
+    | '/service/$port/'
+    | '/service/$port/request/$id'
+    | '/service/$port/tcp-connection/$id'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-	IndexRoute: typeof IndexRoute;
-	CodeEditorRoute: typeof CodeEditorRoute;
-	ConfigRoute: typeof ConfigRoute;
-	SqlRoute: typeof SqlRoute;
-	StatsFlagsRoute: typeof StatsFlagsRoute;
-	StatsRequestsRoute: typeof StatsRequestsRoute;
-	ServicePortHeadersRoute: typeof ServicePortHeadersRoute;
-	ServicePortPathsRoute: typeof ServicePortPathsRoute;
-	ServicePortQueriesRoute: typeof ServicePortQueriesRoute;
-	ServicePortTcpStatsRoute: typeof ServicePortTcpStatsRoute;
-	ServicePortIndexRoute: typeof ServicePortIndexRoute;
-	ServicePortRequestIdRoute: typeof ServicePortRequestIdRoute;
-	ServicePortTcpConnectionIdRoute: typeof ServicePortTcpConnectionIdRoute;
+  IndexRoute: typeof IndexRoute
+  CodeEditorRoute: typeof CodeEditorRoute
+  ConfigRoute: typeof ConfigRoute
+  SqlRoute: typeof SqlRoute
+  StatsFlagsRoute: typeof StatsFlagsRoute
+  StatsRequestsRoute: typeof StatsRequestsRoute
+  ServicePortHeadersRoute: typeof ServicePortHeadersRoute
+  ServicePortPathsRoute: typeof ServicePortPathsRoute
+  ServicePortQueriesRoute: typeof ServicePortQueriesRoute
+  ServicePortRulesRoute: typeof ServicePortRulesRoute
+  ServicePortTagsRoute: typeof ServicePortTagsRoute
+  ServicePortTcpStatsRoute: typeof ServicePortTcpStatsRoute
+  ServicePortIndexRoute: typeof ServicePortIndexRoute
+  ServicePortRequestIdRoute: typeof ServicePortRequestIdRoute
+  ServicePortTcpConnectionIdRoute: typeof ServicePortTcpConnectionIdRoute
 }
 
-declare module "@tanstack/react-router" {
-	interface FileRoutesByPath {
-		"/sql": {
-			id: "/sql";
-			path: "/sql";
-			fullPath: "/sql";
-			preLoaderRoute: typeof SqlRouteImport;
-			parentRoute: typeof rootRouteImport;
-		};
-		"/config": {
-			id: "/config";
-			path: "/config";
-			fullPath: "/config";
-			preLoaderRoute: typeof ConfigRouteImport;
-			parentRoute: typeof rootRouteImport;
-		};
-		"/code-editor": {
-			id: "/code-editor";
-			path: "/code-editor";
-			fullPath: "/code-editor";
-			preLoaderRoute: typeof CodeEditorRouteImport;
-			parentRoute: typeof rootRouteImport;
-		};
-		"/": {
-			id: "/";
-			path: "/";
-			fullPath: "/";
-			preLoaderRoute: typeof IndexRouteImport;
-			parentRoute: typeof rootRouteImport;
-		};
-		"/stats/requests": {
-			id: "/stats/requests";
-			path: "/stats/requests";
-			fullPath: "/stats/requests";
-			preLoaderRoute: typeof StatsRequestsRouteImport;
-			parentRoute: typeof rootRouteImport;
-		};
-		"/stats/flags": {
-			id: "/stats/flags";
-			path: "/stats/flags";
-			fullPath: "/stats/flags";
-			preLoaderRoute: typeof StatsFlagsRouteImport;
-			parentRoute: typeof rootRouteImport;
-		};
-		"/service/$port/": {
-			id: "/service/$port/";
-			path: "/service/$port";
-			fullPath: "/service/$port";
-			preLoaderRoute: typeof ServicePortIndexRouteImport;
-			parentRoute: typeof rootRouteImport;
-		};
-		"/service/$port/tcp-stats": {
-			id: "/service/$port/tcp-stats";
-			path: "/service/$port/tcp-stats";
-			fullPath: "/service/$port/tcp-stats";
-			preLoaderRoute: typeof ServicePortTcpStatsRouteImport;
-			parentRoute: typeof rootRouteImport;
-		};
-		"/service/$port/queries": {
-			id: "/service/$port/queries";
-			path: "/service/$port/queries";
-			fullPath: "/service/$port/queries";
-			preLoaderRoute: typeof ServicePortQueriesRouteImport;
-			parentRoute: typeof rootRouteImport;
-		};
-		"/service/$port/paths": {
-			id: "/service/$port/paths";
-			path: "/service/$port/paths";
-			fullPath: "/service/$port/paths";
-			preLoaderRoute: typeof ServicePortPathsRouteImport;
-			parentRoute: typeof rootRouteImport;
-		};
-		"/service/$port/headers": {
-			id: "/service/$port/headers";
-			path: "/service/$port/headers";
-			fullPath: "/service/$port/headers";
-			preLoaderRoute: typeof ServicePortHeadersRouteImport;
-			parentRoute: typeof rootRouteImport;
-		};
-		"/service/$port/tcp-connection/$id": {
-			id: "/service/$port/tcp-connection/$id";
-			path: "/service/$port/tcp-connection/$id";
-			fullPath: "/service/$port/tcp-connection/$id";
-			preLoaderRoute: typeof ServicePortTcpConnectionIdRouteImport;
-			parentRoute: typeof rootRouteImport;
-		};
-		"/service/$port/request/$id": {
-			id: "/service/$port/request/$id";
-			path: "/service/$port/request/$id";
-			fullPath: "/service/$port/request/$id";
-			preLoaderRoute: typeof ServicePortRequestIdRouteImport;
-			parentRoute: typeof rootRouteImport;
-		};
-	}
+declare module '@tanstack/react-router' {
+  interface FileRoutesByPath {
+    '/sql': {
+      id: '/sql'
+      path: '/sql'
+      fullPath: '/sql'
+      preLoaderRoute: typeof SqlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/config': {
+      id: '/config'
+      path: '/config'
+      fullPath: '/config'
+      preLoaderRoute: typeof ConfigRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/code-editor': {
+      id: '/code-editor'
+      path: '/code-editor'
+      fullPath: '/code-editor'
+      preLoaderRoute: typeof CodeEditorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stats/requests': {
+      id: '/stats/requests'
+      path: '/stats/requests'
+      fullPath: '/stats/requests'
+      preLoaderRoute: typeof StatsRequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stats/flags': {
+      id: '/stats/flags'
+      path: '/stats/flags'
+      fullPath: '/stats/flags'
+      preLoaderRoute: typeof StatsFlagsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service/$port/': {
+      id: '/service/$port/'
+      path: '/service/$port'
+      fullPath: '/service/$port'
+      preLoaderRoute: typeof ServicePortIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service/$port/tcp-stats': {
+      id: '/service/$port/tcp-stats'
+      path: '/service/$port/tcp-stats'
+      fullPath: '/service/$port/tcp-stats'
+      preLoaderRoute: typeof ServicePortTcpStatsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service/$port/tags': {
+      id: '/service/$port/tags'
+      path: '/service/$port/tags'
+      fullPath: '/service/$port/tags'
+      preLoaderRoute: typeof ServicePortTagsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service/$port/rules': {
+      id: '/service/$port/rules'
+      path: '/service/$port/rules'
+      fullPath: '/service/$port/rules'
+      preLoaderRoute: typeof ServicePortRulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service/$port/queries': {
+      id: '/service/$port/queries'
+      path: '/service/$port/queries'
+      fullPath: '/service/$port/queries'
+      preLoaderRoute: typeof ServicePortQueriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service/$port/paths': {
+      id: '/service/$port/paths'
+      path: '/service/$port/paths'
+      fullPath: '/service/$port/paths'
+      preLoaderRoute: typeof ServicePortPathsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service/$port/headers': {
+      id: '/service/$port/headers'
+      path: '/service/$port/headers'
+      fullPath: '/service/$port/headers'
+      preLoaderRoute: typeof ServicePortHeadersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service/$port/tcp-connection/$id': {
+      id: '/service/$port/tcp-connection/$id'
+      path: '/service/$port/tcp-connection/$id'
+      fullPath: '/service/$port/tcp-connection/$id'
+      preLoaderRoute: typeof ServicePortTcpConnectionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/service/$port/request/$id': {
+      id: '/service/$port/request/$id'
+      path: '/service/$port/request/$id'
+      fullPath: '/service/$port/request/$id'
+      preLoaderRoute: typeof ServicePortRequestIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+  }
 }
 
 const rootRouteChildren: RootRouteChildren = {
-	IndexRoute: IndexRoute,
-	CodeEditorRoute: CodeEditorRoute,
-	ConfigRoute: ConfigRoute,
-	SqlRoute: SqlRoute,
-	StatsFlagsRoute: StatsFlagsRoute,
-	StatsRequestsRoute: StatsRequestsRoute,
-	ServicePortHeadersRoute: ServicePortHeadersRoute,
-	ServicePortPathsRoute: ServicePortPathsRoute,
-	ServicePortQueriesRoute: ServicePortQueriesRoute,
-	ServicePortTcpStatsRoute: ServicePortTcpStatsRoute,
-	ServicePortIndexRoute: ServicePortIndexRoute,
-	ServicePortRequestIdRoute: ServicePortRequestIdRoute,
-	ServicePortTcpConnectionIdRoute: ServicePortTcpConnectionIdRoute,
-};
+  IndexRoute: IndexRoute,
+  CodeEditorRoute: CodeEditorRoute,
+  ConfigRoute: ConfigRoute,
+  SqlRoute: SqlRoute,
+  StatsFlagsRoute: StatsFlagsRoute,
+  StatsRequestsRoute: StatsRequestsRoute,
+  ServicePortHeadersRoute: ServicePortHeadersRoute,
+  ServicePortPathsRoute: ServicePortPathsRoute,
+  ServicePortQueriesRoute: ServicePortQueriesRoute,
+  ServicePortRulesRoute: ServicePortRulesRoute,
+  ServicePortTagsRoute: ServicePortTagsRoute,
+  ServicePortTcpStatsRoute: ServicePortTcpStatsRoute,
+  ServicePortIndexRoute: ServicePortIndexRoute,
+  ServicePortRequestIdRoute: ServicePortRequestIdRoute,
+  ServicePortTcpConnectionIdRoute: ServicePortTcpConnectionIdRoute,
+}
 export const routeTree = rootRouteImport
-	._addFileChildren(rootRouteChildren)
-	._addFileTypes<FileRouteTypes>();
+  ._addFileChildren(rootRouteChildren)
+  ._addFileTypes<FileRouteTypes>()

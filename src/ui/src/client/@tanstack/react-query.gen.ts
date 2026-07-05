@@ -10,6 +10,16 @@ import {
 
 import { client } from "../client.gen";
 import {
+	analyzerCreateBackfillApiAnalyzerBackfillPost,
+	analyzerDeleteRuleApiAnalyzerRulesNameDelete,
+	analyzerGetBackfillApiAnalyzerBackfillGet,
+	analyzerGetRuleApiAnalyzerRulesNameGet,
+	analyzerListRulesApiAnalyzerRulesGet,
+	analyzerPreviewApiAnalyzerPreviewPost,
+	analyzerPromoteRuleApiAnalyzerRulesNamePromotePost,
+	analyzerSaveRuleApiAnalyzerRulesNamePut,
+	analyzerTagStatsApiAnalyzerTagStatsGet,
+	analyzerTagTimeStatsApiAnalyzerTagTimeStatsGet,
 	executeSqlApiSqlPost,
 	exportSqlCsvApiSqlExportPost,
 	getAllFlagTimeStatsApiFlagTimeStatsGet,
@@ -40,6 +50,35 @@ import {
 	validateConfigApiConfigValidatePost,
 } from "../sdk.gen";
 import type {
+	AnalyzerCreateBackfillApiAnalyzerBackfillPostData,
+	AnalyzerCreateBackfillApiAnalyzerBackfillPostError,
+	AnalyzerCreateBackfillApiAnalyzerBackfillPostResponse,
+	AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteData,
+	AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteError,
+	AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteResponse,
+	AnalyzerGetBackfillApiAnalyzerBackfillGetData,
+	AnalyzerGetBackfillApiAnalyzerBackfillGetResponse,
+	AnalyzerGetRuleApiAnalyzerRulesNameGetData,
+	AnalyzerGetRuleApiAnalyzerRulesNameGetError,
+	AnalyzerGetRuleApiAnalyzerRulesNameGetResponse,
+	AnalyzerListRulesApiAnalyzerRulesGetData,
+	AnalyzerListRulesApiAnalyzerRulesGetError,
+	AnalyzerListRulesApiAnalyzerRulesGetResponse,
+	AnalyzerPreviewApiAnalyzerPreviewPostData,
+	AnalyzerPreviewApiAnalyzerPreviewPostError,
+	AnalyzerPreviewApiAnalyzerPreviewPostResponse,
+	AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostData,
+	AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostError,
+	AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostResponse,
+	AnalyzerSaveRuleApiAnalyzerRulesNamePutData,
+	AnalyzerSaveRuleApiAnalyzerRulesNamePutError,
+	AnalyzerSaveRuleApiAnalyzerRulesNamePutResponse,
+	AnalyzerTagStatsApiAnalyzerTagStatsGetData,
+	AnalyzerTagStatsApiAnalyzerTagStatsGetError,
+	AnalyzerTagStatsApiAnalyzerTagStatsGetResponse,
+	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetData,
+	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetError,
+	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetResponse,
 	ExecuteSqlApiSqlPostData,
 	ExecuteSqlApiSqlPostError,
 	ExportSqlCsvApiSqlExportPostData,
@@ -1216,3 +1255,282 @@ export const getCodeServerInfoApiCodeServerInfoGetOptions = (
 		},
 		queryKey: getCodeServerInfoApiCodeServerInfoGetQueryKey(options),
 	});
+
+export const analyzerListRulesApiAnalyzerRulesGetQueryKey = (
+	options?: Options<AnalyzerListRulesApiAnalyzerRulesGetData>,
+) => createQueryKey("analyzerListRulesApiAnalyzerRulesGet", options);
+
+/**
+ * Analyzer List Rules
+ */
+export const analyzerListRulesApiAnalyzerRulesGetOptions = (
+	options?: Options<AnalyzerListRulesApiAnalyzerRulesGetData>,
+) =>
+	queryOptions<
+		AnalyzerListRulesApiAnalyzerRulesGetResponse,
+		AnalyzerListRulesApiAnalyzerRulesGetError,
+		AnalyzerListRulesApiAnalyzerRulesGetResponse,
+		ReturnType<typeof analyzerListRulesApiAnalyzerRulesGetQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await analyzerListRulesApiAnalyzerRulesGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: analyzerListRulesApiAnalyzerRulesGetQueryKey(options),
+	});
+
+/**
+ * Analyzer Delete Rule
+ */
+export const analyzerDeleteRuleApiAnalyzerRulesNameDeleteMutation = (
+	options?: Partial<Options<AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteData>>,
+): UseMutationOptions<
+	AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteResponse,
+	AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteError,
+	Options<AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteResponse,
+		AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteError,
+		Options<AnalyzerDeleteRuleApiAnalyzerRulesNameDeleteData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await analyzerDeleteRuleApiAnalyzerRulesNameDelete({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const analyzerGetRuleApiAnalyzerRulesNameGetQueryKey = (
+	options: Options<AnalyzerGetRuleApiAnalyzerRulesNameGetData>,
+) => createQueryKey("analyzerGetRuleApiAnalyzerRulesNameGet", options);
+
+/**
+ * Analyzer Get Rule
+ */
+export const analyzerGetRuleApiAnalyzerRulesNameGetOptions = (
+	options: Options<AnalyzerGetRuleApiAnalyzerRulesNameGetData>,
+) =>
+	queryOptions<
+		AnalyzerGetRuleApiAnalyzerRulesNameGetResponse,
+		AnalyzerGetRuleApiAnalyzerRulesNameGetError,
+		AnalyzerGetRuleApiAnalyzerRulesNameGetResponse,
+		ReturnType<typeof analyzerGetRuleApiAnalyzerRulesNameGetQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await analyzerGetRuleApiAnalyzerRulesNameGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: analyzerGetRuleApiAnalyzerRulesNameGetQueryKey(options),
+	});
+
+/**
+ * Analyzer Save Rule
+ */
+export const analyzerSaveRuleApiAnalyzerRulesNamePutMutation = (
+	options?: Partial<Options<AnalyzerSaveRuleApiAnalyzerRulesNamePutData>>,
+): UseMutationOptions<
+	AnalyzerSaveRuleApiAnalyzerRulesNamePutResponse,
+	AnalyzerSaveRuleApiAnalyzerRulesNamePutError,
+	Options<AnalyzerSaveRuleApiAnalyzerRulesNamePutData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		AnalyzerSaveRuleApiAnalyzerRulesNamePutResponse,
+		AnalyzerSaveRuleApiAnalyzerRulesNamePutError,
+		Options<AnalyzerSaveRuleApiAnalyzerRulesNamePutData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await analyzerSaveRuleApiAnalyzerRulesNamePut({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+/**
+ * Analyzer Promote Rule
+ */
+export const analyzerPromoteRuleApiAnalyzerRulesNamePromotePostMutation = (
+	options?: Partial<
+		Options<AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostData>
+	>,
+): UseMutationOptions<
+	AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostResponse,
+	AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostError,
+	Options<AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostResponse,
+		AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostError,
+		Options<AnalyzerPromoteRuleApiAnalyzerRulesNamePromotePostData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await analyzerPromoteRuleApiAnalyzerRulesNamePromotePost(
+				{
+					...options,
+					...fnOptions,
+					throwOnError: true,
+				},
+			);
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+/**
+ * Analyzer Preview
+ */
+export const analyzerPreviewApiAnalyzerPreviewPostMutation = (
+	options?: Partial<Options<AnalyzerPreviewApiAnalyzerPreviewPostData>>,
+): UseMutationOptions<
+	AnalyzerPreviewApiAnalyzerPreviewPostResponse,
+	AnalyzerPreviewApiAnalyzerPreviewPostError,
+	Options<AnalyzerPreviewApiAnalyzerPreviewPostData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		AnalyzerPreviewApiAnalyzerPreviewPostResponse,
+		AnalyzerPreviewApiAnalyzerPreviewPostError,
+		Options<AnalyzerPreviewApiAnalyzerPreviewPostData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await analyzerPreviewApiAnalyzerPreviewPost({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const analyzerTagStatsApiAnalyzerTagStatsGetQueryKey = (
+	options: Options<AnalyzerTagStatsApiAnalyzerTagStatsGetData>,
+) => createQueryKey("analyzerTagStatsApiAnalyzerTagStatsGet", options);
+
+/**
+ * Analyzer Tag Stats
+ */
+export const analyzerTagStatsApiAnalyzerTagStatsGetOptions = (
+	options: Options<AnalyzerTagStatsApiAnalyzerTagStatsGetData>,
+) =>
+	queryOptions<
+		AnalyzerTagStatsApiAnalyzerTagStatsGetResponse,
+		AnalyzerTagStatsApiAnalyzerTagStatsGetError,
+		AnalyzerTagStatsApiAnalyzerTagStatsGetResponse,
+		ReturnType<typeof analyzerTagStatsApiAnalyzerTagStatsGetQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await analyzerTagStatsApiAnalyzerTagStatsGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: analyzerTagStatsApiAnalyzerTagStatsGetQueryKey(options),
+	});
+
+export const analyzerTagTimeStatsApiAnalyzerTagTimeStatsGetQueryKey = (
+	options: Options<AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetData>,
+) => createQueryKey("analyzerTagTimeStatsApiAnalyzerTagTimeStatsGet", options);
+
+/**
+ * Analyzer Tag Time Stats
+ */
+export const analyzerTagTimeStatsApiAnalyzerTagTimeStatsGetOptions = (
+	options: Options<AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetData>,
+) =>
+	queryOptions<
+		AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetResponse,
+		AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetError,
+		AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetResponse,
+		ReturnType<typeof analyzerTagTimeStatsApiAnalyzerTagTimeStatsGetQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await analyzerTagTimeStatsApiAnalyzerTagTimeStatsGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: analyzerTagTimeStatsApiAnalyzerTagTimeStatsGetQueryKey(options),
+	});
+
+export const analyzerGetBackfillApiAnalyzerBackfillGetQueryKey = (
+	options?: Options<AnalyzerGetBackfillApiAnalyzerBackfillGetData>,
+) => createQueryKey("analyzerGetBackfillApiAnalyzerBackfillGet", options);
+
+/**
+ * Analyzer Get Backfill
+ */
+export const analyzerGetBackfillApiAnalyzerBackfillGetOptions = (
+	options?: Options<AnalyzerGetBackfillApiAnalyzerBackfillGetData>,
+) =>
+	queryOptions<
+		AnalyzerGetBackfillApiAnalyzerBackfillGetResponse,
+		DefaultError,
+		AnalyzerGetBackfillApiAnalyzerBackfillGetResponse,
+		ReturnType<typeof analyzerGetBackfillApiAnalyzerBackfillGetQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await analyzerGetBackfillApiAnalyzerBackfillGet({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: analyzerGetBackfillApiAnalyzerBackfillGetQueryKey(options),
+	});
+
+/**
+ * Analyzer Create Backfill
+ */
+export const analyzerCreateBackfillApiAnalyzerBackfillPostMutation = (
+	options?: Partial<Options<AnalyzerCreateBackfillApiAnalyzerBackfillPostData>>,
+): UseMutationOptions<
+	AnalyzerCreateBackfillApiAnalyzerBackfillPostResponse,
+	AnalyzerCreateBackfillApiAnalyzerBackfillPostError,
+	Options<AnalyzerCreateBackfillApiAnalyzerBackfillPostData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		AnalyzerCreateBackfillApiAnalyzerBackfillPostResponse,
+		AnalyzerCreateBackfillApiAnalyzerBackfillPostError,
+		Options<AnalyzerCreateBackfillApiAnalyzerBackfillPostData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await analyzerCreateBackfillApiAnalyzerBackfillPost({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
