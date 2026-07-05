@@ -1,11 +1,11 @@
 # Envoy proxy configuration
 
-The proxy is a **transparent** interceptor. iptables (`ctf_proxy/bin/iptables-config.py`)
+The proxy is a **transparent** interceptor. iptables (`bin/iptables-config.py`)
 REDIRECTs traffic destined for each configured service port to one of Envoy's listeners,
 and the `original_dst` listener filter restores the original destination so Envoy can forward
 to the real service. Per-service routing therefore lives in iptables — Envoy itself is a fixed
-config generated from `ctf_proxy/proxy/envoy.template.yaml` (the `{INTERCEPTOR_FILENAME}`
-placeholder is filled by `ctf_proxy/bin/refresh-envoy.sh`).
+config generated from `src/envoy/envoy.template.yaml` (the `{INTERCEPTOR_FILENAME}`
+placeholder is filled by `bin/refresh-envoy.sh`).
 
 ## Listeners
 

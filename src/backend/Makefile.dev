@@ -1,0 +1,42 @@
+.PHONY: help test lint fmt check install-dev clean test-cov
+
+help:
+	@echo "Development commands:"
+	@echo "  test        Run all tests"
+	@echo "  test-cov    Run tests with coverage"
+	@echo "  lint        Run ruff linter"
+	@echo "  fmt         Format code with ruff"
+	@echo "  check       Run both linting and tests"
+	@echo "  install-dev Install development dependencies"
+	@echo "  clean       Clean up cache files"
+
+install-dev:
+	./uv.sh sync --dev
+
+test:
+	docker compose -f docker-compose.test.yml up -d --wait
+	./uv.sh run pytest
+	cd ../envoy/interceptor/test && make test
+
+test-cov:
+	./uv.sh run pytest --cov=ctf_proxy --cov-report=term-missing
+
+lint:
+	./uv.sh run ruff check .
+	cd ../frontend && npm run lint
+
+fmt:
+	./uv.sh run ruff format .
+	./uv.sh run ruff check --fix .
+	cd ../envoy/interceptor && go fmt
+	cd ../envoy/interceptor/test && go fmt
+	cd ../frontend && npm run format -- --write .
+
+check: lint test
+
+clean:
+	find . -type d -name "__pycache__" -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
+	rm -rf .coverage
+	rm -rf .pytest_cache
+	rm -rf htmlcov

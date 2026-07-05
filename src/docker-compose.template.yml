@@ -4,16 +4,34 @@ services:
     network_mode: host
     user: "1337:1337"
     volumes:
-      - ./ctf_proxy/proxy/envoy.yaml:/etc/envoy/envoy.yaml:ro
-      - ./interceptor/wasm:/etc/envoy/wasm:ro
-      - ./ctf_proxy/proxy/tls:/etc/envoy/tls:ro
+      - ./envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ./envoy/interceptor/wasm:/etc/envoy/wasm:ro
+      - ./envoy/tls:/etc/envoy/tls:ro
       - ./logs:/var/log/envoy
     command: ["-c", "/etc/envoy/envoy.yaml"]
     restart: unless-stopped
 
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=ctf
+      - POSTGRES_PASSWORD=ctf
+      - POSTGRES_DB=ctf
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ctf"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - control-panel
+
   logs-processor:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile.logs-processor
     user: "1337:1337"
     volumes:
@@ -22,51 +40,71 @@ services:
       - ./logs-archive:/app/logs-archive
     environment:
       - PYTHONUNBUFFERED=1
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGUSER=ctf
+      - PGPASSWORD=ctf
+      - PGDATABASE=ctf
     restart: unless-stopped
     depends_on:
-      - envoy
+      envoy:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - control-panel
 
   analyzer:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile.logs-processor
     user: "1337:1337"
-    command: ["python", "-m", "ctf_proxy.analyzer"]
+    command: ["python", "-m", "ctf_proxy.analytics"]
     volumes:
       - ./data:/app/data
-      - ./analyzer-rules:/app/rules:ro
     environment:
       - PYTHONUNBUFFERED=1
-      - SOURCE_DB_FILE=/app/data/proxy_stats.db
-      - ANALYSIS_DB_FILE=/app/data/analysis.db
-      - RULES_FOLDER=/app/rules
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGUSER=ctf
+      - PGPASSWORD=ctf
+      - PGDATABASE=ctf
     restart: unless-stopped
     depends_on:
-      - logs-processor
+      logs-processor:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - control-panel
 
   analyzer-api:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile.logs-processor
     user: "1337:1337"
     volumes:
       - ./data:/app/data
-      - ./analyzer-rules:/app/rules
     environment:
       - PYTHONUNBUFFERED=1
-      - SOURCE_DB_FILE=/app/data/proxy_stats.db
-      - ANALYSIS_DB_FILE=/app/data/analysis.db
-      - RULES_FOLDER=/app/rules
-    command: ["gunicorn", "ctf_proxy.analyzer.api:app", "--workers", "2", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8090", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGUSER=ctf
+      - PGPASSWORD=ctf
+      - PGDATABASE=ctf
+    command: ["gunicorn", "ctf_proxy.analytics.api:app", "--workers", "2", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8090", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
     restart: unless-stopped
     depends_on:
-      - analyzer
+      analyzer:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     networks:
       - control-panel
 
   dashboard-backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile.logs-processor
     user: "1337:1337"
     volumes:
@@ -75,13 +113,21 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - CONFIG_PATH=/app/data/config.yml
-      - DB_PATH=/app/data/proxy_stats.db
       - ANALYZER_API_URL=http://analyzer-api:8090
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGUSER=ctf
+      - PGPASSWORD=ctf
+      - PGDATABASE=ctf
     command: ["gunicorn", "ctf_proxy.dashboard.app:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8080", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
     restart: unless-stopped
     depends_on:
-      - envoy
-      - analyzer-api
+      envoy:
+        condition: service_started
+      analyzer-api:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     networks:
       - control-panel
 
@@ -97,7 +143,7 @@ services:
 
   dashboard-ui:
     build:
-      context: ./ui
+      context: ./frontend
       dockerfile: Dockerfile
     restart: unless-stopped
     networks:
@@ -129,3 +175,6 @@ services:
 
 networks:
   control-panel:
+
+volumes:
+  pgdata: {}

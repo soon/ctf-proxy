@@ -54,7 +54,7 @@ You're a senior software engineer. When working follow engineering principles:
 
 # How to work with vm:
 
-1. **Use ssh-exec.sh**: If you need to run a command in the vm, use `./scripts/ssh-exec.sh "<command>"`.
+1. **Use ssh-exec.sh**: If you need to run a command in the vm, use `./bin/local/ssh-exec.sh "<command>"`.
 2. **Shared folder**: The project is mounted to `/mnt/shared` in the vm and symlinked to `~/shared`. 
 3. **Copy**: When working with shared folder copy files to `~/working-copy` to avoid permission issues.
 4. **Available commands**: The vm has `docker`, `docker compose`, `make`.

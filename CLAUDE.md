@@ -17,19 +17,17 @@ You're a senior software engineer. When working follow engineering principles:
 1. **About**: The project is a CTF utility. The purpose is to help CTF players to monitor and quickly patch their services.
 2. **How**: The core idea is to run a single proxy in front of all services. The traffic is forwarded using iptables. The proxy supports plugins and logs all traffic which is later post-processed and visualized in a dashboard.
 3. **Components**: The project consists of several components:
-  - Proxy: The core component that forwards traffic, supports plugins, and logs all traffic. Located in `src/ctf_proxy/proxy`.
-  - Post-processor: A component that processes the logs and extracts useful information. Located in `src/ctf_proxy/logs_processor`.
-  - Interceptor: Interrupt or modify requests on the fly. Located in `src/interceptor`
-  - CLI dashboard: A terminal-based dashboard to monitor services and traffic. Located in `src/ctf_proxy/ui`. In the process of deprecation. 
-  - DB: A SQLite database to store logs and statistics. Located in `src/ctf_proxy/db`.
-  - Dashboard backend: A backend service, providing endpoints for the dashboard. Located in `src/ctf_proxy/dashboard`.
-  - UI: Frontend service, located in `src/ui`.
+  - Proxy: The core component that forwards traffic, supports plugins, and logs all traffic. Located in `src/envoy`.
+  - Post-processor: A component that processes the logs and extracts useful information. Located in `src/backend/ctf_proxy/logs_ingestion`.
+  - Interceptor: Interrupt or modify requests on the fly. Located in `src/envoy/interceptor`
+  - DB: A PostgreSQL database to store logs and statistics. Located in `src/backend/ctf_proxy/db`.
+  - Dashboard backend: A backend service, providing endpoints for the dashboard. Located in `src/backend/ctf_proxy/dashboard`.
+  - UI: Frontend service, located in `src/frontend`.
 4. **Tech stack**:
   - Proxy: Envoy
-  - Post-processor: Python, SQLite
+  - Post-processor: Python, PostgreSQL
   - Plugins: Go
-  - CLI dashboard: Python, SQLite, Textual
-  - Dashboard backend: Python, SQLite, FastAPI
+  - Dashboard backend: Python, PostgreSQL, FastAPI
   - UI: React, Vite, Antd
 5. **Ignored files**: Ignore files in "outdated" folder - it contains old version of the similar project.
 
@@ -45,16 +43,16 @@ You're a senior software engineer. When working follow engineering principles:
 
 # How to work with the project:
 
-1. **Use uv.sh**: ALWAYS use `uv.sh` from `src` directory to run python scripts or install dependencies. It is required to set correct venv. You can pass arguments to it similar to regular uv.
+1. **Use uv.sh**: ALWAYS use `uv.sh` from `src/backend` directory to run python scripts or install dependencies. It is required to set correct venv. You can pass arguments to it similar to regular uv.
 2. **Use tests**: The project has tests, use them to verify your changes.
 3. **Use ruff**: Use ruff to lint your code.
-4. **Use make dev**: Use `make dev <target>` from `src` directory to execute development tasks. Supported commands are:
+4. **Use make dev**: Use `make dev <target>` from `src/backend` directory to execute development tasks. Supported commands are:
    - `make dev test` - run tests
    - `make dev lint` - run linter
    - `make dev fmt` - format code
 5. **Use playwright**: ALWAYS USE BROWSER TO TEST CHANGES YOU'VE MADE. 
 6. **Generate API**: ALWAYS USE GENERATED API, NEVER USE DIRECT FETCH WHEN CALLING BACKEND. REGENERATE API IF BACKEND HAS CHANGED USING `npm run gen:api`. ALWAYS USE THIS COMMAND, IF BACKEND IS RUNNING ON OTHER PORT KILL IT AND START ON THE PROPER PORT. 
-7. **Backend**: Run backend using `./uv.sh run ./ctf_proxy/dashboard/main.py --config data/config.yml --db data/proxy_stats.db` command from `src` directory
+7. **Backend**: Run backend using `./uv.sh run ./ctf_proxy/dashboard/main.py --config data/config.yml` command from `src/backend` directory
 8. **UI Deployment**: When asked, deploy using `npm run deploy:prod`.
 
 
@@ -63,7 +61,7 @@ You're a senior software engineer. When working follow engineering principles:
 
 Docker is available locally, so most work runs directly here. A separate Ubuntu VM is only needed to test the end-to-end deployment. TO ACCESS IT USE THE FOLLOWING:
 
-1. **Use ssh-exec.sh**: If you need to run a command in the vm, use `./scripts/ssh-exec.sh "<command>"`. 
+1. **Use ssh-exec.sh**: If you need to run a command in the vm, use `./bin/local/ssh-exec.sh "<command>"`. 
 2. **Project restart**: You can restart project by executing the following command on a remote vm: `~/setup.sh`.
 3. **VM Project folder**: After `~/setup.sh` is executed, project is available at `~/src` in VM.
 4. **Available commands**: The vm has `docker`, `docker compose`, `make`.
