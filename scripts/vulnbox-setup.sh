@@ -21,10 +21,12 @@ chmod 600 /home/ctf-proxy/.ssh/authorized_keys
 usermod -s /bin/bash ctf-proxy
 
 echo 'Installing proxy...'
-su - ctf-proxy
-cd ~
-git clone https://github.com/soon/ctf-proxy.git
-cd ctf-proxy/src
-make
+su - ctf-proxy -c '
+  set -Eeuo pipefail
+  cd ~
+  git clone https://github.com/soon/ctf-proxy.git
+  cd ctf-proxy
+  ./bin/setup.sh
+'
 
 echo 'Setup complete! You can now login as ctf-proxy user.'
