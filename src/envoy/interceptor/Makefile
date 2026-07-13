@@ -16,8 +16,11 @@ build:
 		SUFFIX="$$TIMESTAMP"; \
 	fi; \
 	echo "Building with suffix: $$SUFFIX"; \
-	docker buildx build --output type=local,dest=./wasm -f Dockerfile.build .; \
-	if [ -f wasm/interceptor.wasm ]; then \
-		cp wasm/interceptor.wasm wasm/interceptor_$$SUFFIX.wasm; \
-		echo "Created: wasm/interceptor_$$SUFFIX.wasm"; \
-	fi
+	docker buildx build --output type=local,dest=./wasm -f Dockerfile.build . \
+		|| { echo "ERROR: docker buildx build failed" >&2; exit 1; }; \
+	if [ ! -f wasm/interceptor.wasm ]; then \
+		echo "ERROR: build produced no wasm/interceptor.wasm" >&2; \
+		exit 1; \
+	fi; \
+	cp wasm/interceptor.wasm wasm/interceptor_$$SUFFIX.wasm; \
+	echo "Created: wasm/interceptor_$$SUFFIX.wasm"

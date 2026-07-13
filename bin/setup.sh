@@ -4,6 +4,27 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/../src"
 
+echo 'Checking required tools...'
+have() { command -v "$1" >/dev/null 2>&1 || [ -x "/usr/sbin/$1" ] || [ -x "/sbin/$1" ]; }
+missing=()
+for tool in docker python3 make openssl sudo iptables ip6tables ip; do
+    have "$tool" || missing+=("$tool")
+done
+if have docker; then
+    docker compose version >/dev/null 2>&1 || missing+=("docker compose plugin (docker-compose-v2 / docker-compose-plugin)")
+    docker buildx version  >/dev/null 2>&1 || missing+=("docker buildx plugin (docker-buildx / docker-buildx-plugin)")
+fi
+if have python3; then
+    python3 -c 'import yaml' >/dev/null 2>&1 || missing+=("python3 yaml module (python3-yaml)")
+fi
+if [ ${#missing[@]} -gt 0 ]; then
+    echo "ERROR: required tools are missing:" >&2
+    for m in "${missing[@]}"; do echo "  - $m" >&2; done
+    echo "Install them and re-run setup. This script does not install dependencies." >&2
+    exit 1
+fi
+echo 'All required tools present.'
+
 echo 'Creating envoy user (uid 1337)...'
 sudo useradd --system --no-create-home --uid 1337 envoy || true
 
