@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
+import base64
 import hashlib
 import json
 import os
 import secrets
+import socket
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -104,23 +106,87 @@ def parse_port_mapping(port_mapping: str) -> dict[str, Any] | None:
     return None
 
 
+def probe_service_type(port: int, host: str = "127.0.0.1", timeout: float = 2.0) -> str | None:
+    """Connect to a running service and classify it as http, ws or tcp.
+
+    Heuristic:
+      1. If the server sends a banner before we send anything -> raw tcp.
+      2. Otherwise send a WebSocket upgrade (a valid HTTP request too):
+         - reply "HTTP/.. 101" with Sec-WebSocket-Accept -> ws
+         - any other "HTTP/.." reply                     -> http
+         - non-HTTP reply / reset / silence              -> tcp
+
+    Returns "http", "ws", "tcp", or None if the port can't be reached.
+    """
+    try:
+        conn = socket.create_connection((host, port), timeout=timeout)
+    except OSError:
+        return None
+
+    try:
+        conn.settimeout(0.5)
+        try:
+            if conn.recv(16):
+                return "tcp"
+        except socket.timeout:
+            pass
+        except OSError:
+            return "tcp"
+
+        key = base64.b64encode(os.urandom(16)).decode()
+        request = (
+            f"GET / HTTP/1.1\r\nHost: {host}:{port}\r\n"
+            f"Upgrade: websocket\r\nConnection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n"
+        )
+        conn.settimeout(timeout)
+        try:
+            conn.sendall(request.encode())
+            response = conn.recv(1024)
+        except OSError:
+            return "tcp"
+
+        if not response or not response.lstrip()[:5].lower().startswith(b"http/"):
+            return "tcp"
+        low = response.lower()
+        if b" 101 " in response.split(b"\r\n", 1)[0] or b"sec-websocket-accept" in low:
+            return "ws"
+        return "http"
+    finally:
+        conn.close()
+
+
 def determine_service_type(port: int, protocol: str, container_name: str) -> str:
-    """Determine service type based on port, protocol and container name."""
-    available_types = ["http", "https", "tcp", "udp"]
+    """Determine service type by probing the port, falling back to a prompt/default."""
+    available_types = ["http", "tcp", "ws"]
     default_type = "http"
+
+    probed = probe_service_type(port)
+    default = probed if probed in available_types else default_type
+
+    if not sys.stdin.isatty():
+        note = f"probed as '{probed}'" if probed else "unreachable, using default"
+        print(
+            f"Non-interactive: service type for '{container_name}' on port "
+            f"{port}/{protocol} -> '{default}' ({note})",
+            file=sys.stderr,
+        )
+        return default
+
     supported_message = ", ".join(
-        f"{t} [default]" if t == default_type else t for t in available_types
+        f"{t} [default]" if t == default else t for t in available_types
     )
     while True:
         res = (
             input(
-                f"Enter service type for container '{container_name}' on port {port}/{protocol} ({supported_message}): "
+                f"Enter service type for container '{container_name}' on port "
+                f"{port}/{protocol} ({supported_message}): "
             )
             .strip()
             .lower()
         )
         if not res:
-            res = default_type
+            return default
         if res in available_types:
             return res
         print(f"Invalid service type: {res}. Please enter one of: {', '.join(available_types)}")
