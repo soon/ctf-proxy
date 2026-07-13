@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from typing import ClassVar
 
 from psycopg import Cursor
 
 from ctf_proxy.db.connection import nul_safe
+from ctf_proxy.db.refs import Ref
 
 
 @dataclass
@@ -20,13 +22,14 @@ class FlagRow:
 
     @dataclass
     class Insert:
+        TABLE: ClassVar[str] = "flag"
         value: str
-        http_request_id: int | None = None
-        http_response_id: int | None = None
-        tcp_connection_id: int | None = None
-        tcp_event_id: int | None = None
-        websocket_connection_id: int | None = None
-        websocket_frame_id: int | None = None
+        http_request_id: "int | None | Ref" = None
+        http_response_id: "int | None | Ref" = None
+        tcp_connection_id: "int | None | Ref" = None
+        tcp_event_id: "int | None | Ref" = None
+        websocket_connection_id: "int | None | Ref" = None
+        websocket_frame_id: "int | None | Ref" = None
         location: str | None = None
         offset: int | None = None
 

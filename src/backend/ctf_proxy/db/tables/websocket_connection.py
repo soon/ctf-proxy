@@ -1,6 +1,9 @@
 from dataclasses import dataclass
+from typing import ClassVar
 
 from psycopg import Cursor
+
+from ctf_proxy.db.refs import Ref
 
 
 @dataclass
@@ -10,7 +13,9 @@ class WebSocketConnectionRow:
 
     @dataclass
     class Insert:
-        http_request_id: int
+        TABLE: ClassVar[str] = "websocket_connection"
+        RETURNING: ClassVar[bool] = True
+        http_request_id: "int | Ref"
 
 
 class WebSocketConnectionTable:

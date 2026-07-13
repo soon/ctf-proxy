@@ -1,5 +1,7 @@
 from psycopg import Connection, Cursor
 
+from ctf_proxy.db.utils import parse_headers
+
 
 class DashboardQueries:
     def tag_filter_clause(
@@ -277,16 +279,9 @@ class DashboardQueries:
         return cursor.fetchone()
 
     def http_request_headers(self, cursor: Cursor, request_id: int) -> list:
-        cursor.execute(
-            """
-            SELECT name, value
-            FROM http_header
-            WHERE request_id = %s
-            ORDER BY name
-            """,
-            (request_id,),
-        )
-        return cursor.fetchall()
+        cursor.execute("SELECT request_headers FROM http_request WHERE id = %s", (request_id,))
+        row = cursor.fetchone()
+        return parse_headers(row[0]) if row else []
 
     def flags_for_request(self, cursor: Cursor, request_id: int) -> list:
         cursor.execute(
@@ -368,16 +363,9 @@ class DashboardQueries:
         return cursor.fetchall()
 
     def http_response_headers(self, cursor: Cursor, response_id: int) -> list:
-        cursor.execute(
-            """
-                SELECT name, value
-                FROM http_header
-                WHERE response_id = %s
-                ORDER BY name
-                """,
-            (response_id,),
-        )
-        return cursor.fetchall()
+        cursor.execute("SELECT response_headers FROM http_response WHERE id = %s", (response_id,))
+        row = cursor.fetchone()
+        return parse_headers(row[0]) if row else []
 
     def flags_for_response(self, cursor: Cursor, response_id: int) -> list:
         cursor.execute(

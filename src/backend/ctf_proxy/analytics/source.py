@@ -2,6 +2,7 @@ import psycopg
 
 from ctf_proxy.analytics.context import ConnectionContext, RequestContext, TcpEvent
 from ctf_proxy.db.models import ProxyStatsDB
+from ctf_proxy.db.utils import parse_headers
 
 
 class SourceReader:
@@ -50,15 +51,11 @@ class SourceReader:
             for row in self.db.http_responses.get_by_request_ids(conn, request_ids)
         }
 
-        request_headers: dict[int, dict[str, str]] = {}
-        for row in self.db.http_headers.get_by_request_ids(conn, request_ids):
-            request_headers.setdefault(row["request_id"], {})[row["name"]] = row["value"]
-
-        response_ids = [row["id"] for row in responses.values()]
-        response_headers: dict[int, dict[str, str]] = {}
-        if response_ids:
-            for row in self.db.http_headers.get_by_response_ids(conn, response_ids):
-                response_headers.setdefault(row["response_id"], {})[row["name"]] = row["value"]
+        request_headers = {r["id"]: dict(parse_headers(r["request_headers"])) for r in requests}
+        response_headers = {
+            resp["id"]: dict(parse_headers(resp["response_headers"]))
+            for resp in responses.values()
+        }
 
         contexts: list[RequestContext] = []
         for r in requests:

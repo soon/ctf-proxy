@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from typing import ClassVar
 
 from psycopg import Cursor
 
 from ctf_proxy.db.connection import nul_safe
+from ctf_proxy.db.refs import Ref
 
 
 @dataclass
@@ -19,13 +21,14 @@ class WebSocketFrameRow:
 
     @dataclass
     class Insert:
-        connection_id: int
-        order: int
+        TABLE: ClassVar[str] = "websocket_frame"
+        connection_id: "int | Ref"
+        ord: int
         opcode: str
         payload: bytes
         payload_text: str
         payload_size: int
-        is_client: bool
+        is_client: int
 
 
 class WebSocketFrameTable:
@@ -40,7 +43,7 @@ class WebSocketFrameTable:
             [
                 (
                     frame.connection_id,
-                    frame.order,
+                    frame.ord,
                     frame.opcode,
                     frame.payload,
                     nul_safe(frame.payload_text),

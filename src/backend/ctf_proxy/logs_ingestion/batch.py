@@ -7,6 +7,7 @@ import sys
 import tarfile
 import threading
 from datetime import datetime
+from time import perf_counter
 
 from ctf_proxy.common.config import Config
 from ctf_proxy.db import connection
@@ -114,17 +115,27 @@ class BatchProcessor:
 
         archive_path = os.path.join(self.archive_folder, f"{batch_id}.tar.gz")
 
-        with tarfile.open(archive_path, "w:gz") as tar:
+        start = perf_counter()
+        raw_bytes = 0
+        with tarfile.open(archive_path, "w:gz", compresslevel=1) as tar:
             for name, data in to_archive.items():
                 try:
-                    json_bytes = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+                    json_bytes = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode(
+                        "utf-8"
+                    )
+                    raw_bytes += len(json_bytes)
                     info = tarfile.TarInfo(name)
                     info.size = len(json_bytes)
                     tar.addfile(info, io.BytesIO(json_bytes))
                 except Exception as e:
                     logger.error(f"Failed to archive {name}: {e}")
 
-        logger.info(f"Saved archive {archive_path} with {len(to_archive)} items")
+        elapsed_ms = (perf_counter() - start) * 1000
+        gz_bytes = os.path.getsize(archive_path) if os.path.exists(archive_path) else 0
+        logger.info(
+            "Saved archive %s: items=%d raw=%.1fMB gz=%.1fMB in %.0f ms",
+            archive_path, len(to_archive), raw_bytes / 1e6, gz_bytes / 1e6, elapsed_ms,
+        )
 
     def process_taps(self):
         while self.running:
@@ -166,7 +177,7 @@ class BatchProcessor:
 def main():
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        format="%(asctime)s - %(name)s\t- %(levelname)s - %(message)s",
         handlers=[logging.StreamHandler(sys.stdout)],
     )
 

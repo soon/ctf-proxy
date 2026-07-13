@@ -11,7 +11,7 @@ class TapsFolder:
 
     def __init__(self, path: str):
         self.path = path
-        self.cache = {}
+        self.indexed = set()
         self.to_remove = set()
         self.dirs_to_remove = set()
         self.failed_to_load = {}
@@ -19,22 +19,27 @@ class TapsFolder:
     def refresh(self):
         with os.scandir(self.path) as it:
             for entry in it:
-                if entry.name in self.cache or entry.name in self.to_remove:
+                if entry.name in self.indexed or entry.name in self.to_remove:
                     continue
 
                 if entry.is_file(follow_symlinks=False):
                     if entry.name.endswith(".json"):
-                        self.try_load_file(entry.name)
+                        self.try_index_file(entry.name)
                     else:
                         self.to_remove.add(entry.name)
 
-    def try_load_file(self, filename: str):
+    def try_index_file(self, filename: str):
+        data = self.load_file(filename)
+        if data is None:
+            return
+        self.indexed.add(filename)
+        self.on_file_loaded(filename, data)
+
+    def load_file(self, filename: str) -> dict | None:
         file_path = os.path.join(self.path, filename)
         try:
             with open(file_path) as f:
-                data = json.load(f)
-                self.cache[filename] = data
-                self.on_file_loaded(filename, data)
+                return json.load(f)
         except Exception as e:
             if filename not in self.failed_to_load:
                 logger.error(f"Error loading tap file {file_path}: {e}")
@@ -45,13 +50,14 @@ class TapsFolder:
                     f"Giving up on loading tap file {file_path} after {self.max_load_retries} attempts"
                 )
                 self.to_remove.add(filename)
+            return None
 
     def on_file_loaded(self, filename: str, data: dict):
         pass
 
     def pop_filename(self, filename: str) -> dict | None:
-        data = self.cache.pop(filename, None)
-        if data:
+        data = self.load_file(filename)
+        if data is not None:
             self.to_remove.add(filename)
         return data
 
@@ -62,7 +68,7 @@ class TapsFolder:
                 os.remove(file_path)
             except Exception as e:
                 logger.error(f"Error removing tap file {file_path}: {e}")
-            self.cache.pop(filename, None)
+            self.indexed.discard(filename)
             self.failed_to_load.pop(filename, None)
         self.to_remove.clear()
 

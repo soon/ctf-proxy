@@ -2,8 +2,33 @@ import json
 
 from ctf_proxy.common.config import Config
 from ctf_proxy.db.models import ProxyStatsDB
-from ctf_proxy.logs_ingestion.http import HttpTapProcessor
+from ctf_proxy.db.utils import parse_headers
+from ctf_proxy.logs_ingestion.batch_stats import BatchStats
+from ctf_proxy.logs_ingestion.batch_writer import Batch
+from ctf_proxy.logs_ingestion.http import (
+    HttpTapHeaders,
+    HttpTapProcessor,
+    PathStatsAggregator,
+    serialize_headers,
+)
 from tests.utils import assert_table
+
+
+def test_headers_serialize_parse_roundtrip():
+    headers = HttpTapHeaders(
+        [
+            {"key": "Host", "value": "example.com"},
+            {"key": "X-Dup", "value": "a"},
+            {"key": "X-Dup", "value": "b"},
+        ]
+    )
+    # lowercased names, duplicates + order preserved
+    assert parse_headers(serialize_headers(headers)) == [
+        ("host", "example.com"),
+        ("x-dup", "a"),
+        ("x-dup", "b"),
+    ]
+    assert parse_headers(None) == []
 
 
 def process_tap(db: ProxyStatsDB, file_path: str, tap_id="test-id", batch_id="test-batch"):
@@ -17,7 +42,21 @@ def process_tap(db: ProxyStatsDB, file_path: str, tap_id="test-id", batch_id="te
     processor = HttpTapProcessor(db=db, config=config)
     with db.connect() as conn:
         tx = conn.cursor()
-        processor.process_tap(tx, tap, tap_id=tap_id, batch_id=batch_id, log_entry=log_entry)
+        writer = Batch()
+        stats = BatchStats()
+        paths = PathStatsAggregator()
+        processor.process_tap(
+            tap,
+            tap_id=tap_id,
+            batch_id=batch_id,
+            log_entry=log_entry,
+            writer=writer,
+            stats=stats,
+            paths=paths,
+        )
+        writer.flush(tx)
+        paths.flush(tx)
+        stats.flush(tx)
         conn.commit()
 
     return db

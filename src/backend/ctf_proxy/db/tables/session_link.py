@@ -1,8 +1,9 @@
 from dataclasses import dataclass
+from typing import ClassVar
 
 from psycopg import Cursor
 
-from ctf_proxy.db.tables.session import SessionTable
+from ctf_proxy.db.refs import Ref
 
 
 @dataclass
@@ -13,21 +14,19 @@ class SessionLinkRow:
 
     @dataclass
     class Insert:
-        session_key: str
-        port: int
-        http_request_id: int
+        TABLE: ClassVar[str] = "session_link"
+        CONFLICT: ClassVar[str] = "ON CONFLICT (session_id, http_request_id) DO NOTHING"
+        session_id: "int | Ref"
+        http_request_id: "int | Ref"
 
 
 class SessionLinkTable:
     def insert(self, tx: Cursor, row: SessionLinkRow.Insert) -> None:
-        session_table = SessionTable()
-        session_id = session_table.upsert(tx, row.port, row.session_key)
-
         tx.execute(
             """
             INSERT INTO session_link (session_id, http_request_id)
             VALUES (%s, %s)
             ON CONFLICT (session_id, http_request_id) DO NOTHING
             """,
-            (session_id, row.http_request_id),
+            (row.session_id, row.http_request_id),
         )

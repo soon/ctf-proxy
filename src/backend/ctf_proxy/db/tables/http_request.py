@@ -1,6 +1,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import ClassVar
 
 from psycopg import Cursor
 
@@ -20,6 +21,23 @@ class HttpRequestRow:
     is_websocket: bool
     tap_id: str | None
     batch_id: str | None
+    request_headers: str | None
+
+    @dataclass
+    class Insert:
+        TABLE: ClassVar[str] = "http_request"
+        RETURNING: ClassVar[bool] = True
+        port: int
+        start_time: int
+        path: str
+        method: str
+        is_blocked: int
+        user_agent: str | None = None
+        body: str | None = None
+        is_websocket: int = 0
+        tap_id: str | None = None
+        batch_id: str | None = None
+        request_headers: str | None = None
 
 
 class HttpRequestTable:
@@ -36,11 +54,12 @@ class HttpRequestTable:
         is_websocket: bool = False,
         tap_id: str | None = None,
         batch_id: str | None = None,
+        request_headers: str | None = None,
     ) -> int:
         tx.execute(
             """
-            INSERT INTO http_request (port, start_time, path, method, user_agent, body, is_blocked, is_websocket, tap_id, batch_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+            INSERT INTO http_request (port, start_time, path, method, user_agent, body, is_blocked, is_websocket, tap_id, batch_id, request_headers)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
             """,
             (
                 port,
@@ -53,6 +72,7 @@ class HttpRequestTable:
                 int(bool(is_websocket)),
                 tap_id,
                 batch_id,
+                nul_safe(request_headers),
             ),
         )
         return tx.fetchone()[0]

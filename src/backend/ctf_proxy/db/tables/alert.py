@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import ClassVar
 
 from psycopg import Cursor
+
+from ctf_proxy.db.refs import Ref
 
 
 @dataclass
@@ -15,12 +18,13 @@ class AlertRow:
 
     @dataclass
     class Insert:
+        TABLE: ClassVar[str] = "alert"
         port: int
         created: int
         description: str
-        http_request_id: int | None = None
-        http_response_id: int | None = None
-        tcp_connection_id: int | None = None
+        http_request_id: "int | None | Ref" = None
+        http_response_id: "int | None | Ref" = None
+        tcp_connection_id: "int | None | Ref" = None
 
 
 class AlertTable:

@@ -1,6 +1,7 @@
 import base64
 import logging
 from datetime import datetime
+from time import perf_counter
 
 from psycopg import Cursor
 
@@ -56,8 +57,11 @@ class TcpProcessor:
         self.tap_processor = TcpTapProcessor(db, config)
 
     def process_new_access_log_entries(self, tx: Cursor, batch_id: str):
+        t_start = perf_counter()
         new_entries = self.access_log.read_new_entries(max_entries=1000)
+        t_read = perf_counter()
         self.taps_folder.refresh()
+        t_refresh = perf_counter()
 
         to_archive = {}
         for entry in new_entries:
@@ -92,11 +96,25 @@ class TcpProcessor:
             except Exception as e:
                 logger.error(f"Error processing tap file {tap_filename}: {e}")
 
+        t_process = perf_counter()
+
         if new_entries:
             last_position = new_entries[-1].end_position
             self.access_log.write_last_processed_position(last_position)
 
         self.taps_folder.cleanup()
+        t_cleanup = perf_counter()
+
+        if new_entries:
+            logger.info(
+                "TCP batch: entries=%d matched=%d | read=%.0f refresh=%.0f process+write=%.0f "
+                "cleanup=%.0f | total=%.0f ms",
+                len(new_entries), len(to_archive),
+                (t_read - t_start) * 1000, (t_refresh - t_read) * 1000,
+                (t_process - t_refresh) * 1000, (t_cleanup - t_process) * 1000,
+                (t_cleanup - t_start) * 1000,
+            )
+
         return to_archive
 
 

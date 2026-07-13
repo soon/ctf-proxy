@@ -1,4 +1,12 @@
 import datetime
+import json
+
+
+def parse_headers(text: str | None) -> list[tuple[str, str]]:
+    """Parse the request_headers/response_headers json column into (name, value) pairs."""
+    if not text:
+        return []
+    return [(name, value) for name, value in json.loads(text)]
 
 
 def convert_datetime_to_timestamp(dt: datetime.datetime) -> int:

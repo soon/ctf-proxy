@@ -1,9 +1,11 @@
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 from psycopg import Cursor
 
 from ctf_proxy.db.connection import Row, nul_safe
+from ctf_proxy.db.refs import Ref
 
 
 @dataclass
@@ -16,10 +18,11 @@ class HttpHeaderRow:
 
     @dataclass
     class Insert:
+        TABLE: ClassVar[str] = "http_header"
         name: str
         value: str
-        request_id: int | None = None
-        response_id: int | None = None
+        request_id: "int | None | Ref" = None
+        response_id: "int | None | Ref" = None
 
 
 class HttpHeaderTable:

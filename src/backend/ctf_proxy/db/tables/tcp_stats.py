@@ -17,11 +17,11 @@ class TcpStatsTable:
             VALUES (%s, 1, %s, %s, %s, %s)
             ON CONFLICT(port)
             DO UPDATE SET
-                total_connections = total_connections + 1,
-                total_bytes_in = total_bytes_in + %s,
-                total_bytes_out = total_bytes_out + %s,
-                avg_duration_ms = CAST((avg_duration_ms * (total_connections - 1) + %s) AS INTEGER) / total_connections,
-                total_flags_found = total_flags_found + %s
+                total_connections = tcp_stats.total_connections + 1,
+                total_bytes_in = tcp_stats.total_bytes_in + %s,
+                total_bytes_out = tcp_stats.total_bytes_out + %s,
+                avg_duration_ms = CAST((tcp_stats.avg_duration_ms * (tcp_stats.total_connections - 1) + %s) AS INTEGER) / tcp_stats.total_connections,
+                total_flags_found = tcp_stats.total_flags_found + %s
         """,
             (
                 port,

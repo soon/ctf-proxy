@@ -17,7 +17,7 @@ class TcpConnectionTimeStatsTable:
             INSERT INTO tcp_connection_time_stats (port, read_min, read_max, write_min, write_max, time, count)
             VALUES (%s, %s, %s, %s, %s, %s, 1)
             ON CONFLICT(port, read_min, read_max, write_min, write_max, time)
-            DO UPDATE SET count = count + 1
+            DO UPDATE SET count = tcp_connection_time_stats.count + 1
         """,
             (port, read_min, read_max, write_min, write_max, time),
         )
