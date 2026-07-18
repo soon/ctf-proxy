@@ -16,7 +16,6 @@ from ctf_proxy.db.stats import (
     HttpQueryParamTimeStatsTable,
     HttpRequestTimeStatsTable,
 )
-from ctf_proxy.db.tables.alert import AlertRow, AlertTable
 from ctf_proxy.db.tables.flag import FlagRow, FlagTable
 from ctf_proxy.db.tables.http_header import HttpHeaderRow, HttpHeaderTable
 from ctf_proxy.db.tables.http_path_stats import HttpPathStatsRow, HttpPathStatsTable
@@ -49,8 +48,6 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "RowStatus",
     "SqlExecutionResult",
-    "AlertRow",
-    "AlertTable",
     "FlagRow",
     "FlagTable",
     "HttpHeaderRow",
@@ -103,7 +100,6 @@ class ProxyStatsDB:
         self.http_requests = HttpRequestTable()
         self.http_responses = HttpResponseTable()
         self.http_headers = HttpHeaderTable()
-        self.alerts = AlertTable()
         self.flags = FlagTable()
         self.service_stats = ServiceStatsTable()
         self.http_response_code_stats = HttpResponseCodeStatsTable()
@@ -133,8 +129,7 @@ class ProxyStatsDB:
     def max_source_id(self) -> int:
         with self.connect() as conn:
             if not (
-                self.table_exists(conn, "http_request")
-                or self.table_exists(conn, "tcp_connection")
+                self.table_exists(conn, "http_request") or self.table_exists(conn, "tcp_connection")
             ):
                 return 0
             row = conn.execute(
@@ -204,9 +199,7 @@ class ProxyStatsDB:
                 cursor.execute(query)
                 rows = cursor.fetchall()
             except psycopg.errors.QueryCanceled as e:
-                raise TimeoutError(
-                    f"Query execution exceeded {timeout} seconds timeout"
-                ) from e
+                raise TimeoutError(f"Query execution exceeded {timeout} seconds timeout") from e
             query_time = (time.perf_counter() - start_time) * 1000
 
             if rows:

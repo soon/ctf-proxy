@@ -11,6 +11,7 @@ from ctf_proxy.db.models import (
     ProxyStatsDB,
     ServiceStatsRow,
     TcpConnectionStatsRow,
+    TcpEventRow,
 )
 from ctf_proxy.db.stats import FlagTimeStatsRow
 from ctf_proxy.db.utils import convert_datetime_to_timestamp
@@ -109,9 +110,12 @@ class TcpProcessor:
             logger.info(
                 "TCP batch: entries=%d matched=%d | read=%.0f refresh=%.0f process+write=%.0f "
                 "cleanup=%.0f | total=%.0f ms",
-                len(new_entries), len(to_archive),
-                (t_read - t_start) * 1000, (t_refresh - t_read) * 1000,
-                (t_process - t_refresh) * 1000, (t_cleanup - t_process) * 1000,
+                len(new_entries),
+                len(to_archive),
+                (t_read - t_start) * 1000,
+                (t_refresh - t_read) * 1000,
+                (t_process - t_refresh) * 1000,
+                (t_cleanup - t_process) * 1000,
                 (t_cleanup - t_start) * 1000,
             )
 
@@ -123,9 +127,7 @@ class TcpTapProcessor:
         self.db = db
         self.config = config
 
-    def process_tap(
-        self, tx: Cursor, data: dict, tap_id: str, batch_id: str, log_entry: dict
-    ):
+    def process_tap(self, tx: Cursor, data: dict, tap_id: str, batch_id: str, log_entry: dict):
         socket_trace = data.get("socket_buffered_trace", {})
         events = socket_trace.get("events", [])
 
@@ -200,6 +202,7 @@ class TcpTapProcessor:
             batch_id=batch_id,
         )
 
+        events_to_insert: list[TcpEventRow.Insert] = []
         for event in events:
             timestamp = int(
                 datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")).timestamp() * 1000
@@ -210,15 +213,16 @@ class TcpTapProcessor:
                 data_bytes = base64.b64decode(read_data.get("as_bytes", ""))
                 truncated = read_data.get("truncated", False)
 
-                self.db.tcp_events.insert(
-                    tx=tx,
-                    connection_id=tcp_connection_id,
-                    timestamp=timestamp,
-                    event_type="read",
-                    data=data_bytes,
-                    data_text=data_bytes.decode("utf-8", errors="ignore"),
-                    data_size=len(data_bytes),
-                    truncated=truncated,
+                events_to_insert.append(
+                    TcpEventRow.Insert(
+                        connection_id=tcp_connection_id,
+                        timestamp=timestamp,
+                        event_type="read",
+                        data=data_bytes,
+                        data_text=data_bytes.decode("utf-8", errors="ignore"),
+                        data_size=len(data_bytes),
+                        truncated=truncated,
+                    )
                 )
 
             elif "write" in event:
@@ -227,29 +231,33 @@ class TcpTapProcessor:
                 end_stream = event["write"].get("end_stream", False)
                 truncated = write_data.get("truncated", False)
 
-                self.db.tcp_events.insert(
-                    tx=tx,
-                    connection_id=tcp_connection_id,
-                    timestamp=timestamp,
-                    event_type="write",
-                    data=data_bytes,
-                    data_text=data_bytes.decode("utf-8", errors="ignore"),
-                    data_size=len(data_bytes),
-                    end_stream=end_stream,
-                    truncated=truncated,
+                events_to_insert.append(
+                    TcpEventRow.Insert(
+                        connection_id=tcp_connection_id,
+                        timestamp=timestamp,
+                        event_type="write",
+                        data=data_bytes,
+                        data_text=data_bytes.decode("utf-8", errors="ignore"),
+                        data_size=len(data_bytes),
+                        end_stream=end_stream,
+                        truncated=truncated,
+                    )
                 )
 
             elif "closed" in event:
-                self.db.tcp_events.insert(
-                    tx=tx,
-                    connection_id=tcp_connection_id,
-                    timestamp=timestamp,
-                    event_type="closed",
-                    data=b"",
-                    data_size=0,
-                    end_stream=True,
-                    truncated=False,
+                events_to_insert.append(
+                    TcpEventRow.Insert(
+                        connection_id=tcp_connection_id,
+                        timestamp=timestamp,
+                        event_type="closed",
+                        data=b"",
+                        data_size=0,
+                        end_stream=True,
+                        truncated=False,
+                    )
                 )
+
+        self.db.tcp_events.insert_many(tx=tx, events=events_to_insert)
 
         # Insert flags
         if flags_found:

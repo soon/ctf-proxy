@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass
 
 from psycopg import Cursor
@@ -54,9 +53,32 @@ class TcpEventTable:
         )
         return tx.fetchone()[0]
 
-    def get_by_connection_ids(
-        self, tx: Cursor, connection_ids: list[int]
-    ) -> list[Row]:
+    def insert_many(self, tx: Cursor, events: list["TcpEventRow.Insert"]) -> None:
+        if not events:
+            return
+        tx.executemany(
+            """
+            INSERT INTO tcp_event (
+                connection_id, timestamp, event_type, data, data_text,
+                data_size, end_stream, truncated
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            [
+                (
+                    e.connection_id,
+                    e.timestamp,
+                    e.event_type,
+                    e.data,
+                    nul_safe(e.data_text),
+                    e.data_size,
+                    int(e.end_stream),
+                    int(e.truncated),
+                )
+                for e in events
+            ],
+        )
+
+    def get_by_connection_ids(self, tx: Cursor, connection_ids: list[int]) -> list[Row]:
         placeholders = ",".join(["%s"] * len(connection_ids))
         return tx.execute(
             "SELECT connection_id, event_type, data_text, data_size, end_stream, truncated "

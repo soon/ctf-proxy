@@ -1,6 +1,4 @@
 from .models import (
-    AlertRow,
-    AlertTable,
     HttpHeaderRow,
     HttpHeaderTable,
     HttpRequestRow,
@@ -12,12 +10,10 @@ from .models import (
 
 __all__ = [
     "ProxyStatsDB",
-    "AlertRow",
     "HttpRequestRow",
     "HttpResponseRow",
     "HttpHeaderRow",
     "HttpRequestTable",
     "HttpResponseTable",
     "HttpHeaderTable",
-    "AlertTable",
 ]

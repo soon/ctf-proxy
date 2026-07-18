@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel
 
@@ -29,8 +28,6 @@ class ServiceStats(BaseModel):
     redirect_responses: int
     status_counts: dict[int, int]
     unique_paths: int
-    alerts_count: int
-    recent_alerts: list[tuple[str, Any]]
     flags_written: int
     flags_retrieved: int
     flags_blocked: int

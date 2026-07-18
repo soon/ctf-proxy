@@ -48,10 +48,6 @@ class ServiceStats:
             # Use pre-calculated stats from http_path_stats instead of counting distinct paths
             unique_paths = self.queries.distinct_path_count_for_port(cursor, self.service_port)[0]
 
-            alerts_count = self.queries.alert_count_for_port(cursor, self.service_port)[0]
-
-            recent_alerts = self.queries.recent_alerts_for_port(cursor, self.service_port)
-
             # Use pre-calculated stats from http_header_time_stats
             header_stats = self.queries.header_distinct_counts_for_port(cursor, self.service_port)
             unique_headers = header_stats[0] if header_stats and header_stats[0] else 0
@@ -81,8 +77,6 @@ class ServiceStats:
                 "redirect_responses": redirect_responses,
                 "status_counts": status_counts,
                 "unique_paths": unique_paths,
-                "alerts_count": alerts_count,
-                "recent_alerts": recent_alerts,
                 "flags_written": flags_written,
                 "flags_retrieved": flags_retrieved,
                 "flags_blocked": flags_blocked,
@@ -99,11 +93,10 @@ class ServiceStats:
         if self._prev_stats is None:
             deltas = dict.fromkeys(current.keys(), 0)
             deltas["status_deltas"] = {}
-            deltas["recent_alerts"] = []
         else:
             deltas = {}
             for key in current.keys():
-                if key in ("status_counts", "recent_alerts"):
+                if key == "status_counts":
                     continue
                 deltas[key] = current[key] - self._prev_stats.get(key, 0)
 
@@ -111,8 +104,6 @@ class ServiceStats:
             for status, count in current["status_counts"].items():
                 prev_count = self._prev_stats.get("status_counts", {}).get(status, 0)
                 deltas["status_deltas"][status] = count - prev_count
-
-            deltas["recent_alerts"] = current["recent_alerts"]
 
         self._prev_stats = current.copy()
 

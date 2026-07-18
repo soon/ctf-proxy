@@ -1,30 +1,24 @@
-import {
-	analyzerCreateBackfillApiAnalyzerBackfillPostMutation,
-	analyzerGetBackfillApiAnalyzerBackfillGetOptions,
-	analyzerTagStatsApiAnalyzerTagStatsGetOptions,
-	analyzerTagTimeStatsApiAnalyzerTagTimeStatsGetOptions,
-} from "@/client/@tanstack/react-query.gen";
+import { analyzerTagStatsApiAnalyzerTagStatsGetOptions } from "@/client/@tanstack/react-query.gen";
 import type { TagStatItem } from "@/client/types.gen";
 import { SparklineChart } from "@/components/SparklineChart";
-import { ArrowLeftOutlined, RocketOutlined } from "@ant-design/icons";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { tagColor } from "@/components/tagColor";
+import { ArrowLeftOutlined } from "@ant-design/icons";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
-	App,
 	Button,
 	Card,
 	Empty,
-	InputNumber,
 	Select,
 	Space,
 	Spin,
-	Switch,
 	Table,
 	Tag,
 	Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useState } from "react";
+import { z } from "zod";
 
 const { Text } = Typography;
 
@@ -36,8 +30,17 @@ const WINDOW_OPTIONS = [
 	{ label: "Last 7d", value: 10080 },
 ];
 
+const WINDOW_STORAGE_KEY = "tagStatsWindowMinutes";
+const DEFAULT_WINDOW = 60;
+
+function loadStoredWindow(): number {
+	const raw = Number(localStorage.getItem(WINDOW_STORAGE_KEY));
+	return WINDOW_OPTIONS.some((o) => o.value === raw) ? raw : DEFAULT_WINDOW;
+}
+
 export const Route = createFileRoute("/service/$port/tags")({
 	component: ServiceTags,
+	validateSearch: z.object({ window: z.number().optional() }),
 	staticData: { breadcrumb: "Tag stats" },
 });
 
@@ -45,58 +48,33 @@ function ServiceTags() {
 	const { port } = Route.useParams();
 	const portNumber = Number.parseInt(port, 10);
 	const navigate = useNavigate();
-	const { message } = App.useApp();
+	const search = Route.useSearch();
 
-	const [targetId, setTargetId] = useState<number | null>(null);
-	const [allPorts, setAllPorts] = useState(false);
-	const [windowMinutes, setWindowMinutes] = useState(1440);
+	const windowMinutes = search.window ?? loadStoredWindow();
+	const setWindowMinutes = (value: number) => {
+		localStorage.setItem(WINDOW_STORAGE_KEY, String(value));
+		navigate({
+			to: `/service/${port}/tags`,
+			search: (prev) => ({ ...prev, window: value }),
+			replace: true,
+		});
+	};
+
 	const [hoverTs, setHoverTs] = useState<number | null>(null);
 
-	const {
-		data: tagData,
-		isLoading,
-		refetch,
-	} = useQuery({
+	const { data: tagData, isLoading } = useQuery({
 		...analyzerTagStatsApiAnalyzerTagStatsGetOptions({
-			query: { port: portNumber },
-		}),
-		refetchInterval: 10000,
-	});
-
-	const { data: timeData } = useQuery({
-		...analyzerTagTimeStatsApiAnalyzerTagTimeStatsGetOptions({
 			query: { port: portNumber, window_minutes: windowMinutes },
 		}),
 		refetchInterval: 10000,
 	});
 
-	const seriesByTag = new Map(
-		(timeData?.tags ?? []).map((t) => [`${t.rule}:${t.tag}`, t.time_series]),
-	);
-
-	const { data: job, refetch: refetchJob } = useQuery({
-		...analyzerGetBackfillApiAnalyzerBackfillGetOptions(),
-		refetchInterval: 3000,
-	});
-
-	const backfillMutation = useMutation({
-		...analyzerCreateBackfillApiAnalyzerBackfillPostMutation(),
-		onSuccess: () => {
-			message.success("Backfill scheduled");
-			refetchJob();
-			setTimeout(() => refetch(), 1000);
-		},
-		onError: () => message.error("Failed to schedule backfill"),
-	});
-
-	function runBackfill() {
-		backfillMutation.mutate({
-			body: {
-				target_id: targetId ?? null,
-				ports: allPorts ? null : [portNumber],
-			},
+	const openTag = (tag: string) => {
+		navigate({
+			to: `/service/${port}`,
+			search: (prev) => ({ ...prev, filter_tag: tag }),
 		});
-	}
+	};
 
 	const tags: TagStatItem[] = tagData?.tags ?? [];
 	const uniqueTags = Array.from(new Set(tags.map((t) => t.tag)));
@@ -113,7 +91,15 @@ function ServiceTags() {
 			title: "Tag",
 			dataIndex: "tag",
 			key: "tag",
-			render: (tag: string) => <Tag color="purple">{tag}</Tag>,
+			render: (tag: string) => (
+				<Tag
+					color={tagColor(tag)}
+					style={{ cursor: "pointer" }}
+					onClick={() => openTag(tag)}
+				>
+					{tag}
+				</Tag>
+			),
 		},
 		{
 			title: "HTTP",
@@ -142,9 +128,8 @@ function ServiceTags() {
 			key: "activity",
 			width: 260,
 			render: (_, record) => {
-				const series = seriesByTag.get(`${record.rule}:${record.tag}`) ?? [];
-				if (series.length === 0)
-					return <Text type="secondary">—</Text>;
+				const series = record.time_series ?? [];
+				if (series.length === 0) return <Text type="secondary">—</Text>;
 				return (
 					<SparklineChart
 						time_series={series}
@@ -173,45 +158,21 @@ function ServiceTags() {
 
 			<Card size="small" title={`Unique tags (${uniqueTags.length})`}>
 				{uniqueTags.length === 0 ? (
-					<Empty description="No rule matches yet — run a backfill below" />
+					<Empty description="No rule matches yet" />
 				) : (
 					<Space size={4} wrap>
 						{uniqueTags.map((t) => (
-							<Tag color="purple" key={t}>
+							<Tag
+								color={tagColor(t)}
+								key={t}
+								style={{ cursor: "pointer" }}
+								onClick={() => openTag(t)}
+							>
 								{t}
 							</Tag>
 						))}
 					</Space>
 				)}
-			</Card>
-
-			<Card size="small" title="Backfill">
-				<Space wrap align="center">
-					<Text type="secondary">Backfill up to id</Text>
-					<InputNumber
-						min={1}
-						placeholder="latest"
-						value={targetId ?? undefined}
-						onChange={(v) => setTargetId(v ?? null)}
-					/>
-					<Text type="secondary">All ports</Text>
-					<Switch checked={allPorts} onChange={setAllPorts} />
-					<Button
-						type="primary"
-						icon={<RocketOutlined />}
-						loading={backfillMutation.isPending}
-						onClick={runBackfill}
-					>
-						Run backfill
-					</Button>
-					{job ? (
-						<Text type="secondary">
-							last job #{job.id}: <Tag>{job.status}</Tag>
-							target {job.target_id} · http@{job.http_cursor} · tcp@
-							{job.tcp_cursor}
-						</Text>
-					) : null}
-				</Space>
 			</Card>
 
 			<Card

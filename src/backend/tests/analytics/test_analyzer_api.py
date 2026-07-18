@@ -77,7 +77,7 @@ def test_tag_stats_empty_initially(client):
     resp = client.get("/api/tag-stats", params={"port": 8080})
     assert resp.status_code == 200
     body = resp.json()
-    assert body == {"port": 8080, "tags": []}
+    assert body == {"port": 8080, "window_minutes": 60, "tags": []}
 
 
 def test_backfill_create_and_get(client):

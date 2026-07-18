@@ -42,20 +42,7 @@ class DashboardQueries:
         )
         return cursor.fetchall()
 
-    def alert_counts_by_ports(self, cursor: Cursor, ports: list[int]) -> list:
-        placeholders = ",".join(["%s"] * len(ports))
-        cursor.execute(
-            f"""SELECT port, COUNT(*)
-               FROM alert
-               WHERE port IN ({placeholders})
-               GROUP BY port""",
-            ports,
-        )
-        return cursor.fetchall()
-
-    def request_count_deltas(
-        self, cursor: Cursor, ports: list[int], since: int
-    ) -> list:
+    def request_count_deltas(self, cursor: Cursor, ports: list[int], since: int) -> list:
         placeholders = ",".join(["%s"] * len(ports))
         cursor.execute(
             f"""SELECT port, SUM(count) as recent_count
@@ -67,9 +54,7 @@ class DashboardQueries:
         )
         return cursor.fetchall()
 
-    def blocked_request_count_deltas(
-        self, cursor: Cursor, ports: list[int], since: int
-    ) -> list:
+    def blocked_request_count_deltas(self, cursor: Cursor, ports: list[int], since: int) -> list:
         placeholders = ",".join(["%s"] * len(ports))
         cursor.execute(
             f"""SELECT port, SUM(blocked_count) as recent_blocked_count
@@ -81,9 +66,7 @@ class DashboardQueries:
         )
         return cursor.fetchall()
 
-    def flag_deltas_by_ports(
-        self, cursor: Cursor, ports: list[int], since: int
-    ) -> list:
+    def flag_deltas_by_ports(self, cursor: Cursor, ports: list[int], since: int) -> list:
         placeholders = ",".join(["%s"] * len(ports))
         cursor.execute(
             f"""SELECT port,
@@ -97,9 +80,7 @@ class DashboardQueries:
         )
         return cursor.fetchall()
 
-    def request_count_delta_for_port(
-        self, cursor: Cursor, port: int, since: int
-    ) -> tuple:
+    def request_count_delta_for_port(self, cursor: Cursor, port: int, since: int) -> tuple:
         cursor.execute(
             """SELECT SUM(count) FROM http_request_time_stats
                WHERE port = %s AND time >= %s""",
@@ -107,9 +88,7 @@ class DashboardQueries:
         )
         return cursor.fetchone()
 
-    def blocked_request_count_delta_for_port(
-        self, cursor: Cursor, port: int, since: int
-    ) -> tuple:
+    def blocked_request_count_delta_for_port(self, cursor: Cursor, port: int, since: int) -> tuple:
         cursor.execute(
             """SELECT SUM(blocked_count) FROM http_request_time_stats
                WHERE port = %s AND time >= %s""",
@@ -326,9 +305,7 @@ class DashboardQueries:
         )
         return cursor.fetchall()
 
-    def websocket_connection_id_for_request(
-        self, cursor: Cursor, request_id: int
-    ) -> tuple:
+    def websocket_connection_id_for_request(self, cursor: Cursor, request_id: int) -> tuple:
         cursor.execute(
             """
                 SELECT wc.id
@@ -339,9 +316,7 @@ class DashboardQueries:
         )
         return cursor.fetchone()
 
-    def websocket_frames_for_connection(
-        self, cursor: Cursor, connection_id: int
-    ) -> list:
+    def websocket_frames_for_connection(self, cursor: Cursor, connection_id: int) -> list:
         cursor.execute(
             """
                     SELECT wf.id, wf.ord, wf.opcode, wf.payload_text, wf.payload_size, wf.is_client
@@ -405,9 +380,7 @@ class DashboardQueries:
     ) -> tuple[int, list]:
         cursor = conn.cursor()
 
-        search_clause, search_params = (
-            self.build_tcp_search_filter(search) if search else ("", [])
-        )
+        search_clause, search_params = self.build_tcp_search_filter(search) if search else ("", [])
 
         tag_clause, tag_params = "", []
         if filter_tag:
@@ -502,9 +475,7 @@ class DashboardQueries:
         )
         return cursor.fetchone()
 
-    def tcp_connection_time_stats(
-        self, cursor: Cursor, port: int, start_timestamp: int
-    ) -> list:
+    def tcp_connection_time_stats(self, cursor: Cursor, port: int, start_timestamp: int) -> list:
         cursor.execute(
             """
             SELECT read_min, read_max, write_min, write_max, time, SUM(count) as count
@@ -604,9 +575,7 @@ class DashboardQueries:
         )
         return cursor.fetchall()
 
-    def flag_count_for_websocket_connection(
-        self, cursor: Cursor, connection_id: int
-    ) -> tuple:
+    def flag_count_for_websocket_connection(self, cursor: Cursor, connection_id: int) -> tuple:
         cursor.execute(
             """
             SELECT COUNT(DISTINCT f.id)
@@ -630,9 +599,7 @@ class DashboardQueries:
         )
         return cursor.fetchall()
 
-    def flag_time_stats_for_port(
-        self, cursor: Cursor, port: int, start_time: int
-    ) -> list:
+    def flag_time_stats_for_port(self, cursor: Cursor, port: int, start_time: int) -> list:
         cursor.execute(
             """
             SELECT port, time, write_count, read_count
@@ -644,9 +611,7 @@ class DashboardQueries:
         )
         return cursor.fetchall()
 
-    def request_time_stats_for_port(
-        self, cursor: Cursor, port: int, start_time: int
-    ) -> list:
+    def request_time_stats_for_port(self, cursor: Cursor, port: int, start_time: int) -> list:
         cursor.execute(
             """
             SELECT port, time, count, blocked_count
@@ -747,20 +712,6 @@ class DashboardQueries:
         )
         return cursor.fetchone()
 
-    def alert_count_for_port(self, cursor: Cursor, port: int) -> tuple:
-        cursor.execute("""SELECT COUNT(*) FROM alert WHERE port = %s""", (port,))
-        return cursor.fetchone()
-
-    def recent_alerts_for_port(self, cursor: Cursor, port: int) -> list:
-        cursor.execute(
-            """SELECT description, created FROM alert
-               WHERE port = %s
-               ORDER BY created DESC
-               LIMIT 5""",
-            (port,),
-        )
-        return cursor.fetchall()
-
     def header_distinct_counts_for_port(self, cursor: Cursor, port: int) -> tuple:
         cursor.execute(
             """SELECT COUNT(DISTINCT name), COUNT(DISTINCT value)
@@ -771,7 +722,5 @@ class DashboardQueries:
         return cursor.fetchone()
 
     def request_batch_tap(self, cursor: Cursor, request_id: int) -> tuple:
-        cursor.execute(
-            "SELECT batch_id, tap_id FROM http_request WHERE id = %s", (request_id,)
-        )
+        cursor.execute("SELECT batch_id, tap_id FROM http_request WHERE id = %s", (request_id,))
         return cursor.fetchone()

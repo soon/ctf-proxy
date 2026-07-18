@@ -23,7 +23,6 @@ from ctf_proxy.analytics.schemas import (
     RuleSourceResponse,
     SaveRuleRequest,
     TagStatsResponse,
-    TagTimeStatsResponse,
 )
 from ctf_proxy.common import Config
 from ctf_proxy.dashboard.models import (
@@ -252,15 +251,7 @@ def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
         # 3. Skip unique paths count - too slow with large datasets
         unique_paths = {}
 
-        # 4. Get alerts count for all ports
-        start = time.time()
-        alerts_count = dict(queries.alert_counts_by_ports(cursor, ports))
-        logger.info(f"Query 4 (alerts_count): {time.time() - start:.3f}s")
-
-        # 5. Get recent alerts for all ports - skip for now, too slow
-        recent_alerts = {}
-
-        # 6. Skip header stats - too slow with large datasets
+        # 4. Skip header stats - too slow with large datasets
         header_stats = {}
 
         # 7. Skip TCP stats for now - tcp_stats table is not populated
@@ -268,9 +259,7 @@ def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
 
         # 8. Get request count delta for last 5 minutes using stats table
         start = time.time()
-        request_deltas = dict(
-            queries.request_count_deltas(cursor, ports, five_minutes_ago)
-        )
+        request_deltas = dict(queries.request_count_deltas(cursor, ports, five_minutes_ago))
         logger.info(f"Query 8 (request_deltas): {time.time() - start:.3f}s")
 
         # 9. Get blocked request count delta for last 5 minutes using stats table
@@ -333,8 +322,6 @@ def get_all_services_stats_optimized(ports: list[int], db_instance) -> dict:
                 "success_responses": success_responses,
                 "redirect_responses": redirect_responses,
                 "unique_paths": unique_paths.get(port, 0),
-                "alerts_count": alerts_count.get(port, 0),
-                "recent_alerts": recent_alerts.get(port, []),
                 "unique_headers": header_data[0],
                 "unique_header_values": header_data[1],
                 "tcp_stats": tcp_data,
@@ -381,8 +368,6 @@ async def get_services() -> ServiceListResponse:
             redirect_responses=stats.get("redirect_responses", 0),
             status_counts=stats.get("status_counts", {}),
             unique_paths=stats.get("unique_paths", 0),
-            alerts_count=stats.get("alerts_count", 0),
-            recent_alerts=stats.get("recent_alerts", []),
             flags_written=stats.get("flags_written", 0),
             flags_retrieved=stats.get("flags_retrieved", 0),
             flags_blocked=stats.get("flags_blocked", 0),
@@ -432,24 +417,19 @@ async def get_service_by_port(port: int) -> ServiceListItem:
         # Use stats table instead of raw http_request table
         start = time.time()
         requests_delta = (
-            queries.request_count_delta_for_port(cursor, service.port, five_minutes_ago)[0]
-            or 0
+            queries.request_count_delta_for_port(cursor, service.port, five_minutes_ago)[0] or 0
         )
         logger.info(f"requests_delta query took {time.time() - start:.3f}s")
 
         start = time.time()
         blocked_requests_delta = (
-            queries.blocked_request_count_delta_for_port(
-                cursor, service.port, five_minutes_ago
-            )[0]
+            queries.blocked_request_count_delta_for_port(cursor, service.port, five_minutes_ago)[0]
             or 0
         )
         logger.info(f"blocked_requests_delta query took {time.time() - start:.3f}s")
 
         start = time.time()
-        flag_delta_result = queries.flag_delta_for_port(
-            cursor, service.port, five_minutes_ago
-        )
+        flag_delta_result = queries.flag_delta_for_port(cursor, service.port, five_minutes_ago)
         flags_written_delta = flag_delta_result[0] or 0
         flags_retrieved_delta = flag_delta_result[1] or 0
         logger.info(f"flag_delta query took {time.time() - start:.3f}s")
@@ -477,8 +457,6 @@ async def get_service_by_port(port: int) -> ServiceListItem:
         redirect_responses=current_stats["redirect_responses"],
         status_counts=current_stats["status_counts"],
         unique_paths=current_stats["unique_paths"],
-        alerts_count=current_stats["alerts_count"],
-        recent_alerts=current_stats["recent_alerts"],
         flags_written=current_stats["flags_written"],
         flags_retrieved=current_stats["flags_retrieved"],
         flags_blocked=current_stats["flags_blocked"],
@@ -1548,14 +1526,9 @@ async def analyzer_preview(body: PreviewRequest):
 
 
 @app.get("/api/analyzer/tag-stats", response_model=TagStatsResponse)
-async def analyzer_tag_stats(port: int):
-    return await analyzer_request("GET", "/api/tag-stats", params={"port": port})
-
-
-@app.get("/api/analyzer/tag-time-stats", response_model=TagTimeStatsResponse)
-async def analyzer_tag_time_stats(port: int, window_minutes: int = 60):
+async def analyzer_tag_stats(port: int, window_minutes: int = 60):
     return await analyzer_request(
-        "GET", "/api/tag-time-stats", params={"port": port, "window_minutes": window_minutes}
+        "GET", "/api/tag-stats", params={"port": port, "window_minutes": window_minutes}
     )
 
 

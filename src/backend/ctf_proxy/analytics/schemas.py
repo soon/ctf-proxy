@@ -50,35 +50,24 @@ class MessageResponse(BaseModel):
     detail: str | None = None
 
 
+class TagTimePoint(BaseModel):
+    timestamp: int
+    count: int
+
+
 class TagStatItem(BaseModel):
     rule: str
     tag: str
     http_count: int = 0
     tcp_count: int = 0
     total: int = 0
+    time_series: list[TagTimePoint] = []
 
 
 class TagStatsResponse(BaseModel):
     port: int
+    window_minutes: int = 60
     tags: list[TagStatItem]
-
-
-class TagTimePoint(BaseModel):
-    timestamp: int
-    count: int
-
-
-class TagTimeSeriesItem(BaseModel):
-    rule: str
-    tag: str
-    total: int
-    time_series: list[TagTimePoint]
-
-
-class TagTimeStatsResponse(BaseModel):
-    port: int
-    window_minutes: int
-    tags: list[TagTimeSeriesItem]
 
 
 class AnalysisRowModel(BaseModel):

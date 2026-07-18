@@ -35,9 +35,6 @@ import type {
 	AnalyzerTagStatsApiAnalyzerTagStatsGetData,
 	AnalyzerTagStatsApiAnalyzerTagStatsGetErrors,
 	AnalyzerTagStatsApiAnalyzerTagStatsGetResponses,
-	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetData,
-	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetErrors,
-	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetResponses,
 	ExecuteSqlApiSqlPostData,
 	ExecuteSqlApiSqlPostErrors,
 	ExecuteSqlApiSqlPostResponses,
@@ -824,27 +821,6 @@ export const analyzerTagStatsApiAnalyzerTagStatsGet = <
 		AnalyzerTagStatsApiAnalyzerTagStatsGetErrors,
 		ThrowOnError
 	>({ url: "/api/analyzer/tag-stats", ...options });
-
-/**
- * Analyzer Tag Time Stats
- */
-export const analyzerTagTimeStatsApiAnalyzerTagTimeStatsGet = <
-	ThrowOnError extends boolean = false,
->(
-	options: Options<
-		AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetData,
-		ThrowOnError
-	>,
-): RequestResult<
-	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetResponses,
-	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetErrors,
-	ThrowOnError
-> =>
-	(options.client ?? client).get<
-		AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetResponses,
-		AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetErrors,
-		ThrowOnError
-	>({ url: "/api/analyzer/tag-time-stats", ...options });
 
 /**
  * Analyzer Get Backfill

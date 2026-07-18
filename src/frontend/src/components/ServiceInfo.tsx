@@ -6,7 +6,6 @@ import {
 	CloseCircleOutlined,
 	FlagOutlined,
 	SwapOutlined,
-	WarningOutlined,
 } from "@ant-design/icons";
 import { useState, useEffect } from "react";
 
@@ -75,7 +74,6 @@ export function ServiceInfo({
 	}, [service, previousService, isTcp]);
 
 	const getStatusColor = () => {
-		if (service.stats.alerts_count > 0) return "error";
 		if (service.stats.blocked_requests > 0) return "warning";
 		return "success";
 	};
@@ -235,34 +233,6 @@ export function ServiceInfo({
 									{status}:{formatNumber(count)}
 								</span>
 							))}
-						</div>
-					)}
-
-					{/* Alerts */}
-					{service.stats.alerts_count > 0 && (
-						<div className="bg-red-50 p-1 rounded">
-							<div className="flex items-center gap-1">
-								<WarningOutlined className="text-red-600 text-xs" />
-								<Text strong className="text-red-600 text-xs">
-									{service.stats.alerts_count} Alert
-									{service.stats.alerts_count !== 1 ? "s" : ""}
-								</Text>
-							</div>
-							{service.stats.recent_alerts &&
-								service.stats.recent_alerts.length > 0 && (
-									<div className="mt-0.5 text-xs space-y-0.5">
-										{service.stats.recent_alerts
-											.slice(0, 1)
-											.map(([description]) => (
-												<div
-													key={description}
-													className="text-red-600 truncate text-xs"
-												>
-													{description}
-												</div>
-											))}
-									</div>
-								)}
 						</div>
 					)}
 				</div>

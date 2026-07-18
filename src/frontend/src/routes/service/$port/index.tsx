@@ -12,8 +12,8 @@ import {
 } from "@/client/sdk.gen";
 import type { RequestListItem, TcpConnectionItem } from "@/client/types.gen";
 import { SparklineChart } from "@/components/SparklineChart";
+import { tagColor } from "@/components/tagColor";
 import {
-	AlertOutlined,
 	ApiOutlined,
 	ClearOutlined,
 	CodeOutlined,
@@ -25,7 +25,6 @@ import {
 	LinkOutlined,
 	ReloadOutlined,
 	SearchOutlined,
-	WarningOutlined,
 } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -56,6 +55,7 @@ const { Text } = Typography;
 
 const serviceSearchSchema = z.object({
 	tcpSearch: z.string().optional(),
+	filter_tag: z.string().optional(),
 });
 
 export const Route = createFileRoute("/service/$port/")({
@@ -85,7 +85,7 @@ function renderTags(
 		<Space size={2} wrap>
 			{tags.map((t) => (
 				<Tag
-					color="purple"
+					color={tagColor(t)}
 					key={t}
 					style={onTagClick ? { cursor: "pointer" } : undefined}
 					onClick={
@@ -137,7 +137,6 @@ function ServiceDetail() {
 		filter_blocked?: boolean;
 	}>({});
 	const [searchValue, setSearchValue] = useState(tcpSearch);
-	const [alertsModalVisible, setAlertsModalVisible] = useState(false);
 	const [rawRequestModalVisible, setRawRequestModalVisible] = useState(false);
 	const [selectedRequestId, setSelectedRequestId] = useState<number | null>(
 		null,
@@ -161,11 +160,24 @@ function ServiceDetail() {
 	);
 	const visibleRulesParam =
 		visibleRules.length > 0 ? visibleRules.join(",") : undefined;
-	const [filterTag, setFilterTag] = useState<string | undefined>(undefined);
-	const pickTag = useCallback((tag: string) => {
-		setFilterTag(tag);
-		setCurrentPage(1);
-	}, []);
+	const filterTag = search.filter_tag;
+	const setFilterTag = useCallback(
+		(tag: string | undefined) => {
+			navigate({
+				to: `/service/${port}`,
+				search: (prev) => ({ ...prev, filter_tag: tag || undefined }),
+				replace: true,
+			});
+		},
+		[navigate, port],
+	);
+	const pickTag = useCallback(
+		(tag: string) => {
+			setFilterTag(tag);
+			setCurrentPage(1);
+		},
+		[setFilterTag],
+	);
 
 	const { data: tagStatsData } = useQuery({
 		...analyzerTagStatsApiAnalyzerTagStatsGetOptions({
@@ -839,24 +851,6 @@ function ServiceDetail() {
 						size="small"
 						bodyStyle={{ padding: "8px", cursor: "pointer" }}
 						className="hover:shadow-md transition-shadow"
-						onClick={() => setAlertsModalVisible(true)}
-					>
-						<Statistic
-							title={<span className="text-xs">Alerts</span>}
-							value={service.stats.alerts_count}
-							prefix={<AlertOutlined className="text-xs" />}
-							valueStyle={{
-								fontSize: 14,
-								color: service.stats.alerts_count > 0 ? "#cf1322" : undefined,
-							}}
-						/>
-					</Card>
-				</Col>
-				<Col xs={12} sm={6}>
-					<Card
-						size="small"
-						bodyStyle={{ padding: "8px", cursor: "pointer" }}
-						className="hover:shadow-md transition-shadow"
 						onClick={() => navigate({ to: `/service/${port}/paths` })}
 					>
 						<Statistic
@@ -920,7 +914,7 @@ function ServiceDetail() {
 							Filtered by tag:
 						</Text>{" "}
 						<Tag
-							color="purple"
+							color={tagColor(filterTag)}
 							closable
 							onClose={() => setFilterTag(undefined)}
 						>
@@ -1006,47 +1000,6 @@ function ServiceDetail() {
 					})}
 				/>
 			)}
-
-			{/* Alerts Modal */}
-			<Modal
-				title={
-					<Space>
-						<WarningOutlined style={{ color: "#cf1322" }} />
-						<span>Recent Alerts</span>
-					</Space>
-				}
-				open={alertsModalVisible}
-				onCancel={() => setAlertsModalVisible(false)}
-				footer={[
-					<Button key="close" onClick={() => setAlertsModalVisible(false)}>
-						Close
-					</Button>,
-				]}
-				width={800}
-			>
-				{service?.stats.recent_alerts &&
-				service.stats.recent_alerts.length > 0 ? (
-					<List
-						dataSource={service.stats.recent_alerts}
-						renderItem={(alert: [string, unknown]) => (
-							<List.Item>
-								<Space direction="vertical" style={{ width: "100%" }}>
-									<Text strong>{alert[0]}</Text>
-									{typeof alert[1] === "object" ? (
-										<pre className="text-xs bg-gray-100 p-2 rounded overflow-x-auto">
-											{JSON.stringify(alert[1], null, 2)}
-										</pre>
-									) : (
-										<Text className="text-sm">{String(alert[1])}</Text>
-									)}
-								</Space>
-							</List.Item>
-						)}
-					/>
-				) : (
-					<Empty description="No alerts available" />
-				)}
-			</Modal>
 
 			{/* Raw Request Modal */}
 			<Modal

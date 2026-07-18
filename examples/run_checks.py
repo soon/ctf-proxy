@@ -112,6 +112,48 @@ def run_check(check: Check, host: str, team: str, tick: int, timeout: float) -> 
         )
 
 
+def run_check_limited(
+    check: Check, host: str, team: str, tick: int, timeout: float, limiter: threading.Semaphore | None
+) -> Result:
+    if limiter is not None:
+        limiter.acquire()
+    try:
+        return run_check(check, host, team, tick, timeout)
+    finally:
+        if limiter is not None:
+            limiter.release()
+
+
+def run_batch(
+    check: Check,
+    host: str,
+    team: str,
+    ticks: "itertools.count[int]",
+    timeout: float,
+    limiter: threading.Semaphore | None,
+    count: int,
+) -> list[Result]:
+    """Run the check `count` times in parallel (extra load), returning all results."""
+    if count <= 1:
+        return [run_check_limited(check, host, team, next(ticks), timeout, limiter)]
+
+    assigned = [next(ticks) for _ in range(count)]
+    results: list[Result] = []
+    rlock = threading.Lock()
+
+    def worker(tk: int) -> None:
+        result = run_check_limited(check, host, team, tk, timeout, limiter)
+        with rlock:
+            results.append(result)
+
+    threads = [threading.Thread(target=worker, args=(tk,), daemon=True) for tk in assigned]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    return results
+
+
 def last_line(text: str) -> str:
     for line in reversed(text.strip().splitlines()):
         if line.strip():
@@ -131,32 +173,27 @@ def check_loop(
     lock: threading.Lock,
     stop: threading.Event,
     limiter: threading.Semaphore | None,
+    extra_load: int = 1,
 ) -> None:
     ticks = itertools.count(start_tick)
     while not stop.is_set():
-        tick = next(ticks)
-        if limiter is not None:
-            limiter.acquire()
-        try:
-            result = run_check(check, host, team, tick, timeout)
-        finally:
-            if limiter is not None:
-                limiter.release()
+        results = run_batch(check, host, team, ticks, timeout, limiter, extra_load)
 
         with lock:
-            stat.runs += 1
-            stat.total_duration += result.duration
-            if result.timed_out:
-                stat.timeout += 1
-                stat.last = "TIMEOUT"
-                stat.last_fail_tail = last_line(result.output)
-            elif result.returncode == 0:
-                stat.ok += 1
-                stat.last = "OK"
-            else:
-                stat.fail += 1
-                stat.last = result.status
-                stat.last_fail_tail = last_line(result.output)
+            for result in results:
+                stat.runs += 1
+                stat.total_duration += result.duration
+                if result.timed_out:
+                    stat.timeout += 1
+                    stat.last = "TIMEOUT"
+                    stat.last_fail_tail = last_line(result.output)
+                elif result.returncode == 0:
+                    stat.ok += 1
+                    stat.last = "OK"
+                else:
+                    stat.fail += 1
+                    stat.last = result.status
+                    stat.last_fail_tail = last_line(result.output)
 
         if once:
             break
@@ -222,7 +259,7 @@ def build_table(stats: dict[tuple[str, str, str], Stat], lock: threading.Lock, e
     table.add_column("to", justify="right")
     table.add_column("avg", justify="right")
     table.add_column("rate", justify="right")
-    table.add_column("last", no_wrap=True)
+    table.add_column("last", no_wrap=True, max_width=48, overflow="ellipsis")
 
     colors = {"OK": "green", "TIMEOUT": "yellow", "": "dim"}
     for kind, service, name, runs, ok, fail, timeout, avg, last, tail in data:
@@ -264,6 +301,19 @@ def interactive_supported(force_plain: bool) -> bool:
     return not force_plain and sys.stdout.isatty()
 
 
+def parse_extra_load(value: str) -> int:
+    text = value.strip().lower()
+    if text.endswith("x"):
+        text = text[:-1]
+    try:
+        n = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid --extra-load value: {value!r} (use e.g. 2 or 2x)")
+    if n < 1:
+        raise argparse.ArgumentTypeError("--extra-load must be >= 1")
+    return n
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run each ctf-proxy-check on its own independent loop.")
     parser.add_argument("--host", required=True, help="Target host/IP passed to every check.")
@@ -276,6 +326,13 @@ def main() -> None:
     parser.add_argument("--no-attacks", action="store_true", help="Discover/run checks only, skip attacks.")
     parser.add_argument("--timeout", type=float, default=120.0, help="Per-run timeout in seconds.")
     parser.add_argument("--repeat", type=int, default=1, help="Concurrent loops per check (load amplification).")
+    parser.add_argument(
+        "--extra-load",
+        type=parse_extra_load,
+        default=1,
+        metavar="Nx",
+        help="Run each check N times in parallel per iteration to amplify load (e.g. 2x or 2).",
+    )
     parser.add_argument(
         "--workers",
         type=int,
@@ -308,8 +365,9 @@ def main() -> None:
     print(f"Discovered {n_checks} checks + {n_attacks} attacks across {len(services)} services: {', '.join(services)}")
     cap = f"{args.workers}" if args.workers > 0 else "unbounded"
     print(
-        f"loops={len(checks) * repeat} ({repeat}/entry) check-interval={args.interval}s "
-        f"attack-interval={args.attack_interval}s timeout={args.timeout}s cap={cap}"
+        f"loops={len(checks) * repeat} ({repeat}/entry) extra-load={args.extra_load}x "
+        f"check-interval={args.interval}s attack-interval={args.attack_interval}s "
+        f"timeout={args.timeout}s cap={cap}"
     )
 
     stats: dict[tuple[str, str, str], Stat] = {
@@ -334,6 +392,7 @@ def main() -> None:
                 lock,
                 stop,
                 limiter,
+                args.extra_load,
             ),
             daemon=True,
         )

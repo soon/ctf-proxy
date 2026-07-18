@@ -12,7 +12,6 @@ from psycopg import Cursor
 from ctf_proxy.common.config import Config
 from ctf_proxy.db.connection import nul_safe
 from ctf_proxy.db.models import (
-    AlertRow,
     FlagRow,
     HttpRequestRow,
     HttpResponseRow,
@@ -22,12 +21,11 @@ from ctf_proxy.db.models import (
     WebSocketFrameRow,
 )
 from ctf_proxy.db.refs import Ref
-from ctf_proxy.db.utils import convert_datetime_to_timestamp, now_timestamp
+from ctf_proxy.db.utils import convert_datetime_to_timestamp
 from ctf_proxy.logs_ingestion.access_log import AccessLogReader
 from ctf_proxy.logs_ingestion.batch_stats import BatchStats
 from ctf_proxy.logs_ingestion.batch_writer import (
     Batch,
-    flush_objects,
     flush_with_isolation_fallback,
 )
 from ctf_proxy.logs_ingestion.flags import find_body_flags
@@ -59,23 +57,20 @@ def serialize_headers(headers: "HttpTapHeaders") -> str:
         separators=(",", ":"),
     )
 
+
 class PathStatsAggregator:
     def __init__(self):
         self.counts: dict[tuple, int] = {}
-        self.first: dict[tuple, tuple] = {}
 
-    def record(self, port: int, path: str, full_path: str, request_ref: Ref, response_ref: Ref):
+    def record(self, port: int, path: str):
         key = (port, path)
         self.counts[key] = self.counts.get(key, 0) + 1
-        if key not in self.first:
-            self.first[key] = (full_path, request_ref, response_ref)
 
     def flush(self, tx: Cursor, isolate: bool = False) -> None:
         if not self.counts:
             return
 
         items = list(self.counts.items())
-        new_paths: set[tuple] = set()
         for start in range(0, len(items), 1000):
             chunk = items[start : start + 1000]
             values = ", ".join(["(%s, %s, %s)"] * len(chunk))
@@ -84,30 +79,9 @@ class PathStatsAggregator:
                 params.extend((port, nul_safe(path), count))
             tx.execute(
                 f"INSERT INTO http_path_stats (port, path, count) VALUES {values} "
-                "ON CONFLICT (port, path) DO UPDATE SET count = http_path_stats.count + EXCLUDED.count "
-                "RETURNING port, path, (xmax = 0) AS inserted",
+                "ON CONFLICT (port, path) DO UPDATE SET count = http_path_stats.count + EXCLUDED.count",
                 params,
             )
-            new_paths.update((row[0], row[1]) for row in tx.fetchall() if row[2])
-
-        created = now_timestamp()
-        alerts = []
-        for key in new_paths:
-            full_path, request_ref, response_ref = self.first[key]
-            if not request_ref.resolved:
-                continue
-            port, _ = key
-            alerts.append(
-                AlertRow.Insert(
-                    port=port,
-                    created=created,
-                    description=f"New path: '{full_path}'",
-                    http_request_id=request_ref.value,
-                    http_response_id=response_ref.value if response_ref.resolved else None,
-                )
-            )
-        if alerts:
-            flush_objects(tx, alerts, isolate=isolate)
 
 
 class HttpTapsFolder(TapsFolder):
@@ -224,7 +198,8 @@ class HttpProcessor:
             logger.info(
                 "PER-TABLE flush: %s paths=%.0f stats=%.0f ms",
                 " ".join(f"{name}={secs * 1000:.0f}" for name, secs in table_times.items()),
-                flush_times["paths"] * 1000, flush_times["stats"] * 1000,
+                flush_times["paths"] * 1000,
+                flush_times["stats"] * 1000,
             )
         else:
             flush_with_isolation_fallback(tx, do_flush, writer.reset)
@@ -241,11 +216,16 @@ class HttpProcessor:
             logger.info(
                 "HTTP batch: entries=%d matched=%d | read=%.0f refresh=%.0f process=%.0f "
                 "flush=%.0f (rows=%.0f paths=%.0f stats=%.0f) cleanup=%.0f | total=%.0f ms",
-                len(new_entries), len(to_archive),
-                (t_read - t_start) * 1000, (t_refresh - t_read) * 1000,
-                (t_process - t_refresh) * 1000, (t_flush - t_process) * 1000,
-                flush_times.get("rows", 0) * 1000, flush_times.get("paths", 0) * 1000,
-                flush_times.get("stats", 0) * 1000, (t_cleanup - t_flush) * 1000,
+                len(new_entries),
+                len(to_archive),
+                (t_read - t_start) * 1000,
+                (t_refresh - t_read) * 1000,
+                (t_process - t_refresh) * 1000,
+                (t_flush - t_process) * 1000,
+                flush_times.get("rows", 0) * 1000,
+                flush_times.get("paths", 0) * 1000,
+                flush_times.get("stats", 0) * 1000,
+                (t_cleanup - t_flush) * 1000,
                 (t_cleanup - t_start) * 1000,
             )
 
@@ -453,7 +433,7 @@ class HttpTapProcessor:
                 re.fullmatch(ignored.path, path) and method == ignored.method
                 for ignored in service_config.ignore_path_stats
             ):
-                paths.record(port, path, full_path, request_ref, response_ref)
+                paths.record(port, path)
                 stats.add_path_time(
                     port=port,
                     method=method,
@@ -529,9 +509,7 @@ class HttpTapProcessor:
             self.process_websocket(writer, tap, request_ref)
 
     def process_websocket(self, writer: Batch, tap: HttpTap, request_ref: Ref):
-        connection_ref = writer.insert(
-            WebSocketConnectionRow.Insert(http_request_id=request_ref)
-        )
+        connection_ref = writer.insert(WebSocketConnectionRow.Insert(http_request_id=request_ref))
 
         request_frames = parse_ws_frames(
             tap.request.body.bytes,

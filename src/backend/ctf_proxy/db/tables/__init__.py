@@ -1,4 +1,3 @@
-from ctf_proxy.db.tables.alert import AlertRow, AlertTable
 from ctf_proxy.db.tables.flag import FlagRow, FlagTable
 from ctf_proxy.db.tables.flag_time_stats import FlagTimeStatsRow, FlagTimeStatsTable
 from ctf_proxy.db.tables.http_header import HttpHeaderRow, HttpHeaderTable
@@ -40,8 +39,6 @@ from ctf_proxy.db.tables.websocket_connection import (
 from ctf_proxy.db.tables.websocket_frame import WebSocketFrameRow, WebSocketFrameTable
 
 __all__ = [
-    "AlertRow",
-    "AlertTable",
     "FlagRow",
     "FlagTable",
     "FlagTimeStatsRow",

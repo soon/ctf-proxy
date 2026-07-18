@@ -23,8 +23,6 @@ from ctf_proxy.analytics.schemas import (
     TagsForRefsResponse,
     TagStatItem,
     TagStatsResponse,
-    TagTimeSeriesItem,
-    TagTimeStatsResponse,
 )
 from ctf_proxy.analytics.source import SourceReader
 from ctf_proxy.db.utils import now_timestamp
@@ -161,20 +159,13 @@ async def preview(request: PreviewRequest):
 
 
 @app.get("/api/tag-stats", response_model=TagStatsResponse)
-async def tag_stats(port: int):
-    stats = require_analysis().tag_stats(port)
-    return TagStatsResponse(port=port, tags=[TagStatItem(**s) for s in stats])
-
-
-@app.get("/api/tag-time-stats", response_model=TagTimeStatsResponse)
-async def tag_time_stats(port: int, window_minutes: int = 60):
+async def tag_stats(port: int, window_minutes: int = 60):
+    db = require_analysis()
     since = now_timestamp() - window_minutes * 60_000
-    series = require_analysis().tag_time_series(port, since)
-    return TagTimeStatsResponse(
-        port=port,
-        window_minutes=window_minutes,
-        tags=[TagTimeSeriesItem(**s) for s in series],
-    )
+    stats = db.tag_stats(port)
+    series = {(s["rule"], s["tag"]): s["time_series"] for s in db.tag_time_series(port, since)}
+    tags = [TagStatItem(**s, time_series=series.get((s["rule"], s["tag"]), [])) for s in stats]
+    return TagStatsResponse(port=port, window_minutes=window_minutes, tags=tags)
 
 
 @app.get("/api/analysis/for-ref", response_model=AnalysisRowsResponse)

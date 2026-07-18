@@ -19,7 +19,6 @@ import {
 	analyzerPromoteRuleApiAnalyzerRulesNamePromotePost,
 	analyzerSaveRuleApiAnalyzerRulesNamePut,
 	analyzerTagStatsApiAnalyzerTagStatsGet,
-	analyzerTagTimeStatsApiAnalyzerTagTimeStatsGet,
 	executeSqlApiSqlPost,
 	exportSqlCsvApiSqlExportPost,
 	getAllFlagTimeStatsApiFlagTimeStatsGet,
@@ -76,9 +75,6 @@ import type {
 	AnalyzerTagStatsApiAnalyzerTagStatsGetData,
 	AnalyzerTagStatsApiAnalyzerTagStatsGetError,
 	AnalyzerTagStatsApiAnalyzerTagStatsGetResponse,
-	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetData,
-	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetError,
-	AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetResponse,
 	ExecuteSqlApiSqlPostData,
 	ExecuteSqlApiSqlPostError,
 	ExportSqlCsvApiSqlExportPostData,
@@ -1450,34 +1446,6 @@ export const analyzerTagStatsApiAnalyzerTagStatsGetOptions = (
 			return data;
 		},
 		queryKey: analyzerTagStatsApiAnalyzerTagStatsGetQueryKey(options),
-	});
-
-export const analyzerTagTimeStatsApiAnalyzerTagTimeStatsGetQueryKey = (
-	options: Options<AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetData>,
-) => createQueryKey("analyzerTagTimeStatsApiAnalyzerTagTimeStatsGet", options);
-
-/**
- * Analyzer Tag Time Stats
- */
-export const analyzerTagTimeStatsApiAnalyzerTagTimeStatsGetOptions = (
-	options: Options<AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetData>,
-) =>
-	queryOptions<
-		AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetResponse,
-		AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetError,
-		AnalyzerTagTimeStatsApiAnalyzerTagTimeStatsGetResponse,
-		ReturnType<typeof analyzerTagTimeStatsApiAnalyzerTagTimeStatsGetQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await analyzerTagTimeStatsApiAnalyzerTagTimeStatsGet({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: analyzerTagTimeStatsApiAnalyzerTagTimeStatsGetQueryKey(options),
 	});
 
 export const analyzerGetBackfillApiAnalyzerBackfillGetQueryKey = (
