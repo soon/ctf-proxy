@@ -147,9 +147,7 @@ function ServiceRules() {
 	const backfillMutation = useMutation({
 		...analyzerCreateBackfillApiAnalyzerBackfillPostMutation(),
 		onSuccess: (job) =>
-			message.success(
-				`Backfill queued for "${job.rule_name}" up to id ${job.target_id}`,
-			),
+			message.success(`Backfill queued up to id ${job.target_id}`),
 		onError: (error) =>
 			message.error(`Backfill failed: ${describeError(error)}`),
 	});
@@ -202,11 +200,7 @@ function ServiceRules() {
 	}
 
 	function runBackfill(ports: number[] | null) {
-		if (!name.trim()) {
-			message.warning("Open a rule first");
-			return;
-		}
-		backfillMutation.mutate({ body: { rule_name: name, ports } });
+		backfillMutation.mutate({ body: { ports } });
 	}
 
 	function runPreview() {
@@ -388,7 +382,6 @@ function ServiceRules() {
 					<Dropdown.Button
 						icon={<DownOutlined />}
 						loading={backfillMutation.isPending}
-						disabled={status !== "enabled" || !name}
 						onClick={() => runBackfill([portNumber])}
 						menu={{
 							items: [{ key: "all", label: "Backfill on all ports" }],

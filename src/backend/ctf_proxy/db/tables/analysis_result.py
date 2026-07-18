@@ -50,20 +50,14 @@ class AnalysisResultTable:
             deltas[key] = deltas.get(key, 0) + 1
         self.apply_tag_time_deltas(tx, deltas)
 
-    def delete_for_refs(
-        self, tx: Cursor, ref_ids: list[int], rule_id: int | None = None
-    ) -> None:
+    def delete_for_refs(self, tx: Cursor, ref_ids: list[int]) -> None:
         if not ref_ids:
             return
         placeholders = ",".join(["%s"] * len(ref_ids))
         params = list(ref_ids)
-        rule_clause = ""
-        if rule_id is not None:
-            rule_clause = " AND rule_id = %s"
-            params.append(rule_id)
         rows = tx.execute(
             f"SELECT port, rule_id, tag, event_time FROM {self.table} "
-            f"WHERE {self.ref_column} IN ({placeholders}){rule_clause}",
+            f"WHERE {self.ref_column} IN ({placeholders})",
             params,
         ).fetchall()
         deltas: dict[tuple, int] = {}
@@ -75,7 +69,7 @@ class AnalysisResultTable:
             deltas[key] = deltas.get(key, 0) - 1
         self.apply_tag_time_deltas(tx, deltas)
         tx.execute(
-            f"DELETE FROM {self.table} WHERE {self.ref_column} IN ({placeholders}){rule_clause}",
+            f"DELETE FROM {self.table} WHERE {self.ref_column} IN ({placeholders})",
             params,
         )
 

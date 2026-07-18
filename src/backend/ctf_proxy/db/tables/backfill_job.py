@@ -8,7 +8,6 @@ class BackfillJob:
     id: int
     target_id: int
     ports: list[int] | None
-    rule_name: str | None
     http_cursor: int
     tcp_cursor: int
     status: str
@@ -33,21 +32,20 @@ class BackfillJobTable:
         target_id: int,
         ports: list[int] | None,
         created: int,
-        rule_name: str | None = None,
     ) -> int:
         tx.execute(
             """
-            INSERT INTO backfill_job (target_id, ports, rule_name, status, created, updated)
-            VALUES (%s, %s, %s, 'pending', %s, %s) RETURNING id
+            INSERT INTO backfill_job (target_id, ports, status, created, updated)
+            VALUES (%s, %s, 'pending', %s, %s) RETURNING id
             """,
-            (target_id, encode_ports(ports), rule_name, created, created),
+            (target_id, encode_ports(ports), created, created),
         )
         return tx.fetchone()[0]
 
     def active(self, tx: Cursor) -> BackfillJob | None:
         tx.execute(
             """
-            SELECT id, target_id, ports, rule_name, http_cursor, tcp_cursor, status
+            SELECT id, target_id, ports, http_cursor, tcp_cursor, status
             FROM backfill_job WHERE status IN ('pending', 'running')
             ORDER BY id LIMIT 1
             """
@@ -58,7 +56,7 @@ class BackfillJobTable:
     def by_id(self, tx: Cursor, job_id: int) -> BackfillJob | None:
         tx.execute(
             """
-            SELECT id, target_id, ports, rule_name, http_cursor, tcp_cursor, status
+            SELECT id, target_id, ports, http_cursor, tcp_cursor, status
             FROM backfill_job WHERE id = %s
             """,
             (job_id,),
@@ -69,7 +67,7 @@ class BackfillJobTable:
     def latest(self, tx: Cursor) -> BackfillJob | None:
         tx.execute(
             """
-            SELECT id, target_id, ports, rule_name, http_cursor, tcp_cursor, status
+            SELECT id, target_id, ports, http_cursor, tcp_cursor, status
             FROM backfill_job ORDER BY id DESC LIMIT 1
             """
         )
@@ -81,10 +79,9 @@ class BackfillJobTable:
             id=row[0],
             target_id=row[1],
             ports=decode_ports(row[2]),
-            rule_name=row[3],
-            http_cursor=row[4],
-            tcp_cursor=row[5],
-            status=row[6],
+            http_cursor=row[3],
+            tcp_cursor=row[4],
+            status=row[5],
         )
 
     def update(self, tx: Cursor, job_id: int, updated: int, **fields) -> None:

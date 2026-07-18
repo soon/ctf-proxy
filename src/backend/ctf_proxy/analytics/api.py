@@ -187,7 +187,6 @@ def job_model(job) -> BackfillJobModel:
         id=job.id,
         target_id=job.target_id,
         ports=job.ports,
-        rule_name=job.rule_name,
         http_cursor=job.http_cursor,
         tcp_cursor=job.tcp_cursor,
         status=job.status,
@@ -202,17 +201,9 @@ async def create_backfill(request: BackfillRequest):
         if source_reader is None:
             raise HTTPException(status_code=500, detail="Analyzer not initialized")
         target_id = source_reader.max_source_id()
-    if request.rule_name is not None:
-        enabled = {r.name for r in require_store().list_rules() if r.status == ENABLED}
-        if request.rule_name not in enabled:
-            raise HTTPException(
-                status_code=404, detail=f"No enabled rule named {request.rule_name}"
-            )
     with db.connect() as conn:
         tx = conn.cursor()
-        job_id = db.backfill.create(
-            tx, target_id, request.ports, now_timestamp(), request.rule_name
-        )
+        job_id = db.backfill.create(tx, target_id, request.ports, now_timestamp())
         conn.commit()
         job = db.backfill.by_id(tx, job_id)
     return job_model(job)

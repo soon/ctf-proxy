@@ -93,41 +93,24 @@ def test_backfill_create_and_get(client):
     assert resp.json()["id"] == job["id"]
 
 
-def test_backfill_for_rule(client):
-    resp = client.post("/api/backfill", json={"rule_name": "enabled_one"})
+def test_backfill_for_port(client):
+    resp = client.post("/api/backfill", json={"ports": [8080]})
     assert resp.status_code == 200
     job = resp.json()
-    assert job["rule_name"] == "enabled_one"
-    assert job["ports"] is None
+    assert job["ports"] == [8080]
     assert job["status"] == "pending"
 
 
-def test_backfill_for_rule_and_port(client):
-    resp = client.post(
-        "/api/backfill", json={"rule_name": "enabled_one", "ports": [8080]}
-    )
+def test_backfill_ignores_rule_name(client):
+    resp = client.post("/api/backfill", json={"rule_name": "enabled_one"})
     assert resp.status_code == 200
-    job = resp.json()
-    assert job["rule_name"] == "enabled_one"
-    assert job["ports"] == [8080]
-
-
-def test_backfill_rejects_unknown_rule(client):
-    resp = client.post("/api/backfill", json={"rule_name": "not_a_rule"})
-    assert resp.status_code == 404
-
-
-def test_backfill_rejects_draft_rule(client):
-    client.put("/api/rules/admin_probe", json={"source": ADMIN_RULE})
-    resp = client.post("/api/backfill", json={"rule_name": "admin_probe"})
-    assert resp.status_code == 404
+    assert "rule_name" not in resp.json()
 
 
 def test_backfill_returns_the_job_it_created(client):
-    first = client.post("/api/backfill", json={"rule_name": "enabled_one"}).json()
+    first = client.post("/api/backfill", json={"ports": [8080]}).json()
     second = client.post("/api/backfill", json={"ports": [8081]}).json()
     assert second["id"] != first["id"]
-    assert second["rule_name"] is None
     assert second["ports"] == [8081]
 
 
