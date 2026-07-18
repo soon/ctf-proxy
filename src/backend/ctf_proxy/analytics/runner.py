@@ -118,19 +118,26 @@ class AnalyzerRunner:
 
         return processed
 
-    def run_all_rules(self, contexts, source: str, matcher_attr: str, tx) -> list[AnalysisResultRow]:
-        group = [(rule, self.rule_id(tx, rule.rule_name())) for rule in self.registry.rules]
-        return self.run_rules(contexts, source, matcher_attr, group)
+    def job_rules(self, tx, rule_name: str | None) -> list:
+        rules = self.registry.rules
+        if rule_name is not None:
+            rules = [rule for rule in rules if rule.rule_name() == rule_name]
+        return [(rule, self.rule_id(tx, rule.rule_name())) for rule in rules]
 
     def backfill_source(self, tx, job, read_fn, matcher_attr, result_table, source) -> int:
+        group = self.job_rules(tx, job.rule_name)
+        if not group:
+            return 0
+
         cursor = job.http_cursor if source == HTTP_SOURCE else job.tcp_cursor
         contexts = read_fn(cursor, job.target_id, job.ports, self.batch_size)
         if not contexts:
             return 0
 
-        results = self.run_all_rules(contexts, source, matcher_attr, tx)
+        results = self.run_rules(contexts, source, matcher_attr, group)
         max_id = max(ctx.id for ctx in contexts)
-        result_table.delete_for_refs(tx, [ctx.id for ctx in contexts])
+        scoped_rule_id = group[0][1] if job.rule_name is not None else None
+        result_table.delete_for_refs(tx, [ctx.id for ctx in contexts], scoped_rule_id)
         if results:
             result_table.insert_many(tx, results, now_timestamp())
         column = "http_cursor" if source == HTTP_SOURCE else "tcp_cursor"

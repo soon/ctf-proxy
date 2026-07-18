@@ -9,6 +9,11 @@ body {
 	-moz-osx-font-smoothing: grayscale;
 }
 
+.preview-match > td.ant-table-cell,
+.ant-table-tbody > tr.preview-match:hover > td.ant-table-cell {
+	background-color: #e6f4ff !important;
+}
+
 code {
 	font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
 		monospace;

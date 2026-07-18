@@ -193,12 +193,74 @@ def test_source_without_tables_returns_empty():
     assert runner.source.max_source_id() == 0
 
 
-def create_backfill(runner: AnalyzerRunner, target_id: int, ports=None) -> int:
+def create_backfill(
+    runner: AnalyzerRunner, target_id: int, ports=None, rule_name=None
+) -> int:
     with runner.db.connect() as conn:
         tx = conn.cursor()
-        job_id = runner.db.backfill.create(tx, target_id, ports, now_timestamp())
+        job_id = runner.db.backfill.create(
+            tx, target_id, ports, now_timestamp(), rule_name
+        )
         conn.commit()
     return job_id
+
+
+def drain_backfill(runner: AnalyzerRunner) -> None:
+    for _ in range(10):
+        if runner.process_backfill_batch() == 0:
+            break
+
+
+def test_backfill_scoped_to_rule_leaves_other_rules_untouched():
+    runner, ids = make_runner(SQLI_RULE)
+    seed_rule(runner.db, "extra", PATH_RULE)
+    runner.registry.maybe_reload()
+    runner.process_batch()
+
+    before = read_results(runner)
+    assert ("sqli", ids["attack_id"]) in {(n, ref) for n, _t, _m, _p, ref in before}
+    assert ("path", ids["attack_id"]) in {(n, ref) for n, _t, _m, _p, ref in before}
+
+    create_backfill(
+        runner, target_id=ids["benign_id"], ports=[8080], rule_name="path"
+    )
+    drain_backfill(runner)
+
+    after = read_results(runner)
+    assert sorted(map(tuple, after)) == sorted(map(tuple, before))
+    assert tag_time_stats_sum(runner, 8080) == 2
+
+
+def test_backfill_scoped_to_rule_reprocesses_only_that_rule():
+    runner, ids = make_runner(SQLI_RULE)
+    runner.process_batch()
+
+    seed_rule(runner.db, "extra", PATH_RULE)
+    runner.registry.maybe_reload()
+
+    create_backfill(
+        runner, target_id=ids["benign_id"], ports=[8080], rule_name="path"
+    )
+    drain_backfill(runner)
+
+    names = {name for name, _t, _m, _p, _ref in read_results(runner)}
+    assert names == {"sqli", "path"}
+    assert cursor_for(runner, "path", HTTP_SOURCE) == 0
+
+
+def test_backfill_for_unknown_rule_finishes_without_touching_results():
+    runner, ids = make_runner(SQLI_RULE)
+    runner.process_batch()
+    before = read_results(runner)
+
+    create_backfill(
+        runner, target_id=ids["benign_id"], ports=[8080], rule_name="nope"
+    )
+    drain_backfill(runner)
+
+    assert read_results(runner) == before
+    with runner.db.connect() as conn:
+        assert runner.db.backfill.active(conn.cursor()) is None
 
 
 def test_backfill_reprocesses_range_after_rule_added():

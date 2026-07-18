@@ -93,12 +93,14 @@ class TagsForRefsResponse(BaseModel):
 class BackfillRequest(BaseModel):
     target_id: int | None = None
     ports: list[int] | None = None
+    rule_name: str | None = None
 
 
 class BackfillJobModel(BaseModel):
     id: int
     target_id: int
     ports: list[int] | None = None
+    rule_name: str | None = None
     http_cursor: int
     tcp_cursor: int
     status: str

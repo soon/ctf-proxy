@@ -12,6 +12,7 @@ import {
 	Empty,
 	Popconfirm,
 	Spin,
+	Dropdown,
 } from "antd";
 import {
 	SaveOutlined,
@@ -20,6 +21,8 @@ import {
 	DeleteOutlined,
 	PlusOutlined,
 	ArrowLeftOutlined,
+	HistoryOutlined,
+	DownOutlined,
 } from "@ant-design/icons";
 import Editor from "@monaco-editor/react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -29,6 +32,7 @@ import {
 	analyzerDeleteRuleApiAnalyzerRulesNameDeleteMutation,
 	analyzerPromoteRuleApiAnalyzerRulesNamePromotePostMutation,
 	analyzerPreviewApiAnalyzerPreviewPostMutation,
+	analyzerCreateBackfillApiAnalyzerBackfillPostMutation,
 	getServiceByPortApiServicesPortGetOptions,
 	getServiceRequestsApiServicesPortRequestsGetOptions,
 	getTcpConnectionsApiServicesPortTcpConnectionsGetOptions,
@@ -140,6 +144,16 @@ function ServiceRules() {
 			message.error(`Promote failed: ${describeError(error)}`),
 	});
 
+	const backfillMutation = useMutation({
+		...analyzerCreateBackfillApiAnalyzerBackfillPostMutation(),
+		onSuccess: (job) =>
+			message.success(
+				`Backfill queued for "${job.rule_name}" up to id ${job.target_id}`,
+			),
+		onError: (error) =>
+			message.error(`Backfill failed: ${describeError(error)}`),
+	});
+
 	const previewMutation = useMutation({
 		...analyzerPreviewApiAnalyzerPreviewPostMutation(),
 		onSuccess: (result) => {
@@ -185,6 +199,14 @@ function ServiceRules() {
 			return;
 		}
 		saveMutation.mutate({ path: { name }, body: { source } });
+	}
+
+	function runBackfill(ports: number[] | null) {
+		if (!name.trim()) {
+			message.warning("Open a rule first");
+			return;
+		}
+		backfillMutation.mutate({ body: { rule_name: name, ports } });
 	}
 
 	function runPreview() {
@@ -363,6 +385,18 @@ function ServiceRules() {
 							Promote
 						</Button>
 					</Popconfirm>
+					<Dropdown.Button
+						icon={<DownOutlined />}
+						loading={backfillMutation.isPending}
+						disabled={status !== "enabled" || !name}
+						onClick={() => runBackfill([portNumber])}
+						menu={{
+							items: [{ key: "all", label: "Backfill on all ports" }],
+							onClick: () => runBackfill(null),
+						}}
+					>
+						<HistoryOutlined /> Backfill port {port}
+					</Dropdown.Button>
 					<Popconfirm
 						title={`Delete ${status} rule "${name}"?`}
 						onConfirm={() =>
@@ -418,6 +452,9 @@ function ServiceRules() {
 							columns={entityColumns}
 							pagination={false}
 							scroll={{ y: 240 }}
+							rowClassName={(row: { id: number }) =>
+								matchedIds.has(row.id) ? "preview-match" : ""
+							}
 							rowSelection={{
 								selectedRowKeys: selectedIds,
 								onChange: (keys) => setSelectedIds(keys as number[]),
