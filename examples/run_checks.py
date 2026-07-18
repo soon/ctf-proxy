@@ -345,6 +345,14 @@ def main() -> None:
         "--plain", action="store_true", help="Force plain text output (disable the interactive TUI)."
     )
     parser.add_argument("--filter", default="", help="Only run checks whose service or name contains this.")
+    parser.add_argument(
+        "--except",
+        dest="exclude",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="Skip checks whose service or name contains this. May be given multiple times.",
+    )
     parser.add_argument("root", nargs="?", default=str(Path(__file__).resolve().parent))
     args = parser.parse_args()
 
@@ -354,6 +362,8 @@ def main() -> None:
         checks = [c for c in checks if c.kind == "check"]
     if args.filter:
         checks = [c for c in checks if args.filter in c.service or args.filter in c.name]
+    for pattern in args.exclude:
+        checks = [c for c in checks if pattern not in c.service and pattern not in c.name]
     if not checks:
         print(f"No checks found under {root}/**/{{{CHECKS_DIR_NAME},{ATTACKS_DIR_NAME}}}/*.py")
         sys.exit(1)
